@@ -23,13 +23,13 @@ export async function GET() {
     await connectDB();
     
     // Fetch data for analytics
+    // Fetch core metrics
     const [
       activeUsersCount,
       totalUsers,
       totalExperiments,
       activeExperiments,
       completedExperiments,
-      completionRate,
       totalUserGroups,
       totalScenarios
     ] = await Promise.all([
@@ -48,15 +48,17 @@ export async function GET() {
       // Count completed experiments
       Experiment.countDocuments({ status: 'completed' }),
       
-      // Get overall completion rate (placeholder - would need actual participation data)
-      Promise.resolve(78), // Placeholder value
-      
       // Count user groups
       UserGroup.countDocuments(),
       
       // Count scenarios
       Scenario.countDocuments(),
     ]);
+    
+    // Calculate completion rate based on completed vs total experiments
+    const completionRate = totalExperiments > 0 
+      ? Math.round((completedExperiments / totalExperiments) * 100) 
+      : 0;
     
     // Fetch recent active experiments
     const recentExperiments = await Experiment.find(
@@ -104,7 +106,12 @@ export async function GET() {
       };
     }));
     
-    // Format analytics data
+    // Calculate average participants per experiment
+    const averageParticipants = totalExperiments > 0 
+        ? Math.round(activeUsersCount / totalExperiments) 
+        : 0;
+        
+    // Format analytics data with actual numbers
     const analyticsData = {
       activeUsers: activeUsersCount,
       totalUsers: totalUsers,
@@ -114,9 +121,7 @@ export async function GET() {
       userGroups: totalUserGroups,
       scenarios: totalScenarios,
       completionRate: completionRate,
-      averageParticipantsPerExperiment: totalExperiments > 0 
-        ? Math.floor(activeUsersCount / totalExperiments) 
-        : 0
+      averageParticipantsPerExperiment: averageParticipants
     };
     
     return NextResponse.json({
