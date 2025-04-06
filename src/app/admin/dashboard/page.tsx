@@ -177,7 +177,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Quick Access Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Link href="/admin/experiments" className="block">
             <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
               <div className="flex items-center">
@@ -241,7 +241,10 @@ export default function AdminDashboard() {
               </div>
             </div>
           </Link>
-          
+        </div>
+        
+        {/* Reporting Card - Now Below the Main Cards */}
+        <div className="mb-6">
           <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
             <div className="flex items-center">
               <div className="p-3 rounded-full bg-indigo-100 mr-4">
@@ -251,7 +254,7 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold">Reporting</h3>
-                <p className="text-gray-500 text-sm">Export and analyze data</p>
+                <p className="text-gray-500 text-sm">Export and analyze experiment data</p>
               </div>
             </div>
           </div>
