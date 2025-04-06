@@ -142,9 +142,7 @@ export async function PUT(request: NextRequest) {
         maxParticipants?: number | string;
       }
       
-      // Get mongoose for ObjectId conversion
-      const mongoose = require('mongoose');
-      
+      // Use already imported mongoose
       // Log userGroups for debugging
       console.log('Processing userGroups:', JSON.stringify(userGroups, null, 2));
       
@@ -153,11 +151,10 @@ export async function PUT(request: NextRequest) {
         // Convert userGroupId to ObjectId if it's a string
         let userGroupId;
         try {
-          userGroupId = mongoose.Types.ObjectId.isValid(group.userGroupId) 
-            ? new mongoose.Types.ObjectId(group.userGroupId) 
-            : group.userGroupId;
+          // Check if it's already a valid ID
+          userGroupId = group.userGroupId;
         } catch (err) {
-          console.error('Error converting userGroupId to ObjectId:', err);
+          console.error('Error processing userGroupId:', err);
           userGroupId = group.userGroupId;
         }
         
@@ -234,15 +231,12 @@ export async function PUT(request: NextRequest) {
           stageData.format = stage.format || 'markdown';
         } 
         else if (stage.type === 'scenario') {
-          // Convert scenarioId to ObjectId if it's a string
+          // Use scenarioId as-is since Mongoose will handle conversion
           if (stage.scenarioId) {
             try {
-              const mongoose = require('mongoose');
-              stageData.scenarioId = mongoose.Types.ObjectId.isValid(stage.scenarioId) 
-                ? new mongoose.Types.ObjectId(stage.scenarioId) 
-                : stage.scenarioId;
+              stageData.scenarioId = stage.scenarioId;
             } catch (err) {
-              console.error('Error converting scenarioId to ObjectId:', err);
+              console.error('Error processing scenarioId:', err);
               stageData.scenarioId = stage.scenarioId;
             }
           }
