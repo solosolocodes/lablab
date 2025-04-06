@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI as string;
+// In development, use .env.local value, in production use vercel.json environment variable
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://vis203077:lablab@lablab.bw2sxxm.mongodb.net/?retryWrites=true&w=majority&appName=lablab";
 
 if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable');

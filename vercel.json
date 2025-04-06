@@ -1,0 +1,9 @@
+{
+  "buildCommand": "next build",
+  "env": {
+    "MONGODB_URI": "mongodb+srv://vis203077:lablab@lablab.bw2sxxm.mongodb.net/?retryWrites=true&w=majority&appName=lablab",
+    "NEXTAUTH_SECRET": "your-secret-key-for-jwt-tokens",
+    "NEXTAUTH_URL": "https://lablab-git-main-solosolocodes.vercel.app"
+  },
+  "framework": "nextjs"
+}
