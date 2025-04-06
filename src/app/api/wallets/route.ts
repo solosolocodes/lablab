@@ -26,13 +26,11 @@ export async function GET(request: NextRequest) {
     const scenarioId = searchParams.get('scenarioId');
     
     // Create filter based on query parameters
-    const filter: { owner?: string; scenarioId?: string } = {};
-    if (ownerId) filter.owner = ownerId;
+    const filter: { scenarioId?: string } = {};
     if (scenarioId) filter.scenarioId = scenarioId;
     
-    // Find wallets and populate owner field
+    // Find wallets
     const wallets = await Wallet.find(filter)
-      .populate('owner', '_id name email role')
       .sort({ createdAt: -1 });
     
     // Format the response
@@ -40,12 +38,6 @@ export async function GET(request: NextRequest) {
       id: wallet._id,
       name: wallet.name,
       description: wallet.description,
-      owner: {
-        id: wallet.owner._id,
-        name: wallet.owner.name,
-        email: wallet.owner.email,
-        role: wallet.owner.role,
-      },
       assets: wallet.assets,
       scenarioId: wallet.scenarioId,
       createdAt: wallet.createdAt,
@@ -75,28 +67,63 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const { name, description, ownerId, assets = [], scenarioId = null } = await request.json();
+    const { name, description, scenarioId = null } = await request.json();
 
-    if (!name || !description || !ownerId) {
+    if (!name || !description) {
       return NextResponse.json(
-        { message: 'Name, description, and owner ID are required' },
+        { message: 'Name and description are required' },
         { status: 400 }
       );
     }
 
     await connectDB();
     
+    // Create default assets with random amounts
+    const defaultAssets = [
+      {
+        type: 'fiat',
+        name: 'US Dollar',
+        symbol: 'USD',
+        amount: Math.floor(Math.random() * 10000) + 5000, // 5000-15000 USD
+        initialAmount: Math.floor(Math.random() * 10000) + 5000,
+      },
+      {
+        type: 'cryptocurrency',
+        name: 'Bitcoin',
+        symbol: 'BTC',
+        amount: (Math.random() * 2) + 0.1, // 0.1-2.1 BTC
+        initialAmount: (Math.random() * 2) + 0.1,
+      },
+      {
+        type: 'cryptocurrency',
+        name: 'Ethereum',
+        symbol: 'ETH',
+        amount: (Math.random() * 20) + 2, // 2-22 ETH
+        initialAmount: (Math.random() * 20) + 2,
+      },
+      {
+        type: 'cryptocurrency',
+        name: 'Solana',
+        symbol: 'SOL',
+        amount: (Math.random() * 200) + 50, // 50-250 SOL
+        initialAmount: (Math.random() * 200) + 50,
+      },
+      {
+        type: 'share',
+        name: 'ABC Corporation',
+        symbol: 'ABC',
+        amount: Math.floor(Math.random() * 500) + 100, // 100-600 shares
+        initialAmount: Math.floor(Math.random() * 500) + 100,
+      }
+    ];
+
     // Create wallet
     const wallet = await Wallet.create({
       name,
       description,
-      owner: new mongoose.Types.ObjectId(ownerId),
-      assets,
+      assets: defaultAssets,
       scenarioId: scenarioId ? new mongoose.Types.ObjectId(scenarioId) : undefined,
     });
-    
-    // Populate owner for the response
-    await wallet.populate('owner', '_id name email role');
     
     // Return successful response
     return NextResponse.json({
@@ -105,12 +132,6 @@ export async function POST(request: NextRequest) {
         id: wallet._id,
         name: wallet.name,
         description: wallet.description,
-        owner: {
-          id: wallet.owner._id,
-          name: wallet.owner.name,
-          email: wallet.owner.email,
-          role: wallet.owner.role,
-        },
         assets: wallet.assets,
         scenarioId: wallet.scenarioId,
         createdAt: wallet.createdAt,
@@ -139,11 +160,11 @@ export async function PUT(request: NextRequest) {
       );
     }
     
-    const { id, name, description, ownerId, assets, scenarioId } = await request.json();
+    const { id, name, description, assets, scenarioId } = await request.json();
 
-    if (!id || !name || !description || !ownerId) {
+    if (!id || !name || !description) {
       return NextResponse.json(
-        { message: 'ID, name, description, and owner ID are required' },
+        { message: 'ID, name, and description are required' },
         { status: 400 }
       );
     }
@@ -162,15 +183,11 @@ export async function PUT(request: NextRequest) {
     // Update fields
     wallet.name = name;
     wallet.description = description;
-    wallet.owner = new mongoose.Types.ObjectId(ownerId);
     wallet.assets = assets || [];
     wallet.scenarioId = scenarioId ? new mongoose.Types.ObjectId(scenarioId) : undefined;
     
     // Save changes
     await wallet.save();
-    
-    // Populate owner for the response
-    await wallet.populate('owner', '_id name email role');
     
     // Return successful response
     return NextResponse.json({
@@ -179,12 +196,6 @@ export async function PUT(request: NextRequest) {
         id: wallet._id,
         name: wallet.name,
         description: wallet.description,
-        owner: {
-          id: wallet.owner._id,
-          name: wallet.owner.name,
-          email: wallet.owner.email,
-          role: wallet.owner.role,
-        },
         assets: wallet.assets,
         scenarioId: wallet.scenarioId,
         createdAt: wallet.createdAt,

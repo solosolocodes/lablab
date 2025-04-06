@@ -3,7 +3,7 @@ import { IUser } from './User';
 
 export interface IAsset {
   _id?: mongoose.Types.ObjectId;
-  type: 'share' | 'cryptocurrency' | 'fiat';
+  type: string;
   name: string;
   symbol: string;
   amount: number;
@@ -14,7 +14,6 @@ export interface IAsset {
 const AssetSchema = new mongoose.Schema<IAsset>({
   type: {
     type: String,
-    enum: ['share', 'cryptocurrency', 'fiat'],
     required: [true, 'Asset type is required'],
   },
   name: {
@@ -42,7 +41,6 @@ const AssetSchema = new mongoose.Schema<IAsset>({
 export interface IWallet extends mongoose.Document {
   name: string;
   description: string;
-  owner: mongoose.Types.ObjectId | IUser;
   assets: IAsset[];
   scenarioId?: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -60,11 +58,6 @@ const WalletSchema = new mongoose.Schema<IWallet>(
       type: String,
       required: [true, 'Please provide a description'],
       trim: true,
-    },
-    owner: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'Wallet must have an owner'],
     },
     assets: [AssetSchema],
     scenarioId: {

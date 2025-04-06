@@ -10,7 +10,7 @@ import { toast } from 'react-hot-toast';
 // Type definitions
 type Asset = {
   _id?: string;
-  type: 'share' | 'cryptocurrency' | 'fiat';
+  type: string;
   name: string;
   symbol: string;
   amount: number;
@@ -28,7 +28,6 @@ type Wallet = {
   id: string;
   name: string;
   description: string;
-  owner: User;
   assets: Asset[];
   scenarioId?: string;
   createdAt: string;
@@ -50,10 +49,9 @@ export default function WalletsPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    ownerId: '',
   });
   const [assetFormData, setAssetFormData] = useState<Asset>({
-    type: 'fiat',
+    type: 'cryptocurrency',
     name: '',
     symbol: '',
     amount: 0,
@@ -108,9 +106,7 @@ export default function WalletsPage() {
   // Filter wallets based on search query
   const filteredWallets = wallets.filter(wallet => 
     wallet.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    wallet.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    wallet.owner.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    wallet.owner.email.toLowerCase().includes(searchQuery.toLowerCase())
+    wallet.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Open wallet modal
@@ -122,7 +118,6 @@ export default function WalletsPage() {
     setFormData({
       name: '',
       description: '',
-      ownerId: '',
     });
     
     // If editing, set the form data
@@ -131,7 +126,6 @@ export default function WalletsPage() {
       setFormData({
         name: wallet.name,
         description: wallet.description,
-        ownerId: wallet.owner.id,
       });
     }
   };
@@ -182,10 +176,6 @@ export default function WalletsPage() {
       toast.error('Description must be at least 10 characters');
       return;
     }
-    if (!formData.ownerId) {
-      toast.error('Please select an owner');
-      return;
-    }
     
     // Set loading state
     setIsSubmitting(true);
@@ -204,8 +194,6 @@ export default function WalletsPage() {
           body: JSON.stringify({
             name: formData.name,
             description: formData.description,
-            ownerId: formData.ownerId,
-            assets: [],
           }),
         });
         
@@ -241,7 +229,6 @@ export default function WalletsPage() {
             id: selectedWallet.id,
             name: formData.name,
             description: formData.description,
-            ownerId: formData.ownerId,
             assets: selectedWallet.assets,
             scenarioId: selectedWallet.scenarioId,
           }),
@@ -497,8 +484,36 @@ export default function WalletsPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         );
+      case 'commodity':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+          </svg>
+        );
+      case 'bond':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
+      case 'real_estate':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+        );
+      case 'collectible':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+          </svg>
+        );
       default:
-        return null;
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+        );
     }
   };
 
@@ -511,8 +526,16 @@ export default function WalletsPage() {
         return 'Crypto';
       case 'fiat':
         return 'Fiat';
+      case 'commodity':
+        return 'Commodity';
+      case 'bond':
+        return 'Bond';
+      case 'real_estate':
+        return 'Real Estate';
+      case 'collectible':
+        return 'Collectible';
       default:
-        return type;
+        return type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ');
     }
   };
 
@@ -622,11 +645,8 @@ export default function WalletsPage() {
                   </div>
                 </div>
                 <div className="flex items-center mt-3 text-sm">
-                  <div className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs">
-                    Owner: {wallet.owner.name}
-                  </div>
-                  <div className="ml-2 text-gray-500">
-                    {new Date(wallet.createdAt).toLocaleDateString()}
+                  <div className="text-gray-500">
+                    Created: {new Date(wallet.createdAt).toLocaleDateString()}
                   </div>
                 </div>
               </div>
@@ -649,11 +669,14 @@ export default function WalletsPage() {
                       <div key={asset._id} className="px-4 py-3 flex justify-between items-center">
                         <div className="flex items-center">
                           <div className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                            asset.type === 'share' 
-                              ? 'bg-blue-100 text-blue-600' 
-                              : asset.type === 'cryptocurrency' 
-                                ? 'bg-purple-100 text-purple-600' 
-                                : 'bg-green-100 text-green-600'
+                            asset.type === 'share' ? 'bg-blue-100 text-blue-600' :
+                            asset.type === 'cryptocurrency' ? 'bg-purple-100 text-purple-600' :
+                            asset.type === 'fiat' ? 'bg-green-100 text-green-600' :
+                            asset.type === 'commodity' ? 'bg-yellow-100 text-yellow-600' :
+                            asset.type === 'bond' ? 'bg-indigo-100 text-indigo-600' :
+                            asset.type === 'real_estate' ? 'bg-pink-100 text-pink-600' :
+                            asset.type === 'collectible' ? 'bg-amber-100 text-amber-600' :
+                            'bg-gray-100 text-gray-600'
                           }`}>
                             {getAssetIcon(asset.type)}
                           </div>
@@ -783,25 +806,6 @@ export default function WalletsPage() {
                 )}
               </div>
               
-              <div className="mb-6">
-                <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="ownerId">
-                  Owner
-                </label>
-                <select
-                  id="ownerId"
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  value={formData.ownerId}
-                  onChange={(e) => setFormData({ ...formData, ownerId: e.target.value })}
-                  required
-                >
-                  <option value="">-- Select Owner --</option>
-                  {allUsers.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.name} ({user.email}) - {user.role}
-                    </option>
-                  ))}
-                </select>
-              </div>
               
               <div className="flex justify-end space-x-2">
                 <Button
@@ -861,12 +865,16 @@ export default function WalletsPage() {
                   id="assetType"
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                   value={assetFormData.type}
-                  onChange={(e) => setAssetFormData({ ...assetFormData, type: e.target.value as 'share' | 'cryptocurrency' | 'fiat' })}
+                  onChange={(e) => setAssetFormData({ ...assetFormData, type: e.target.value })}
                   required
                 >
                   <option value="fiat">Fiat Currency</option>
                   <option value="cryptocurrency">Cryptocurrency</option>
                   <option value="share">Share</option>
+                  <option value="commodity">Commodity</option>
+                  <option value="bond">Bond</option>
+                  <option value="real_estate">Real Estate</option>
+                  <option value="collectible">Collectible</option>
                 </select>
               </div>
               

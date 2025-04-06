@@ -26,10 +26,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate asset type
-    if (!['share', 'cryptocurrency', 'fiat'].includes(asset.type)) {
+    // Make sure asset has a valid type string
+    if (typeof asset.type !== 'string' || asset.type.trim() === '') {
       return NextResponse.json(
-        { message: 'Asset type must be one of: share, cryptocurrency, fiat' },
+        { message: 'A valid asset type is required' },
         { status: 400 }
       );
     }
@@ -56,9 +56,6 @@ export async function POST(request: NextRequest) {
     // Save changes
     await wallet.save();
     
-    // Populate owner for the response
-    await wallet.populate('owner', '_id name email role');
-    
     // Return successful response
     return NextResponse.json({
       message: 'Asset added successfully',
@@ -66,12 +63,6 @@ export async function POST(request: NextRequest) {
         id: wallet._id,
         name: wallet.name,
         description: wallet.description,
-        owner: {
-          id: wallet.owner._id,
-          name: wallet.owner.name,
-          email: wallet.owner.email,
-          role: wallet.owner.role,
-        },
         assets: wallet.assets,
         scenarioId: wallet.scenarioId,
         createdAt: wallet.createdAt,
@@ -139,9 +130,6 @@ export async function PUT(request: NextRequest) {
     // Save changes
     await wallet.save();
     
-    // Populate owner for the response
-    await wallet.populate('owner', '_id name email role');
-    
     // Return successful response
     return NextResponse.json({
       message: 'Asset updated successfully',
@@ -149,12 +137,6 @@ export async function PUT(request: NextRequest) {
         id: wallet._id,
         name: wallet.name,
         description: wallet.description,
-        owner: {
-          id: wallet.owner._id,
-          name: wallet.owner.name,
-          email: wallet.owner.email,
-          role: wallet.owner.role,
-        },
         assets: wallet.assets,
         scenarioId: wallet.scenarioId,
         createdAt: wallet.createdAt,
