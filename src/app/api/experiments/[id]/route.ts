@@ -236,17 +236,17 @@ export async function PUT(request: NextRequest) {
         else if (stage.type === 'scenario') {
           // Handle required scenarioId - must be present for scenario stages
           try {
-            // If scenarioId is missing or empty, we need to skip this stage or set a default
+            // If scenarioId is missing or empty, log a warning but don't add scenarioId
+            // This will cause a validation error but won't return null from the route handler
             if (!stage.scenarioId) {
               console.warn(`Scenario stage missing required scenarioId: ${stage.id}`);
-              // Skip this stage by returning immediately
-              return null;
+              stageData._validationError = true; // Mark as invalid for later filtering
+            } else {
+              stageData.scenarioId = stage.scenarioId;
             }
-            stageData.scenarioId = stage.scenarioId;
           } catch (err) {
             console.error('Error processing scenarioId:', err);
-            // Skip this stage by returning null
-            return null;
+            stageData._validationError = true; // Mark as invalid for later filtering
           }
           
           stageData.rounds = stage.rounds ? Number(stage.rounds) : 1;
@@ -265,9 +265,16 @@ export async function PUT(request: NextRequest) {
           stageData.message = stage.message;
         }
         
-        // Only add the stage if it's not null (skip invalid stages)
-        if (stageData !== null) {
+        // Skip stages with validation errors
+        if (!stageData._validationError) {
+          // Delete the validation flag property before adding to MongoDB
+          if (stageData._validationError !== undefined) {
+            delete stageData._validationError;
+          }
           experiment.stages.push(stageData);
+        } else {
+          // Log skipped stage for debugging
+          console.log(`Skipping invalid stage: ${stage.id} (${stage.type})`);
         }
       }
     }
