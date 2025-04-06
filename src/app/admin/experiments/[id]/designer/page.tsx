@@ -654,11 +654,63 @@ export default function ExperimentDesignerPage() {
                           <div className="font-medium flex items-center">
                             <span className="mr-2">{index + 1}.</span> 
                             <span>{node.data.label}</span>
-                            {index > 0 && (
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mx-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4" />
-                              </svg>
-                            )}
+                            
+                            {/* Order adjustment buttons */}
+                            <div className="flex space-x-1 ml-2">
+                              {index > 0 && (
+                                <button 
+                                  className="p-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Move node up in order
+                                    const newNodes = [...nodes];
+                                    const temp = newNodes[index];
+                                    newNodes[index] = newNodes[index - 1];
+                                    newNodes[index - 1] = temp;
+                                    
+                                    // Update the order property for persistence
+                                    newNodes.forEach((node, idx) => {
+                                      if (node.data.stageData) {
+                                        node.data.stageData.order = idx;
+                                      }
+                                    });
+                                    
+                                    setNodes(newNodes);
+                                  }}
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                              )}
+                              
+                              {index < nodes.length - 1 && (
+                                <button 
+                                  className="p-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Move node down in order
+                                    const newNodes = [...nodes];
+                                    const temp = newNodes[index];
+                                    newNodes[index] = newNodes[index + 1];
+                                    newNodes[index + 1] = temp;
+                                    
+                                    // Update the order property for persistence
+                                    newNodes.forEach((node, idx) => {
+                                      if (node.data.stageData) {
+                                        node.data.stageData.order = idx;
+                                      }
+                                    });
+                                    
+                                    setNodes(newNodes);
+                                  }}
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
                           </div>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
                             node.data.type === 'instructions' ? 'bg-purple-100 text-purple-700' :
@@ -681,15 +733,42 @@ export default function ExperimentDesignerPage() {
                           <span className="text-xs text-gray-500">
                             Duration: {node.data.stageData?.durationSeconds || 0} seconds
                           </span>
-                          <button 
-                            className="text-xs text-purple-600 hover:text-purple-800 px-2 py-1 bg-purple-50 rounded"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedNode(node as Node<NodeData>);
-                            }}
-                          >
-                            Edit Properties
-                          </button>
+                          <div className="flex space-x-2">
+                            <button 
+                              className="text-xs text-purple-600 hover:text-purple-800 px-2 py-1 bg-purple-50 rounded"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedNode(node as Node<NodeData>);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              className="text-xs text-red-600 hover:text-red-800 px-2 py-1 bg-red-50 rounded"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                
+                                // Remove from nodes list
+                                const updatedNodes = nodes.filter(n => n.id !== node.id);
+                                
+                                // Re-number the order property
+                                updatedNodes.forEach((node, idx) => {
+                                  if (node.data.stageData) {
+                                    node.data.stageData.order = idx;
+                                  }
+                                });
+                                
+                                setNodes(updatedNodes);
+                                
+                                // If deleting selected node, clear selection
+                                if (selectedNode?.id === node.id) {
+                                  setSelectedNode(null);
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -783,13 +862,20 @@ export default function ExperimentDesignerPage() {
                   if (!experiment) return;
                   
                   try {
+                    // First, ensure all nodes have an order property that matches their array index
+                    nodes.forEach((node, index) => {
+                      if (node.data.stageData) {
+                        node.data.stageData.order = index;
+                      }
+                    });
+                    
                     // Convert nodes and edges to experiment stages and branches
                     const stages = nodes.map((node) => ({
                       id: node.id,
                       type: node.data.type,
                       title: node.data.label,
                       description: node.data.description || '',
-                      order: 0, // This would be calculated based on graph traversal
+                      order: node.data.stageData?.order || 0,
                       durationSeconds: node.data.stageData?.durationSeconds || 30,
                       required: node.data.stageData?.required !== false,
                       ...node.data.stageData
@@ -815,18 +901,26 @@ export default function ExperimentDesignerPage() {
                       lastEditedAt: new Date().toISOString()
                     };
                     
-                    const response = await fetch(`/api/experiments/${experimentId}`, {
-                      method: 'PUT',
-                      headers: {
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify(updatedExperiment)
-                    });
+                    console.log('Saving experiment:', JSON.stringify(updatedExperiment, null, 2));
                     
-                    if (response.ok) {
-                      toast.success('Experiment saved as draft');
-                    } else {
-                      throw new Error('Failed to save experiment');
+                    try {
+                      const response = await fetch(`/api/experiments/${experimentId}`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updatedExperiment)
+                      });
+                      
+                      if (response.ok) {
+                        toast.success('Experiment saved as draft');
+                      } else {
+                        const errorData = await response.json();
+                        throw new Error(`Failed to save experiment: ${errorData.message || response.statusText}`);
+                      }
+                    } catch (apiError) {
+                      console.error('API Error:', apiError);
+                      throw new Error(`API Error: ${apiError.message}`);
                     }
                   } catch (error) {
                     console.error('Error saving experiment:', error);
@@ -847,13 +941,20 @@ export default function ExperimentDesignerPage() {
                   }
                   
                   try {
-                    // Same conversion as in Save as Draft, but with 'published' status
+                    // First, ensure all nodes have an order property that matches their array index
+                    nodes.forEach((node, index) => {
+                      if (node.data.stageData) {
+                        node.data.stageData.order = index;
+                      }
+                    });
+                    
+                    // Convert nodes and edges to experiment stages and branches
                     const stages = nodes.map((node) => ({
                       id: node.id,
                       type: node.data.type,
                       title: node.data.label,
                       description: node.data.description || '',
-                      order: 0, // This would be calculated based on graph traversal
+                      order: node.data.stageData?.order || 0,
                       durationSeconds: node.data.stageData?.durationSeconds || 30,
                       required: node.data.stageData?.required !== false,
                       ...node.data.stageData
@@ -877,22 +978,30 @@ export default function ExperimentDesignerPage() {
                       lastEditedAt: new Date().toISOString()
                     };
                     
-                    const response = await fetch(`/api/experiments/${experimentId}`, {
-                      method: 'PUT',
-                      headers: {
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify(updatedExperiment)
-                    });
+                    console.log('Publishing experiment:', JSON.stringify(updatedExperiment, null, 2));
                     
-                    if (response.ok) {
-                      toast.success('Experiment published successfully!');
-                      // Optionally redirect to the experiments list
-                      setTimeout(() => {
-                        router.push('/admin/experiments');
-                      }, 1500);
-                    } else {
-                      throw new Error('Failed to publish experiment');
+                    try {
+                      const response = await fetch(`/api/experiments/${experimentId}`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(updatedExperiment)
+                      });
+                      
+                      if (response.ok) {
+                        toast.success('Experiment published successfully!');
+                        // Optionally redirect to the experiments list
+                        setTimeout(() => {
+                          router.push('/admin/experiments');
+                        }, 1500);
+                      } else {
+                        const errorData = await response.json();
+                        throw new Error(`Failed to publish experiment: ${errorData.message || response.statusText}`);
+                      }
+                    } catch (apiError) {
+                      console.error('API Error:', apiError);
+                      throw new Error(`API Error: ${apiError.message}`);
                     }
                   } catch (error) {
                     console.error('Error publishing experiment:', error);
