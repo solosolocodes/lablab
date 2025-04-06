@@ -283,8 +283,13 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
               </p>
               
               {/* Update the actual durationSeconds with the calculated value */}
-              {/* We call this directly instead of using useEffect to avoid hook rules issues */}
-              {handleStageDataChange('durationSeconds', calculatedDuration), null}
+              {/* We call this as a side effect in the render */}
+              <div className="hidden">
+                {React.useMemo(() => {
+                  handleStageDataChange('durationSeconds', calculatedDuration);
+                  return null;
+                }, [calculatedDuration])}
+              </div>
             </div>
             
             <div className="mt-5">
