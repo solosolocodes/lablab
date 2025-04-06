@@ -135,8 +135,15 @@ export async function PUT(request: NextRequest) {
     
     // Handle userGroups
     if (userGroups) {
+      // Define interface for userGroup
+      interface UserGroupInput {
+        userGroupId: string;
+        condition: string;
+        maxParticipants?: number | string;
+      }
+      
       // Ensure maxParticipants is a number or undefined
-      experiment.userGroups = userGroups.map(group => ({
+      experiment.userGroups = userGroups.map((group: UserGroupInput) => ({
         userGroupId: group.userGroupId,
         condition: group.condition,
         maxParticipants: group.maxParticipants !== undefined ? Number(group.maxParticipants) : undefined
@@ -145,10 +152,52 @@ export async function PUT(request: NextRequest) {
     
     // Handle stages - need to ensure all required fields are present based on type
     if (stages) {
+      // Define interfaces for stage data
+      interface BaseStageInput {
+        id: string;
+        type: 'instructions' | 'scenario' | 'survey' | 'break';
+        title: string;
+        description: string;
+        durationSeconds: number | string;
+        required?: boolean;
+        order: number | string;
+      }
+      
+      interface InstructionsStageInput extends BaseStageInput {
+        type: 'instructions';
+        content: string;
+        format?: 'text' | 'markdown' | 'html';
+      }
+      
+      interface ScenarioStageInput extends BaseStageInput {
+        type: 'scenario';
+        scenarioId: string;
+        rounds?: number | string;
+        roundDuration?: number | string;
+      }
+      
+      interface SurveyStageInput extends BaseStageInput {
+        type: 'survey';
+        questions?: Array<{
+          id: string;
+          text: string;
+          type: string;
+          options?: string[];
+          required?: boolean;
+        }>;
+      }
+      
+      interface BreakStageInput extends BaseStageInput {
+        type: 'break';
+        message: string;
+      }
+      
+      type StageInput = InstructionsStageInput | ScenarioStageInput | SurveyStageInput | BreakStageInput;
+      
       experiment.stages = [];
       
       // Process each stage
-      for (const stage of stages) {
+      for (const stage of stages as StageInput[]) {
         // Common fields for all stage types
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const stageData: any = {
