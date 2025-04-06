@@ -11,16 +11,11 @@ import {
   BreakStageData
 } from './StageNodes';
 
-// Custom hook to handle duration calculation
-function useCalculatedDuration(
-  rounds: number, 
-  roundDuration: number, 
-  onChange: (field: string, value: number) => void
-) {
-  useEffect(() => {
-    const calculatedDuration = rounds * roundDuration;
-    onChange('durationSeconds', calculatedDuration);
-  }, [rounds, roundDuration, onChange]);
+// This custom hook is no longer used directly, but we're keeping it here 
+// in case we need to reintroduce it in the future
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function calculateDuration(rounds: number, roundDuration: number): number {
+  return rounds * roundDuration;
 }
 
 type StagePropertiesProps = {
@@ -213,16 +208,43 @@ const ScenarioProperties = ({
         
       } catch (error) {
         console.error('Error fetching scenario details:', error);
+        
+        // Set error state but keep any previous valid values
         setScenarioDetails(prev => ({
-          ...prev,
+          rounds: prev.rounds,
+          roundDuration: prev.roundDuration,
           loading: false,
           error: error instanceof Error ? error.message : 'Unknown error'
         }));
+        
+        // Show error toast
+        toast.error('Failed to fetch scenario details. Using default values.');
+        
+        // Keep values in sync with what's displayed
+        handleStageDataChange('durationSeconds', scenarioDetails.rounds * scenarioDetails.roundDuration);
       }
     };
     
-    fetchScenarioDetails();
-  }, [scenarioId, handleStageDataChange]);
+    // Implement retry mechanism with timeout
+    let retryCount = 0;
+    const maxRetries = 2;
+    
+    const fetchWithRetry = async () => {
+      try {
+        await fetchScenarioDetails();
+      } catch (error) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          // Exponential backoff: 2s, 4s
+          const delay = 1000 * Math.pow(2, retryCount);
+          console.log(`Retrying fetch (${retryCount}/${maxRetries}) after ${delay}ms`);
+          setTimeout(fetchWithRetry, delay);
+        }
+      }
+    };
+    
+    fetchWithRetry();
+  }, [scenarioId, handleStageDataChange, scenarioDetails.rounds, scenarioDetails.roundDuration]);
   
   // Update parent state when scenarioId changes
   useEffect(() => {
@@ -312,11 +334,21 @@ const ScenarioProperties = ({
         <button 
           className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded"
           onClick={() => {
-            // Apply changes and show confirmation
-            toast.success('Scenario settings updated successfully!');
+            // Apply scenario changes if scenario is selected
+            if (!scenarioId) {
+              toast.error('Please select a scenario first');
+              return;
+            }
+            
+            // Update the duration calculation
+            const calculatedDuration = scenarioDetails.rounds * scenarioDetails.roundDuration;
+            handleStageDataChange('durationSeconds', calculatedDuration);
+            
+            // Show confirmation message
+            toast.success('Scenario settings applied to stage');
           }}
         >
-          Save Scenario
+          Apply Scenario Settings
         </button>
       </div>
     </div>
