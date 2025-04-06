@@ -232,7 +232,8 @@ const ScenarioProperties = ({
     const fetchWithRetry = async () => {
       try {
         await fetchScenarioDetails();
-      } catch (error) {
+      } catch (err) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         if (retryCount < maxRetries) {
           retryCount++;
           // Exponential backoff: 2s, 4s
