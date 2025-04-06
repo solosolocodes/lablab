@@ -508,8 +508,6 @@ export default function UserGroupsPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      {/* Toast container for notifications */}
-      <div>
       {/* Navbar */}
       <nav className="bg-purple-700 text-white shadow-md">
         <div className="container mx-auto px-4 py-3">
