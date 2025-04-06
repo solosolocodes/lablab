@@ -14,7 +14,8 @@ interface MongooseCache {
 
 // Define interface for the global namespace
 declare global {
-  var mongoose: MongooseCache | undefined;
+  // Using let here to satisfy ESLint, but it's just a type declaration
+  let mongoose: MongooseCache | undefined;
 }
 
 /**
@@ -22,7 +23,7 @@ declare global {
  * in development. This prevents connections growing exponentially
  * during API Route usage.
  */
-let cached: MongooseCache = global.mongoose || { conn: null, promise: null };
+const cached: MongooseCache = global.mongoose || { conn: null, promise: null };
 
 // Cache the connection in global namespace
 if (!global.mongoose) {
