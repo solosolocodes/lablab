@@ -295,14 +295,21 @@ export default function ExperimentDesignerPage() {
     
     const updatedStages = experiment.stages.map(stage => {
       if (stage.id === selectedStage.id) {
-        return {
+        // Base updated stage
+        const updatedStage = {
           ...stage,
           ...stageFormData,
-          // Special handling for scenario stages to calculate duration
-          ...(stage.type === 'scenario' && {
-            durationSeconds: (stageFormData.rounds as number || 1) * (stageFormData.roundDuration as number || 60)
-          })
         };
+        
+        // Special handling for scenario stages to calculate duration
+        if (stage.type === 'scenario' && stageFormData.type === 'scenario') {
+          const scenarioData = stageFormData as Partial<ScenarioStage>;
+          const rounds = scenarioData.rounds || 1;
+          const roundDuration = scenarioData.roundDuration || 60;
+          updatedStage.durationSeconds = rounds * roundDuration;
+        }
+        
+        return updatedStage;
       }
       return stage;
     });
