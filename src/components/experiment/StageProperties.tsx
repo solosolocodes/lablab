@@ -163,19 +163,31 @@ const ScenarioProperties = ({
     error: null
   });
   
+  // If we have a scenarioId from props, fetch it immediately on first render
+  const isInitialRender = React.useRef(true);
+  
   // Calculate duration from the scenario details
   const calculatedDuration = scenarioDetails.rounds * scenarioDetails.roundDuration;
   
+  // Check for initial scenarioId and trigger fetch
+  useEffect(() => {
+    if (isInitialRender.current && scenarioId) {
+      isInitialRender.current = false;
+      // Initial scenario fetch will be handled by the next useEffect
+    }
+  }, []);
+    
   // Fetch scenario details when scenarioId changes
   useEffect(() => {
     if (!scenarioId) {
-      // Reset to defaults if no scenario selected
-      setScenarioDetails({
+      // Keep some sensible defaults if no scenario selected
+      setScenarioDetails(prev => ({
+        ...prev,
         rounds: 1,
         roundDuration: 60,
         loading: false,
         error: null
-      });
+      }));
       return;
     }
     
@@ -260,23 +272,26 @@ const ScenarioProperties = ({
   
   return (
     <div className="mt-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Select Scenario
-      </label>
-      <select
-        className="w-full px-3 py-2 border rounded-md text-sm"
-        value={scenarioId}
-        onChange={(e) => setScenarioId(e.target.value)}
-      >
-        <option value="">-- Select a scenario --</option>
-        {scenarios.map(scenario => (
-          <option key={scenario.id} value={scenario.id}>
-            {scenario.name}
-          </option>
-        ))}
-      </select>
+      {/* Move scenario selection to the top */}
+      <div className="mb-4 border-b pb-3">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Select Scenario
+        </label>
+        <select
+          className="w-full px-3 py-2 border rounded-md text-sm"
+          value={scenarioId}
+          onChange={(e) => setScenarioId(e.target.value)}
+        >
+          <option value="">-- Select a scenario --</option>
+          {scenarios.map(scenario => (
+            <option key={scenario.id} value={scenario.id}>
+              {scenario.name}
+            </option>
+          ))}
+        </select>
+      </div>
       
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Number of Rounds
@@ -284,14 +299,16 @@ const ScenarioProperties = ({
           <input
             type="number"
             min="1"
-            className={`w-full px-3 py-2 border rounded-md text-sm bg-gray-100 ${
-              scenarioDetails.loading ? 'opacity-50' : ''
-            }`}
+            className={`w-full px-3 py-2 border rounded-md text-sm ${
+              !scenarioId ? 'bg-white' : 'bg-gray-100'
+            } ${scenarioDetails.loading ? 'opacity-50' : ''}`}
             value={scenarioDetails.loading ? 'Loading...' : scenarioDetails.rounds}
             readOnly
-            disabled
+            disabled={!!scenarioId}
           />
-          <p className="text-xs text-gray-500 mt-1">Set in scenario settings</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {scenarioId ? 'Set in scenario settings' : 'Will be loaded from scenario'}
+          </p>
         </div>
         
         <div>
@@ -301,14 +318,16 @@ const ScenarioProperties = ({
           <input
             type="number"
             min="10"
-            className={`w-full px-3 py-2 border rounded-md text-sm bg-gray-100 ${
-              scenarioDetails.loading ? 'opacity-50' : ''
-            }`}
+            className={`w-full px-3 py-2 border rounded-md text-sm ${
+              !scenarioId ? 'bg-white' : 'bg-gray-100'
+            } ${scenarioDetails.loading ? 'opacity-50' : ''}`}
             value={scenarioDetails.loading ? 'Loading...' : scenarioDetails.roundDuration}
             readOnly
-            disabled
+            disabled={!!scenarioId}
           />
-          <p className="text-xs text-gray-500 mt-1">Set in scenario settings</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {scenarioId ? 'Set in scenario settings' : 'Will be loaded from scenario'}
+          </p>
         </div>
       </div>
       
@@ -318,15 +337,17 @@ const ScenarioProperties = ({
         </div>
       )}
       
-      <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
+      <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-md">
         <div className="flex justify-between items-center">
-          <span className="text-sm font-medium text-gray-700">Total Duration:</span>
-          <span className="text-sm text-gray-900">
+          <span className="text-sm font-medium text-blue-700">Total Duration:</span>
+          <span className="text-sm font-medium text-blue-900">
             {scenarioDetails.loading ? 'Calculating...' : `${calculatedDuration} seconds`}
           </span>
         </div>
-        <p className="text-xs text-gray-500 mt-1">
-          Calculated as {scenarioDetails.rounds} rounds × {scenarioDetails.roundDuration} seconds per round
+        <p className="text-xs text-blue-600 mt-1">
+          {scenarioId 
+            ? `Calculated from scenario: ${scenarioDetails.rounds} rounds × ${scenarioDetails.roundDuration} seconds per round`
+            : 'Select a scenario to load duration details'}
         </p>
       </div>
       
