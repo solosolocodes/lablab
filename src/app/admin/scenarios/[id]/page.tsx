@@ -44,6 +44,7 @@ export default function ScenarioDetailPage() {
   const [localPriceData, setLocalPriceData] = useState<PriceData[]>([]);
   const [currentRound, setCurrentRound] = useState(0); // For focusing on a specific round
   const [editMode, setEditMode] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Redirect if not admin
   useEffect(() => {
@@ -174,6 +175,107 @@ export default function ScenarioDetailPage() {
     if (price >= 10000) return price.toLocaleString('en-US', { maximumFractionDigits: 0 });
     return price.toLocaleString('en-US', { maximumFractionDigits: 2 });
   };
+  
+  // Export price data to CSV
+  const exportPriceDataToCSV = () => {
+    if (!scenario) return;
+    
+    // Create header row with round numbers
+    const headerRow = ['Asset ID', 'Symbol', 'Name', ...Array.from({ length: scenario.rounds + 1 }, (_, i) => 
+      i === 0 ? 'Initial' : `Round ${i}`
+    )];
+    
+    // Create data rows
+    const dataRows = localPriceData.map(asset => [
+      asset.assetId,
+      asset.symbol,
+      asset.name,
+      ...asset.prices.map(price => price.toString())
+    ]);
+    
+    // Combine header and data rows
+    const csvContent = [
+      headerRow.join(','),
+      ...dataRows.map(row => row.join(','))
+    ].join('\n');
+    
+    // Create a Blob and download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `scenario_${scenario.id}_prices.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+  // Handle file selection for CSV import
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setIsImporting(true);
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const csvText = e.target?.result as string;
+        const lines = csvText.split('\n');
+        
+        // Skip header row and parse data rows
+        const newPriceData = lines.slice(1).filter(line => line.trim()).map(line => {
+          const values = line.split(',');
+          
+          // Extract asset info and prices
+          const assetId = values[0];
+          const symbol = values[1];
+          const name = values[2];
+          const prices = values.slice(3).map(Number);
+          
+          return {
+            assetId,
+            symbol,
+            name,
+            prices
+          };
+        });
+        
+        // Validate and update price data
+        if (newPriceData.length === 0) {
+          throw new Error('No valid data found in CSV file');
+        }
+        
+        // Ensure each asset has the correct number of prices
+        const requiredPriceCount = scenario ? scenario.rounds + 1 : 0;
+        const invalidData = newPriceData.find(asset => asset.prices.length !== requiredPriceCount);
+        if (invalidData) {
+          throw new Error(`Invalid data format: Each asset must have ${requiredPriceCount} price values`);
+        }
+        
+        // Update local price data
+        setLocalPriceData(newPriceData);
+        toast.success('Price data imported successfully');
+      } catch (error) {
+        console.error('Error parsing CSV:', error);
+        toast.error('Failed to import CSV: ' + (error instanceof Error ? error.message : 'Invalid format'));
+      } finally {
+        setIsImporting(false);
+        // Reset the file input
+        event.target.value = '';
+      }
+    };
+    
+    reader.onerror = () => {
+      toast.error('Failed to read file');
+      setIsImporting(false);
+      // Reset the file input
+      event.target.value = '';
+    };
+    
+    reader.readAsText(file);
+  };
 
   // Get color class based on price change
   const getPriceChangeColor = (currentPrice: number, previousPrice: number) => {
@@ -266,12 +368,37 @@ export default function ScenarioDetailPage() {
           </div>
           <div className="flex space-x-2">
             {!editMode ? (
-              <Button 
-                className="bg-blue-600 hover:bg-blue-700 px-4 py-2"
-                onClick={() => setEditMode(true)}
-              >
-                Edit Prices
-              </Button>
+              <>
+                <Button 
+                  className="bg-blue-600 hover:bg-blue-700 px-4 py-2"
+                  onClick={() => setEditMode(true)}
+                >
+                  Edit Prices
+                </Button>
+                <Button 
+                  className="bg-teal-600 hover:bg-teal-700 px-4 py-2"
+                  onClick={exportPriceDataToCSV}
+                >
+                  Export CSV
+                </Button>
+                <div className="relative">
+                  <Button 
+                    className="bg-emerald-600 hover:bg-emerald-700 px-4 py-2"
+                    onClick={() => document.getElementById('csv-file-input')?.click()}
+                    disabled={isImporting}
+                  >
+                    {isImporting ? 'Importing...' : 'Import CSV'}
+                  </Button>
+                  <input
+                    id="csv-file-input"
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    disabled={isImporting}
+                  />
+                </div>
+              </>
             ) : (
               <>
                 <Button 
@@ -289,6 +416,29 @@ export default function ScenarioDetailPage() {
                 >
                   Generate Random
                 </Button>
+                <Button 
+                  className="bg-teal-600 hover:bg-teal-700 px-4 py-2"
+                  onClick={exportPriceDataToCSV}
+                >
+                  Export CSV
+                </Button>
+                <div className="relative">
+                  <Button 
+                    className="bg-emerald-600 hover:bg-emerald-700 px-4 py-2"
+                    onClick={() => document.getElementById('csv-file-input')?.click()}
+                    disabled={isImporting}
+                  >
+                    {isImporting ? 'Importing...' : 'Import CSV'}
+                  </Button>
+                  <input
+                    id="csv-file-input"
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    disabled={isImporting}
+                  />
+                </div>
                 <Button 
                   className="bg-purple-600 hover:bg-purple-700 px-4 py-2"
                   onClick={saveChanges}
