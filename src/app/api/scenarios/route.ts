@@ -111,16 +111,21 @@ export async function POST(request: NextRequest) {
     const assetPrices = wallet.assets.map((asset: IAsset) => {
       // For each asset, generate a price for each round
       // Initial prices are based on current amount with random fluctuation
-      const prices = Array.from({ length: rounds }, (_, i) => {
+      const prices: number[] = [];
+      
+      // Initialize prices array
+      for (let i = 0; i < rounds; i++) {
         // Generate a price that fluctuates around the initial amount
         // For the first round, use the current amount
-        if (i === 0) return asset.amount;
-        
-        // For subsequent rounds, fluctuate by -20% to +20%
-        const fluctuation = 0.8 + (Math.random() * 0.4); // 0.8 to 1.2
-        const previousPrice = i > 0 ? prices[i-1] : asset.amount;
-        return previousPrice * fluctuation;
-      });
+        if (i === 0) {
+          prices.push(asset.amount);
+        } else {
+          // For subsequent rounds, fluctuate by -20% to +20%
+          const fluctuation = 0.8 + (Math.random() * 0.4); // 0.8 to 1.2
+          const previousPrice = prices[i-1];
+          prices.push(previousPrice * fluctuation);
+        }
+      }
 
       return {
         assetId: asset._id,
