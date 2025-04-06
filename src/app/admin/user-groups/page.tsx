@@ -34,6 +34,7 @@ export default function UserGroupsPage() {
   const [modalType, setModalType] = useState<'createUser' | 'createGroup' | 'editGroup' | 'editUser' | ''>('');
   const [selectedGroup, setSelectedGroup] = useState<UserGroup | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -48,7 +49,9 @@ export default function UserGroupsPage() {
     }
   }, [session, status, router]);
 
-  // Generate dummy data for user groups
+  // We no longer need the dummy data since we're using real MongoDB data
+  // This code is kept as reference but not used
+  /*
   const generateDummyUserGroups = (): UserGroup[] => {
     const generateId = () => Math.random().toString(36).substring(2, 10);
     const groups: UserGroup[] = [
@@ -86,24 +89,13 @@ export default function UserGroupsPage() {
       },
     ];
 
-    // Generate dummy users
-    const users = generateDummyUsers();
-    
-    // Distribute users among groups
-    users.forEach((user, index) => {
-      // Add user to first group
-      groups[index % groups.length].users.push(user);
-      
-      // Add some users to multiple groups to demonstrate multiple group membership
-      if (index % 3 === 0 && index < users.length - 1) {
-        groups[(index + 1) % groups.length].users.push(user);
-      }
-    });
-    
     return groups;
   };
+  */
   
-  // Generate dummy users
+  // We no longer need the dummy users since we're fetching from MongoDB
+  // This function is kept as reference but commented out
+  /*
   const generateDummyUsers = (): User[] => {
     const generateId = () => Math.random().toString(36).substring(2, 10);
     const names = [
@@ -124,6 +116,7 @@ export default function UserGroupsPage() {
       };
     });
   };
+  */
 
   const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -214,6 +207,30 @@ export default function UserGroupsPage() {
   // Handle form submission
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form
+    if (modalType === 'createGroup' || modalType === 'editGroup') {
+      if (formData.name.length < 3) {
+        toast.error('Group name must be at least 3 characters');
+        return;
+      }
+      if (formData.description.length < 10) {
+        toast.error('Description must be at least 10 characters');
+        return;
+      }
+    } else if (modalType === 'createUser' || modalType === 'editUser') {
+      if (formData.name.length < 2) {
+        toast.error('Name must be at least 2 characters');
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+        toast.error('Please enter a valid email address');
+        return;
+      }
+    }
+    
+    // Set loading state
+    setIsSubmitting(true);
     
     const generateId = () => Math.random().toString(36).substring(2, 10);
     
@@ -338,8 +355,7 @@ export default function UserGroupsPage() {
         }
       } catch (error) {
         console.error('Error creating participant:', error);
-        // You would typically show an error message here
-        alert('Failed to create participant: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        toast.error('Failed to create participant: ' + (error instanceof Error ? error.message : 'Unknown error'), { id: 'create-user' });
         return; // Don't close the modal so they can try again
       }
     }
@@ -383,7 +399,7 @@ export default function UserGroupsPage() {
         setUserGroups(updatedGroups);
       } catch (error) {
         console.error('Error updating participant:', error);
-        alert('Failed to update participant');
+        toast.error('Failed to update participant: ' + (error instanceof Error ? error.message : 'Unknown error'), { id: 'edit-user' });
         return;
       }
     }
@@ -392,6 +408,7 @@ export default function UserGroupsPage() {
     setIsModalOpen(false);
     setSelectedGroup(null);
     setSelectedUser(null);
+    setIsSubmitting(false);
   };
 
   // Add/remove user from group
@@ -458,7 +475,10 @@ export default function UserGroupsPage() {
   
   // Delete a user group
   const deleteGroup = async (groupId: string) => {
-    if (!confirm('Are you sure you want to delete this group?')) {
+    const group = userGroups.find(g => g.id === groupId);
+    if (!group) return;
+    
+    if (!confirm(`Are you sure you want to delete the group "${group.name}"? This action cannot be undone.`)) {
       return;
     }
     
@@ -489,7 +509,88 @@ export default function UserGroupsPage() {
       );
     }
   };
+  
+  // Delete a user
+  const deleteUser = async (userId: string) => {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
+    
+    if (!confirm(`Are you sure you want to delete the user "${user.name}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      // Start loading state
+      toast.loading('Deleting user...', { id: `delete-user-${userId}` });
+      
+      // Send delete request to API
+      const response = await fetch(`/api/users?id=${userId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to delete user');
+      }
+      
+      // Remove from local state
+      setAllUsers(allUsers.filter(user => user.id !== userId));
+      
+      // Also remove from any groups they were part of
+      const updatedGroups = userGroups.map(group => ({
+        ...group,
+        users: group.users.filter(u => u.id !== userId)
+      }));
+      setUserGroups(updatedGroups);
+      
+      // Show success message
+      toast.success('User deleted successfully', { id: `delete-user-${userId}` });
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error(
+        'Failed to delete user: ' + (error instanceof Error ? error.message : 'Unknown error'), 
+        { id: `delete-user-${userId}` }
+      );
+    }
+  };
 
+  // Export group data to CSV
+  const exportGroupToCsv = (group: UserGroup) => {
+    // Create CSV content
+    const headers = ['ID', 'Name', 'Email', 'Role', 'Added Date'];
+    const csvRows = [headers.join(',')];
+    
+    group.users.forEach(user => {
+      const row = [
+        user.id,
+        `"${user.name.replace(/"/g, '""')}"`, // Escape quotes in CSV
+        `"${user.email.replace(/"/g, '""')}"`,
+        user.role,
+        new Date(user.createdAt).toISOString().split('T')[0]
+      ];
+      csvRows.push(row.join(','));
+    });
+    
+    // Create downloadable link
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    // Create a link and click it to download
+    const link = document.createElement('a');
+    const fileName = `${group.name.replace(/\s+/g, '_')}_users_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Show success notification
+    toast.success(`Exported ${group.users.length} users to CSV`);
+  };
+  
   // Loading state
   if (status === 'loading') {
     return (
@@ -654,6 +755,15 @@ export default function UserGroupsPage() {
                       >
                         Edit
                       </button>
+                      {group.users.length > 0 && (
+                        <button 
+                          onClick={() => exportGroupToCsv(group)}
+                          className="text-emerald-600 hover:text-emerald-900 mr-3"
+                          title="Export users to CSV"
+                        >
+                          Export
+                        </button>
+                      )}
                       <button 
                         onClick={() => deleteGroup(group.id)}
                         className="text-red-600 hover:text-red-900"
@@ -744,6 +854,7 @@ export default function UserGroupsPage() {
                         Edit
                       </button>
                       <button 
+                        onClick={() => deleteUser(user.id)}
                         className="text-red-600 hover:text-red-900"
                       >
                         Delete
@@ -808,7 +919,13 @@ export default function UserGroupsPage() {
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
+                      minLength={3}
+                      maxLength={50}
+                      placeholder="Enter group name (3-50 characters)"
                     />
+                    {formData.name && formData.name.length < 3 && (
+                      <p className="text-red-500 text-xs mt-1">Name must be at least 3 characters</p>
+                    )}
                   </div>
                   
                   <div className="mb-6">
@@ -822,7 +939,13 @@ export default function UserGroupsPage() {
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       rows={3}
                       required
+                      minLength={10}
+                      maxLength={200}
+                      placeholder="Enter group description (10-200 characters)"
                     />
+                    {formData.description && formData.description.length < 10 && (
+                      <p className="text-red-500 text-xs mt-1">Description must be at least 10 characters</p>
+                    )}
                   </div>
                 </>
               )}
@@ -840,7 +963,13 @@ export default function UserGroupsPage() {
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
+                      minLength={2}
+                      maxLength={50}
+                      placeholder="Enter participant's full name"
                     />
+                    {formData.name && formData.name.length < 2 && (
+                      <p className="text-red-500 text-xs mt-1">Name must be at least 2 characters</p>
+                    )}
                   </div>
                   
                   <div className="mb-4">
@@ -854,7 +983,12 @@ export default function UserGroupsPage() {
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
+                      pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+                      placeholder="participant@example.com"
                     />
+                    {formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) && (
+                      <p className="text-red-500 text-xs mt-1">Please enter a valid email address</p>
+                    )}
                   </div>
                   
                   {modalType === 'createUser' && (
@@ -889,8 +1023,19 @@ export default function UserGroupsPage() {
                 <Button
                   type="submit"
                   className="bg-purple-600 hover:bg-purple-700"
+                  disabled={isSubmitting}
                 >
-                  {modalType.startsWith('create') ? 'Create' : 'Save Changes'}
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {modalType.startsWith('create') ? 'Creating...' : 'Saving...'}
+                    </span>
+                  ) : (
+                    modalType.startsWith('create') ? 'Create' : 'Save Changes'
+                  )}
                 </Button>
               </div>
             </form>
@@ -930,13 +1075,153 @@ export default function UserGroupsPage() {
                     type="text"
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder="Search users..."
-                    onChange={() => {
-                      // This would filter the user list in a real implementation
-                    }}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                   />
                 </div>
+                <div className="mb-2 flex justify-between items-center">
+                  <span className="text-sm text-gray-600">
+                    {selectedGroup.users.length} users in this group
+                  </span>
+                  <div className="flex space-x-2">
+                    {filteredUsers.filter(user => !selectedGroup.users.some(u => u.id === user.id)).length > 0 && (
+                      <Button
+                        type="button"
+                        className="text-xs px-3 py-1 bg-green-100 text-green-800 hover:bg-green-200"
+                        onClick={() => {
+                          if (confirm(`Add all ${filteredUsers.filter(user => !selectedGroup.users.some(u => u.id === user.id)).length} filtered users to "${selectedGroup.name}"?`)) {
+                            // Get IDs of all filtered users that aren't in the group yet
+                            const usersToAdd = filteredUsers
+                              .filter(user => !selectedGroup.users.some(u => u.id === user.id));
+                            
+                            if (usersToAdd.length === 0) return;
+                            
+                            // Add batch of users to the group
+                            const updatedUsers = [...selectedGroup.users, ...usersToAdd];
+                            // Show loading indicator
+                            toast.loading('Adding users to group...', { id: 'batch-add-users' });
+                            
+                            // Update in the database
+                            (async () => {
+                              try {
+                                // Get all user IDs for the updated group
+                                const updatedUserIds = [
+                                  ...selectedGroup.users.map(u => u.id),
+                                  ...usersToAdd.map(u => u.id)
+                                ];
+                                
+                                // Update the group in MongoDB
+                                const response = await fetch('/api/user-groups', {
+                                  method: 'PUT',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    id: selectedGroup.id,
+                                    name: selectedGroup.name,
+                                    description: selectedGroup.description,
+                                    users: updatedUserIds,
+                                  }),
+                                });
+                                
+                                if (!response.ok) {
+                                  const data = await response.json();
+                                  throw new Error(data.message || 'Failed to update group');
+                                }
+                                
+                                const responseData = await response.json();
+                                
+                                // Update in local state
+                                const updatedGroups = userGroups.map(g => 
+                                  g.id === selectedGroup.id 
+                                    ? responseData.group
+                                    : g
+                                );
+                                setUserGroups(updatedGroups);
+                                setSelectedGroup(responseData.group);
+                                
+                                // Toast notification
+                                toast.success(`Added ${usersToAdd.length} users to group`, { id: 'batch-add-users' });
+                              } catch (error) {
+                                console.error('Error updating group:', error);
+                                toast.error(
+                                  'Failed to update group: ' + (error instanceof Error ? error.message : 'Unknown error'), 
+                                  { id: 'batch-add-users' }
+                                );
+                              }
+                            })();
+                          }
+                        }}
+                      >
+                        Add All Filtered
+                      </Button>
+                    )}
+                    {selectedGroup.users.length > 0 && (
+                      <Button
+                        type="button"
+                        className="text-xs px-3 py-1 bg-red-100 text-red-800 hover:bg-red-200"
+                        onClick={() => {
+                          if (confirm(`Remove all users from "${selectedGroup.name}"?`)) {
+                            // Show loading indicator
+                            toast.loading('Removing users from group...', { id: 'batch-remove-users' });
+                            
+                            // Update in the database
+                            (async () => {
+                              try {
+                                // Update the group in MongoDB with empty users array
+                                const response = await fetch('/api/user-groups', {
+                                  method: 'PUT',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({
+                                    id: selectedGroup.id,
+                                    name: selectedGroup.name,
+                                    description: selectedGroup.description,
+                                    users: [], // Empty array
+                                  }),
+                                });
+                                
+                                if (!response.ok) {
+                                  const data = await response.json();
+                                  throw new Error(data.message || 'Failed to update group');
+                                }
+                                
+                                const responseData = await response.json();
+                                
+                                // Update in local state
+                                const updatedGroups = userGroups.map(g => 
+                                  g.id === selectedGroup.id 
+                                    ? responseData.group
+                                    : g
+                                );
+                                setUserGroups(updatedGroups);
+                                setSelectedGroup(responseData.group);
+                                
+                                // Toast notification
+                                toast.success('Removed all users from group', { id: 'batch-remove-users' });
+                              } catch (error) {
+                                console.error('Error updating group:', error);
+                                toast.error(
+                                  'Failed to update group: ' + (error instanceof Error ? error.message : 'Unknown error'), 
+                                  { id: 'batch-remove-users' }
+                                );
+                              }
+                            })();
+                          }
+                        }}
+                      >
+                        Remove All
+                      </Button>
+                    )}
+                  </div>
+                </div>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {allUsers.map(user => {
+                  {allUsers
+                    .filter(user => 
+                      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      user.email.toLowerCase().includes(searchQuery.toLowerCase())
+                    )
+                    .map(user => {
                     const isUserInGroup = selectedGroup.users.some(u => u.id === user.id);
                     return (
                       <div key={user.id} className="flex items-center justify-between p-2 rounded hover:bg-gray-50">

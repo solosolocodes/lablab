@@ -1,6 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
+import UserGroup from '@/models/UserGroup';
+
+// Delete a user by ID
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(
+        { message: 'User ID is required' },
+        { status: 400 }
+      );
+    }
+
+    await connectDB();
+    
+    // Find and delete the user
+    const user = await User.findByIdAndDelete(id);
+    
+    if (!user) {
+      return NextResponse.json(
+        { message: 'User not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Also remove user from any user groups they're in
+    await UserGroup.updateMany(
+      { users: id },
+      { $pull: { users: id } }
+    );
+    
+    return NextResponse.json({
+      message: 'User deleted successfully'
+    });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('Error deleting user:', error);
+    return NextResponse.json(
+      { message: 'Error deleting user', error: errorMessage },
+      { status: 500 }
+    );
+  }
+}
 
 // Update a user by ID
 export async function PUT(request: NextRequest) {
