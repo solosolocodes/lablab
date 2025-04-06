@@ -158,10 +158,13 @@ export async function PUT(request: NextRequest) {
           userGroupId = group.userGroupId;
         }
         
+        // maxParticipants must be at least 1 according to validation
+        const maxParticipants = group.maxParticipants !== undefined ? Number(group.maxParticipants) : 1;
+        
         return {
           userGroupId: userGroupId,
           condition: group.condition,
-          maxParticipants: group.maxParticipants !== undefined ? Number(group.maxParticipants) : undefined
+          maxParticipants: maxParticipants < 1 ? 1 : maxParticipants // Ensure minimum is 1
         };
       });
     }
@@ -231,14 +234,19 @@ export async function PUT(request: NextRequest) {
           stageData.format = stage.format || 'markdown';
         } 
         else if (stage.type === 'scenario') {
-          // Use scenarioId as-is since Mongoose will handle conversion
-          if (stage.scenarioId) {
-            try {
-              stageData.scenarioId = stage.scenarioId;
-            } catch (err) {
-              console.error('Error processing scenarioId:', err);
-              stageData.scenarioId = stage.scenarioId;
+          // Handle required scenarioId - must be present for scenario stages
+          try {
+            // If scenarioId is missing or empty, we need to skip this stage or set a default
+            if (!stage.scenarioId) {
+              console.warn(`Scenario stage missing required scenarioId: ${stage.id}`);
+              // Skip this stage by returning immediately
+              return null;
             }
+            stageData.scenarioId = stage.scenarioId;
+          } catch (err) {
+            console.error('Error processing scenarioId:', err);
+            // Skip this stage by returning null
+            return null;
           }
           
           stageData.rounds = stage.rounds ? Number(stage.rounds) : 1;
@@ -257,8 +265,10 @@ export async function PUT(request: NextRequest) {
           stageData.message = stage.message;
         }
         
-        // Add the stage to the experiment
-        experiment.stages.push(stageData);
+        // Only add the stage if it's not null (skip invalid stages)
+        if (stageData !== null) {
+          experiment.stages.push(stageData);
+        }
       }
     }
     

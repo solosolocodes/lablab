@@ -435,6 +435,37 @@ export default function ExperimentDesignerPage() {
     if (!experiment) return;
     
     try {
+      // Validate data before sending
+      const validationErrors = [];
+      
+      // Check for scenario stages without scenario ID
+      if (experiment.stages) {
+        experiment.stages.forEach((stage, index) => {
+          if (stage.type === 'scenario' && !stage.scenarioId) {
+            validationErrors.push(`Stage ${index + 1} (${stage.title}) is missing a scenario selection`);
+          }
+        });
+      }
+      
+      // Check user groups for invalid maxParticipants
+      if (experiment.userGroups) {
+        experiment.userGroups.forEach((group, index) => {
+          // If maxParticipants is defined but less than 1, flag it
+          if (group.maxParticipants !== undefined && Number(group.maxParticipants) < 1) {
+            // Fix it automatically
+            group.maxParticipants = 1;
+          }
+        });
+      }
+      
+      // Show validation errors if any
+      if (validationErrors.length > 0) {
+        const errorMessage = validationErrors.join('\n• ');
+        toast.error(`Please fix these errors:\n• ${errorMessage}`);
+        console.error('Client-side validation errors:', validationErrors);
+        return;
+      }
+      
       const updatedExperiment = {
         ...experiment,
         status,
