@@ -339,7 +339,14 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                               value={option}
                               onChange={(e) => {
                                 const updatedQuestions = [...questions];
-                                updatedQuestions[index].options[optionIndex] = e.target.value;
+                                // Ensure options array exists
+                                if (!Array.isArray(updatedQuestions[index].options)) {
+                                  updatedQuestions[index].options = [];
+                                }
+                                // Now safely assign the value
+                                if (updatedQuestions[index].options) {
+                                  updatedQuestions[index].options[optionIndex] = e.target.value;
+                                }
                                 handleStageDataChange('questions', updatedQuestions);
                               }}
                             />
@@ -347,8 +354,9 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                               className="ml-1 text-red-500 hover:text-red-700"
                               onClick={() => {
                                 const updatedQuestions = [...questions];
-                                updatedQuestions[index].options = Array.isArray(question.options) ? 
-                                  question.options.filter((_, i: number) => i !== optionIndex) : [];
+                                // Ensure options array exists and filter out the removed option
+                                updatedQuestions[index].options = Array.isArray(updatedQuestions[index].options) ? 
+                                  updatedQuestions[index].options.filter((_, i: number) => i !== optionIndex) : [];
                                 handleStageDataChange('questions', updatedQuestions);
                               }}
                             >
