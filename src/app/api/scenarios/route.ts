@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Scenario from '@/models/Scenario';
-import Wallet from '@/models/Wallet';
+import Wallet, { IAsset } from '@/models/Wallet';
 import mongoose from 'mongoose';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate initial price data for all assets in the wallet
-    const assetPrices = wallet.assets.map(asset => {
+    const assetPrices = wallet.assets.map((asset: IAsset) => {
       // For each asset, generate a price for each round
       // Initial prices are based on current amount with random fluctuation
       const prices = Array.from({ length: rounds }, (_, i) => {
