@@ -62,7 +62,7 @@ export default function AdminDashboard() {
               <h1 className="text-xl font-bold">LabLab Admin</h1>
               <div className="hidden md:flex space-x-4">
                 <Link href="/admin/dashboard" className="px-3 py-2 rounded bg-purple-600">Dashboard</Link>
-                <Link href="#" className="px-3 py-2 rounded hover:bg-purple-600">Experiments</Link>
+                <Link href="/admin/experiments" className="px-3 py-2 rounded hover:bg-purple-600">Experiments</Link>
                 <Link href="/admin/scenarios" className="px-3 py-2 rounded hover:bg-purple-600">Scenarios</Link>
                 <Link href="/admin/wallets" className="px-3 py-2 rounded hover:bg-purple-600">Wallets</Link>
                 <Link href="/admin/user-groups" className="px-3 py-2 rounded hover:bg-purple-600">User Groups</Link>
@@ -113,9 +113,11 @@ export default function AdminDashboard() {
         <div className="mb-6">
           <div className="flex justify-between items-center mb-3">
             <h2 className="text-lg font-semibold text-gray-700">Active Experiments</h2>
-            <Button className="text-sm py-1 px-3 bg-purple-600 hover:bg-purple-700">
-              View All
-            </Button>
+            <Link href="/admin/experiments">
+              <Button className="text-sm py-1 px-3 bg-purple-600 hover:bg-purple-700">
+                View All
+              </Button>
+            </Link>
           </div>
           <div className="bg-white rounded-lg shadow overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -176,19 +178,21 @@ export default function AdminDashboard() {
 
         {/* Quick Access Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <div className="p-3 rounded-full bg-purple-100 mr-4">
-                <svg className="h-6 w-6 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Experiments</h3>
-                <p className="text-gray-500 text-sm">Create and manage experiments</p>
+          <Link href="/admin/experiments" className="block">
+            <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-center">
+                <div className="p-3 rounded-full bg-purple-100 mr-4">
+                  <svg className="h-6 w-6 text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Experiments</h3>
+                  <p className="text-gray-500 text-sm">Create and manage experiments</p>
+                </div>
               </div>
             </div>
-          </div>
+          </Link>
           
           <Link href="/admin/scenarios" className="block">
             <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
