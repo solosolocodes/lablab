@@ -63,8 +63,8 @@ export default function AdminDashboard() {
               <div className="hidden md:flex space-x-4">
                 <Link href="/admin/dashboard" className="px-3 py-2 rounded bg-purple-600">Dashboard</Link>
                 <Link href="/admin/user-groups" className="px-3 py-2 rounded hover:bg-purple-600">User Groups</Link>
+                <Link href="/admin/wallets" className="px-3 py-2 rounded hover:bg-purple-600">Wallets</Link>
                 <Link href="#" className="px-3 py-2 rounded hover:bg-purple-600">Experiments</Link>
-                <Link href="#" className="px-3 py-2 rounded hover:bg-purple-600">Reports</Link>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -202,19 +202,21 @@ export default function AdminDashboard() {
             </div>
           </div>
           
-          <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <div className="p-3 rounded-full bg-green-100 mr-4">
-                <svg className="h-6 w-6 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Wallets</h3>
-                <p className="text-gray-500 text-sm">Manage participant payments</p>
+          <Link href="/admin/wallets" className="block">
+            <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-center">
+                <div className="p-3 rounded-full bg-green-100 mr-4">
+                  <svg className="h-6 w-6 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Wallets</h3>
+                  <p className="text-gray-500 text-sm">Manage participant payments</p>
+                </div>
               </div>
             </div>
-          </div>
+          </Link>
           
           <Link href="/admin/user-groups" className="block">
             <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
