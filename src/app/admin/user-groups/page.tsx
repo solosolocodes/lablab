@@ -4,7 +4,6 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Button from '@/components/Button';
-import Input from '@/components/Input';
 import Link from 'next/link';
 
 // Type definitions
@@ -113,7 +112,6 @@ export default function UserGroupsPage() {
     
     return names.map((name, index) => {
       const id = 'usr-' + generateId();
-      const nameParts = name.split(' ');
       const email = `participant${index + 1}@lablab.com`;
       
       return {
@@ -143,6 +141,7 @@ export default function UserGroupsPage() {
     });
     
     setAllUsers(Object.values(uniqueUsers));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Filter groups based on search query
@@ -433,7 +432,7 @@ export default function UserGroupsPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">{group.users.length}</div>
                       <div className="flex -space-x-1 overflow-hidden mt-1">
-                        {group.users.slice(0, 3).map((user, index) => (
+                        {group.users.slice(0, 3).map((user) => (
                           <div key={user.id} className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 border border-white text-xs">
                             {user.name.charAt(0)}
                           </div>
@@ -730,7 +729,7 @@ export default function UserGroupsPage() {
                     type="text"
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder="Search users..."
-                    onChange={(e) => {
+                    onChange={() => {
                       // This would filter the user list in a real implementation
                     }}
                   />
