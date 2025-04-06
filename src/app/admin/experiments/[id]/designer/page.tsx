@@ -295,28 +295,64 @@ export default function ExperimentDesignerPage() {
     
     const updatedStages = experiment.stages.map(stage => {
       if (stage.id === selectedStage.id) {
-        // Base updated stage
-        const updatedStage = {
-          ...stage,
-          ...stageFormData,
-        };
-        
-        // Special handling for scenario stages to calculate duration
-        if (stage.type === 'scenario' && stageFormData.type === 'scenario') {
+        // For type safety, handle each stage type specifically
+        if (stage.type === 'instructions' && stageFormData.type === 'instructions') {
+          return {
+            ...stage,
+            title: stageFormData.title || stage.title,
+            description: stageFormData.description || stage.description,
+            required: stageFormData.required !== undefined ? stageFormData.required : stage.required,
+            durationSeconds: stageFormData.durationSeconds || stage.durationSeconds,
+            content: (stageFormData as Partial<InstructionsStage>).content || stage.content
+          } as InstructionsStage;
+        } 
+        else if (stage.type === 'scenario' && stageFormData.type === 'scenario') {
           const scenarioData = stageFormData as Partial<ScenarioStage>;
-          const rounds = scenarioData.rounds || 1;
-          const roundDuration = scenarioData.roundDuration || 60;
-          updatedStage.durationSeconds = rounds * roundDuration;
+          const rounds = scenarioData.rounds || stage.rounds;
+          const roundDuration = scenarioData.roundDuration || stage.roundDuration;
+          return {
+            ...stage,
+            title: stageFormData.title || stage.title,
+            description: stageFormData.description || stage.description,
+            required: stageFormData.required !== undefined ? stageFormData.required : stage.required,
+            scenarioId: scenarioData.scenarioId || stage.scenarioId,
+            rounds: rounds,
+            roundDuration: roundDuration,
+            durationSeconds: rounds * roundDuration
+          } as ScenarioStage;
+        }
+        else if (stage.type === 'survey' && stageFormData.type === 'survey') {
+          const surveyData = stageFormData as Partial<SurveyStage>;
+          return {
+            ...stage,
+            title: stageFormData.title || stage.title,
+            description: stageFormData.description || stage.description,
+            required: stageFormData.required !== undefined ? stageFormData.required : stage.required,
+            durationSeconds: stageFormData.durationSeconds || stage.durationSeconds,
+            questions: surveyData.questions || stage.questions
+          } as SurveyStage;
+        }
+        else if (stage.type === 'break' && stageFormData.type === 'break') {
+          const breakData = stageFormData as Partial<BreakStage>;
+          return {
+            ...stage,
+            title: stageFormData.title || stage.title,
+            description: stageFormData.description || stage.description,
+            required: stageFormData.required !== undefined ? stageFormData.required : stage.required,
+            durationSeconds: stageFormData.durationSeconds || stage.durationSeconds,
+            message: breakData.message || stage.message
+          } as BreakStage;
         }
         
-        return updatedStage;
+        // Fallback case - shouldn't reach here in practice
+        return stage;
       }
       return stage;
     });
     
     const updatedExperiment = {
       ...experiment,
-      stages: updatedStages
+      stages: updatedStages as Stage[]
     };
     
     setExperiment(updatedExperiment);
