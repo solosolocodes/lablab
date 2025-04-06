@@ -285,10 +285,10 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                     <div className="mt-1 flex items-center space-x-2">
                       <select
                         className="px-2 py-1 text-xs border rounded"
-                        value={question.type}
+                        value={String(question.type || 'text')}
                         onChange={(e) => {
                           const updatedQuestions = [...questions];
-                          updatedQuestions[index].type = e.target.value;
+                          updatedQuestions[index].type = e.target.value as 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
                           handleStageDataChange('questions', updatedQuestions);
                         }}
                       >
@@ -302,7 +302,7 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                         <input
                           type="checkbox"
                           className="mr-1"
-                          checked={question.required}
+                          checked={Boolean(question.required)}
                           onChange={(e) => {
                             const updatedQuestions = [...questions];
                             updatedQuestions[index].required = e.target.checked;
@@ -313,7 +313,7 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                       </label>
                     </div>
                     
-                    {(question.type === 'multipleChoice' || question.type === 'checkboxes') && (
+                    {(String(question.type) === 'multipleChoice' || String(question.type) === 'checkboxes') && (
                       <div className="mt-1">
                         <div className="flex justify-between items-center mb-1">
                           <span className="text-xs text-gray-500">Options:</span>
