@@ -1096,7 +1096,6 @@ export default function UserGroupsPage() {
                             if (usersToAdd.length === 0) return;
                             
                             // Add batch of users to the group
-                            const updatedUsers = [...selectedGroup.users, ...usersToAdd];
                             // Show loading indicator
                             toast.loading('Adding users to group...', { id: 'batch-add-users' });
                             
@@ -1104,7 +1103,7 @@ export default function UserGroupsPage() {
                             (async () => {
                               try {
                                 // Get all user IDs for the updated group
-                                const updatedUserIds = [
+                                let updatedUserIds = [
                                   ...selectedGroup.users.map(u => u.id),
                                   ...usersToAdd.map(u => u.id)
                                 ];

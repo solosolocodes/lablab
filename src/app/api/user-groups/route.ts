@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import UserGroup from '@/models/UserGroup';
-import User from '@/models/User';
 import mongoose from 'mongoose';
 
 // Get all user groups
@@ -19,7 +18,7 @@ export async function GET() {
       id: group._id,
       name: group.name,
       description: group.description,
-      users: group.users.map((user: any) => ({
+      users: group.users.map((user: { _id: string; name: string; email: string; role: string }) => ({
         id: user._id,
         name: user.name,
         email: user.email,
@@ -72,7 +71,7 @@ export async function POST(request: NextRequest) {
         id: userGroup._id,
         name: userGroup.name,
         description: userGroup.description,
-        users: (userGroup.users as any).map((user: any) => ({
+        users: (userGroup.users as { _id: string; name: string; email: string; role: string }[]).map((user) => ({
           id: user._id,
           name: user.name,
           email: user.email,
@@ -133,7 +132,7 @@ export async function PUT(request: NextRequest) {
         id: group._id,
         name: group.name,
         description: group.description,
-        users: (group.users as any).map((user: any) => ({
+        users: (group.users as { _id: string; name: string; email: string; role: string }[]).map((user) => ({
           id: user._id,
           name: user.name,
           email: user.email,
