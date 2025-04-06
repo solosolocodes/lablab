@@ -6,15 +6,27 @@ if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable');
 }
 
+// Define the interface for the cached connection
+interface MongooseCache {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+}
+
+// Define interface for the global namespace
+declare global {
+  var mongoose: MongooseCache | undefined;
+}
+
 /**
  * Global is used here to maintain a cached connection across hot reloads
  * in development. This prevents connections growing exponentially
  * during API Route usage.
  */
-let cached = global.mongoose;
+let cached: MongooseCache = global.mongoose || { conn: null, promise: null };
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
+// Cache the connection in global namespace
+if (!global.mongoose) {
+  global.mongoose = cached;
 }
 
 async function connectDB() {
