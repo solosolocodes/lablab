@@ -150,6 +150,7 @@ export async function PUT(request: NextRequest) {
       // Process each stage
       for (const stage of stages) {
         // Common fields for all stage types
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const stageData: any = {
           type: stage.type,
           title: stage.title,
@@ -216,6 +217,7 @@ export async function PUT(request: NextRequest) {
     
     // Handle MongoDB validation errors
     if (error instanceof Error && 'name' in error && error.name === 'ValidationError') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const validationError = error as any;
       const errors: Record<string, string> = {};
       
