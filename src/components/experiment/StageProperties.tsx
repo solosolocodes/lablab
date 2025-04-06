@@ -27,14 +27,13 @@ type StagePropertiesProps = {
   selectedNode: Node<NodeData> | null;
   onUpdateNode: (nodeId: string, data: NodeData) => void;
   scenarios: Array<{ id: string; name: string }>;
-  userGroups: Array<{ id: string; name: string }>;
+  userGroups?: Array<{ id: string; name: string }>; // Made optional since we don't use it
 };
 
 export const StageProperties: React.FC<StagePropertiesProps> = ({ 
   selectedNode, 
   onUpdateNode,
-  scenarios,
-  userGroups
+  scenarios
 }) => {
   const [stageData, setStageData] = useState<NodeData | null>(null);
 
