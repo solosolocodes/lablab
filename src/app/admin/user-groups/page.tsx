@@ -50,7 +50,7 @@ export default function UserGroupsPage() {
   // Generate dummy data for user groups
   const generateDummyUserGroups = (): UserGroup[] => {
     const generateId = () => Math.random().toString(36).substring(2, 10);
-    const groups = [
+    const groups: UserGroup[] = [
       {
         id: 'grp-' + generateId(),
         name: 'Cognitive Testing Group',
