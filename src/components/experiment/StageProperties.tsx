@@ -168,7 +168,7 @@ const ScenarioProperties = ({
     if (scenarioId !== (scenarioData?.scenarioId ? String(scenarioData.scenarioId) : '')) {
       handleStageDataChange('scenarioId', scenarioId);
     }
-  }, [scenarioId]);
+  }, [scenarioId, scenarioData?.scenarioId, handleStageDataChange]);
   
   // Update local state when props change
   useEffect(() => {
