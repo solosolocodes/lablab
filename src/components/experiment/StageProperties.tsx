@@ -163,20 +163,9 @@ const ScenarioProperties = ({
     error: null
   });
   
-  // If we have a scenarioId from props, fetch it immediately on first render
-  const isInitialRender = React.useRef(true);
-  
   // Calculate duration from the scenario details
   const calculatedDuration = scenarioDetails.rounds * scenarioDetails.roundDuration;
   
-  // Check for initial scenarioId and trigger fetch
-  useEffect(() => {
-    if (isInitialRender.current && scenarioId) {
-      isInitialRender.current = false;
-      // Initial scenario fetch will be handled by the next useEffect
-    }
-  }, []);
-    
   // Fetch scenario details when scenarioId changes
   useEffect(() => {
     if (!scenarioId) {
@@ -188,6 +177,11 @@ const ScenarioProperties = ({
         loading: false,
         error: null
       }));
+      
+      // Update the stage data with default values
+      handleStageDataChange('rounds', 1);
+      handleStageDataChange('roundDuration', 60);
+      handleStageDataChange('durationSeconds', 60);
       return;
     }
     
@@ -272,13 +266,13 @@ const ScenarioProperties = ({
   
   return (
     <div className="mt-4">
-      {/* Move scenario selection to the top */}
+      {/* Scenario selection at the top */}
       <div className="mb-4 border-b pb-3">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 mb-1 text-base">
           Select Scenario
         </label>
         <select
-          className="w-full px-3 py-2 border rounded-md text-sm"
+          className="w-full px-3 py-2 border rounded-md text-sm bg-white border-blue-300 focus:border-blue-500 focus:ring focus:ring-blue-200"
           value={scenarioId}
           onChange={(e) => setScenarioId(e.target.value)}
         >
@@ -291,6 +285,22 @@ const ScenarioProperties = ({
         </select>
       </div>
       
+      {/* Total Duration at the top below the scenario selection */}
+      <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-md">
+        <div className="flex justify-between items-center">
+          <span className="text-sm font-medium text-blue-700">Total Duration:</span>
+          <span className="text-sm font-medium text-blue-900">
+            {scenarioDetails.loading ? 'Calculating...' : `${calculatedDuration} seconds`}
+          </span>
+        </div>
+        <p className="text-xs text-blue-600 mt-1">
+          {scenarioId 
+            ? `${scenarioDetails.rounds} rounds × ${scenarioDetails.roundDuration} seconds per round`
+            : `${scenarioDetails.rounds} rounds × ${scenarioDetails.roundDuration} seconds per round (default values)`}
+        </p>
+      </div>
+      
+      {/* Scenario details */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -307,7 +317,7 @@ const ScenarioProperties = ({
             disabled={!!scenarioId}
           />
           <p className="text-xs text-gray-500 mt-1">
-            {scenarioId ? 'Set in scenario settings' : 'Will be loaded from scenario'}
+            {scenarioId ? 'Set in scenario settings' : 'Default value'}
           </p>
         </div>
         
@@ -326,7 +336,7 @@ const ScenarioProperties = ({
             disabled={!!scenarioId}
           />
           <p className="text-xs text-gray-500 mt-1">
-            {scenarioId ? 'Set in scenario settings' : 'Will be loaded from scenario'}
+            {scenarioId ? 'Set in scenario settings' : 'Default value'}
           </p>
         </div>
       </div>
@@ -334,22 +344,9 @@ const ScenarioProperties = ({
       {scenarioDetails.error && (
         <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
           Error loading scenario details: {scenarioDetails.error}
+          <p className="mt-1 text-xs">Using default values for calculation.</p>
         </div>
       )}
-      
-      <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-md">
-        <div className="flex justify-between items-center">
-          <span className="text-sm font-medium text-blue-700">Total Duration:</span>
-          <span className="text-sm font-medium text-blue-900">
-            {scenarioDetails.loading ? 'Calculating...' : `${calculatedDuration} seconds`}
-          </span>
-        </div>
-        <p className="text-xs text-blue-600 mt-1">
-          {scenarioId 
-            ? `Calculated from scenario: ${scenarioDetails.rounds} rounds × ${scenarioDetails.roundDuration} seconds per round`
-            : 'Select a scenario to load duration details'}
-        </p>
-      </div>
       
       <div className="mt-5">
         <button 
