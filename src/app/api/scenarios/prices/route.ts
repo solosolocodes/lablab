@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import Scenario from '@/models/Scenario';
+import Scenario, { AssetPrice } from '@/models/Scenario';
 import Wallet, { IAsset } from '@/models/Wallet';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     }));
     
     // Get price data for each asset
-    const priceData = scenario.assetPrices.map(assetPrice => {
+    const priceData = scenario.assetPrices.map((assetPrice: AssetPrice) => {
       const asset = wallet.assets.find((a: IAsset) => a._id && a._id.toString() === assetPrice.assetId.toString());
       return {
         assetId: assetPrice.assetId,
