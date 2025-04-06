@@ -2,14 +2,37 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Button from '@/components/Button';
+import { toast } from 'react-hot-toast';
 
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const isLoading = status === 'loading';
+  const [dashboardData, setDashboardData] = useState<{
+    analytics: {
+      activeUsers: number;
+      totalUsers: number;
+      experimentsRun: number;
+      activeExperiments: number;
+      completedExperiments: number;
+      userGroups: number;
+      scenarios: number;
+      completionRate: number;
+      averageParticipantsPerExperiment: number;
+    };
+    activeExperiments: Array<{
+      id: string;
+      name: string;
+      status: string;
+      participants: number;
+      stages: number;
+      progress: number;
+    }>;
+  } | null>(null);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
   useEffect(() => {
     // If not authenticated or not an admin, redirect to login
@@ -17,6 +40,32 @@ export default function AdminDashboard() {
       router.push('/admin/login');
     }
   }, [session, isLoading, router]);
+  
+  useEffect(() => {
+    // Fetch dashboard data when session is loaded
+    if (session && session.user.role === 'admin') {
+      fetchDashboardData();
+    }
+  }, [session]);
+  
+  const fetchDashboardData = async () => {
+    try {
+      setIsDataLoading(true);
+      const response = await fetch('/api/dashboard');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch dashboard data: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setDashboardData(data);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setIsDataLoading(false);
+    }
+  };
 
   const handleSignOut = async () => {
     await signOut({ redirect: false });
@@ -27,7 +76,7 @@ export default function AdminDashboard() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-6">
         <div className="w-full max-w-md text-center">
-          <p>Loading...</p>
+          <p>Loading session...</p>
         </div>
       </div>
     );
@@ -36,21 +85,32 @@ export default function AdminDashboard() {
   if (!session || session.user.role !== 'admin') {
     return null; // Will redirect via useEffect
   }
-
-  // Dummy data for analytics
-  const analyticsData = {
-    activeUsers: 238,
-    experimentsRun: 15,
-    completionRate: 72,
-    averageParticipants: 42
+  
+  if (isDataLoading) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md text-center">
+          <p>Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Use real data from API if available, otherwise fallback to defaults
+  const analyticsData = dashboardData?.analytics || {
+    activeUsers: 0,
+    totalUsers: 0,
+    experimentsRun: 0,
+    activeExperiments: 0,
+    completedExperiments: 0, 
+    userGroups: 0,
+    scenarios: 0,
+    completionRate: 0,
+    averageParticipantsPerExperiment: 0
   };
 
-  // Dummy data for active experiments
-  const activeExperiments = [
-    { id: 1, name: "Cognitive Response Study", status: "Running", participants: 42, progress: 75 },
-    { id: 2, name: "Memory Task Evaluation", status: "Starting", participants: 20, progress: 15 },
-    { id: 3, name: "Visual Perception Test", status: "Running", participants: 56, progress: 40 },
-  ];
+  // Use real experiments data if available
+  const activeExperiments = dashboardData?.activeExperiments || [];
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
@@ -95,7 +155,7 @@ export default function AdminDashboard() {
               <div className="text-gray-500 text-sm">Active Users</div>
             </div>
             <div className="bg-white rounded-lg shadow p-4">
-              <div className="text-blue-500 text-3xl font-bold">{analyticsData.experimentsRun}</div>
+              <div className="text-blue-500 text-3xl font-bold">{analyticsData.activeExperiments}</div>
               <div className="text-gray-500 text-sm">Active Experiments</div>
             </div>
             <div className="bg-white rounded-lg shadow p-4">
@@ -103,8 +163,32 @@ export default function AdminDashboard() {
               <div className="text-gray-500 text-sm">Completion Rate</div>
             </div>
             <div className="bg-white rounded-lg shadow p-4">
-              <div className="text-amber-500 text-3xl font-bold">{analyticsData.averageParticipants}</div>
+              <div className="text-amber-500 text-3xl font-bold">{analyticsData.averageParticipantsPerExperiment}</div>
               <div className="text-gray-500 text-sm">Avg. Participants</div>
+            </div>
+          </div>
+          
+          {/* Additional Analytics in single row */}
+          <div className="grid grid-cols-3 md:grid-cols-5 gap-3 mt-3">
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="text-indigo-500 text-xl font-bold">{analyticsData.experimentsRun}</div>
+              <div className="text-gray-500 text-xs">Total Experiments</div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="text-teal-500 text-xl font-bold">{analyticsData.completedExperiments}</div>
+              <div className="text-gray-500 text-xs">Completed</div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="text-cyan-500 text-xl font-bold">{analyticsData.totalUsers}</div>
+              <div className="text-gray-500 text-xs">Total Users</div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="text-rose-500 text-xl font-bold">{analyticsData.scenarios}</div>
+              <div className="text-gray-500 text-xs">Scenarios</div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="text-orange-500 text-xl font-bold">{analyticsData.userGroups}</div>
+              <div className="text-gray-500 text-xs">User Groups</div>
             </div>
           </div>
         </div>
@@ -141,36 +225,51 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {activeExperiments.map((experiment) => (
-                  <tr key={experiment.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{experiment.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        experiment.status === 'Running' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {experiment.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {experiment.participants}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="w-full bg-gray-200 rounded-full h-2.5">
-                        <div 
-                          className="bg-purple-600 h-2.5 rounded-full" 
-                          style={{ width: `${experiment.progress}%` }}
-                        ></div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <a href="#" className="text-purple-600 hover:text-purple-900">View</a>
+                {activeExperiments.length > 0 ? (
+                  activeExperiments.map((experiment) => (
+                    <tr key={experiment.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{experiment.name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          experiment.status === 'active' || experiment.status === 'published'
+                            ? 'bg-green-100 text-green-800' 
+                            : experiment.status === 'draft'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {experiment.status.charAt(0).toUpperCase() + experiment.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {experiment.participants}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="w-full bg-gray-200 rounded-full h-2.5 mr-2">
+                            <div 
+                              className="bg-purple-600 h-2.5 rounded-full" 
+                              style={{ width: `${experiment.progress}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-xs text-gray-500">{experiment.progress}%</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <Link href={`/admin/experiments/${experiment.id}`} className="text-purple-600 hover:text-purple-900">
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                      No active experiments found
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
