@@ -421,7 +421,7 @@ export default function ExperimentDesignerPage() {
           // Try to parse the response as JSON
           const errorData = await response.json();
           errorMessage = errorData.message || response.statusText;
-        } catch (_) {
+        } catch {
           // If response is not JSON, use the status text
           errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
         }
