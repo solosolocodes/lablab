@@ -16,7 +16,7 @@ import {
   NodeTypes,
   Panel
 } from '@reactflow/core';
-import { Background } from '@reactflow/core';
+import { Background } from '@reactflow/background';
 import { Controls } from '@reactflow/controls';
 import { MiniMap } from '@reactflow/minimap';
 import '@reactflow/core/dist/style.css';
