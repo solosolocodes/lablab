@@ -6,28 +6,32 @@ if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable');
 }
 
-// Define the interface for the cached connection
-interface MongooseCache {
+// Define the types for the cached connection
+interface ConnectionCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
 }
 
-// Define interface for the global namespace
-declare global {
-  // Using let here to satisfy ESLint, but it's just a type declaration
-  let mongoose: MongooseCache | undefined;
-}
+// In Next.js, we can cache the connection in a global variable safely
+// This is explicitly recommended in the Next.js docs for database connections
+// https://github.com/vercel/next.js/blob/canary/examples/with-mongodb-mongoose/lib/dbConnect.js
+const globalForMongoose = global as unknown as {
+  mongoose: ConnectionCache | undefined;
+};
 
 /**
  * Global is used here to maintain a cached connection across hot reloads
  * in development. This prevents connections growing exponentially
  * during API Route usage.
  */
-const cached: MongooseCache = global.mongoose || { conn: null, promise: null };
+const cached: ConnectionCache = globalForMongoose.mongoose || {
+  conn: null,
+  promise: null,
+};
 
 // Cache the connection in global namespace
-if (!global.mongoose) {
-  global.mongoose = cached;
+if (!globalForMongoose.mongoose) {
+  globalForMongoose.mongoose = cached;
 }
 
 async function connectDB() {
