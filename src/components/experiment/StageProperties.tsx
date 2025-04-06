@@ -154,12 +154,26 @@ const ScenarioProperties = ({
   scenarios: Array<{ id: string; name: string }>; 
   handleStageDataChange: (field: string, value: unknown) => void;
 }) => {
+  // Create local state for scenario ID to fix the dropdown issue
+  const [scenarioId, setScenarioId] = useState(scenarioData?.scenarioId ? String(scenarioData.scenarioId) : '');
   const rounds = Number(scenarioData?.rounds || 1);
   const roundDuration = Number(scenarioData?.roundDuration || 60);
   const calculatedDuration = rounds * roundDuration;
   
   // Use our custom hook to update the duration
   useCalculatedDuration(rounds, roundDuration, handleStageDataChange);
+  
+  // Update parent state when local state changes
+  useEffect(() => {
+    if (scenarioId !== (scenarioData?.scenarioId ? String(scenarioData.scenarioId) : '')) {
+      handleStageDataChange('scenarioId', scenarioId);
+    }
+  }, [scenarioId]);
+  
+  // Update local state when props change
+  useEffect(() => {
+    setScenarioId(scenarioData?.scenarioId ? String(scenarioData.scenarioId) : '');
+  }, [scenarioData?.scenarioId]);
   
   return (
     <div className="mt-4">
@@ -168,8 +182,8 @@ const ScenarioProperties = ({
       </label>
       <select
         className="w-full px-3 py-2 border rounded-md text-sm"
-        value={scenarioData?.scenarioId ? String(scenarioData.scenarioId) : ''}
-        onChange={(e) => handleStageDataChange('scenarioId', e.target.value)}
+        value={scenarioId}
+        onChange={(e) => setScenarioId(e.target.value)}
       >
         <option value="">-- Select a scenario --</option>
         {scenarios.map(scenario => (

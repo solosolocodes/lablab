@@ -323,198 +323,36 @@ export default function ExperimentDesignerPage() {
         </div>
         
         {/* Experiment Designer Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Sidebar: Components Panel */}
-          <div className="bg-white rounded-lg shadow lg:col-span-1">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-lg text-gray-800">Experiment Components</h3>
-            </div>
-            
-            {/* Component Types Accordion */}
-            <div className="p-4">
-              {/* Instructions Component */}
-              <div className="mb-4 border border-gray-200 rounded-md shadow-sm">
-                <div className="flex items-center justify-between p-3 bg-purple-50 cursor-pointer rounded-t-md">
-                  <div className="flex items-center">
-                    <div className="p-2 rounded-full bg-purple-100 mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                    <span className="font-medium text-purple-700">Instructions</span>
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-                <div className="p-3 bg-white">
-                  <p className="text-sm text-gray-600 mb-2">Add instruction stages for participants to read before starting tasks.</p>
-                  <button 
-                    className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center"
-                    onClick={() => addStageNode('instructions')}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Instructions
-                  </button>
-                </div>
-              </div>
-              
-              {/* Scenario Component */}
-              <div className="mb-4 border border-gray-200 rounded-md shadow-sm">
-                <div className="flex items-center justify-between p-3 bg-blue-50 cursor-pointer rounded-t-md">
-                  <div className="flex items-center">
-                    <div className="p-2 rounded-full bg-blue-100 mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                      </svg>
-                    </div>
-                    <span className="font-medium text-blue-700">Scenarios</span>
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-                <div className="p-3 bg-white">
-                  <p className="text-sm text-gray-600 mb-2">Select from existing trading scenarios where participants make investment decisions.</p>
-                  <button 
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
-                    onClick={() => addStageNode('scenario')}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Scenario
-                  </button>
-                </div>
-              </div>
-              
-              {/* Survey Component */}
-              <div className="mb-4 border border-gray-200 rounded-md shadow-sm">
-                <div className="flex items-center justify-between p-3 bg-green-50 cursor-pointer rounded-t-md">
-                  <div className="flex items-center">
-                    <div className="p-2 rounded-full bg-green-100 mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                      </svg>
-                    </div>
-                    <span className="font-medium text-green-700">Surveys</span>
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-                <div className="p-3 bg-white">
-                  <p className="text-sm text-gray-600 mb-2">Create survey questions including demographic data to analyze trading behavior patterns.</p>
-                  <div className="space-y-2">
-                    <button 
-                      className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center"
-                      onClick={() => {
-                        const newNodeId = `stage-${Date.now()}`;
-                        const newNode: Node<NodeData> = {
-                          id: newNodeId,
-                          type: 'survey',
-                          position: { 
-                            x: Math.random() * 300 + 100, 
-                            y: Math.random() * 300 + 100 
-                          },
-                          data: {
-                            label: `Demographics Survey`,
-                            description: `Collect demographic information`,
-                            type: 'survey',
-                            stageData: {
-                              durationSeconds: 180,
-                              required: true,
-                              questions: [
-                                {
-                                  id: `q-${Date.now()}-age`,
-                                  text: 'What is your age?',
-                                  type: 'multipleChoice',
-                                  required: true,
-                                  options: ['18-24', '25-34', '35-44', '45-54', '55-64', '65+']
-                                },
-                                {
-                                  id: `q-${Date.now()}-gender`,
-                                  text: 'What is your gender?',
-                                  type: 'multipleChoice',
-                                  required: true,
-                                  options: ['Male', 'Female', 'Non-binary', 'Prefer not to say']
-                                },
-                                {
-                                  id: `q-${Date.now()}-education`,
-                                  text: 'What is your highest level of education?',
-                                  type: 'multipleChoice',
-                                  required: true,
-                                  options: ['High School', 'Some College', 'Bachelor\'s Degree', 'Master\'s Degree', 'Doctorate', 'Other']
-                                },
-                                {
-                                  id: `q-${Date.now()}-income`,
-                                  text: 'What is your annual income range?',
-                                  type: 'multipleChoice',
-                                  required: true,
-                                  options: ['Under $25,000', '$25,000-$49,999', '$50,000-$74,999', '$75,000-$99,999', '$100,000+', 'Prefer not to say']
-                                },
-                                {
-                                  id: `q-${Date.now()}-trading`,
-                                  text: 'How much experience do you have with financial trading?',
-                                  type: 'multipleChoice',
-                                  required: true,
-                                  options: ['None', 'Beginner', 'Intermediate', 'Advanced', 'Professional']
-                                }
-                              ]
-                            }
-                          }
-                        };
-                        
-                        setNodes(nds => [...nds, newNode]);
-                      }}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                      </svg>
-                      Add Demographics
-                    </button>
-                    <button 
-                      className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center"
-                      onClick={() => addStageNode('survey')}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                      </svg>
-                      Add Custom Survey
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Break Component */}
-              <div className="mb-4 border border-gray-200 rounded-md shadow-sm">
-                <div className="flex items-center justify-between p-3 bg-amber-50 cursor-pointer rounded-t-md">
-                  <div className="flex items-center">
-                    <div className="p-2 rounded-full bg-amber-100 mr-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <span className="font-medium text-amber-700">Breaks</span>
-                  </div>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-                <div className="p-3 bg-white">
-                  <p className="text-sm text-gray-600 mb-2">Add timed breaks or pauses between activities to prevent participant fatigue.</p>
-                  <button 
-                    className="text-amber-600 hover:text-amber-800 text-sm font-medium flex items-center"
-                    onClick={() => addStageNode('break')}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Break
-                  </button>
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Quick Add Buttons */}
+          <div className="bg-white rounded-lg shadow p-4 lg:col-span-3 mb-4">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold text-lg text-gray-800">Add New Components</h3>
+              <div className="flex space-x-3">
+                <button 
+                  className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-md"
+                  onClick={() => addStageNode('instructions')}
+                >
+                  Add Instructions
+                </button>
+                <button 
+                  className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md"
+                  onClick={() => addStageNode('scenario')}
+                >
+                  Add Scenario
+                </button>
+                <button 
+                  className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md"
+                  onClick={() => addStageNode('survey')}
+                >
+                  Add Survey
+                </button>
+                <button 
+                  className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-md"
+                  onClick={() => addStageNode('break')}
+                >
+                  Add Break
+                </button>
               </div>
             </div>
           </div>
@@ -573,70 +411,6 @@ export default function ExperimentDesignerPage() {
               <div className="p-4 overflow-y-auto flex-grow">
                 {nodes.length > 0 ? (
                   <div className="space-y-3">
-                    {/* Stage Controls */}
-                    <div className="p-3 bg-white border border-gray-300 rounded shadow-sm mb-4">
-                      <h4 className="text-xs font-medium text-gray-600 mb-2">Add Stages</h4>
-                      <div className="flex space-x-2 mb-2">
-                        <button
-                          className="px-2 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs rounded-md flex items-center"
-                          onClick={() => addStageNode('instructions')}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                          Instructions
-                        </button>
-                        <button
-                          className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs rounded-md flex items-center"
-                          onClick={() => addStageNode('scenario')}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                          Scenario
-                        </button>
-                        <button
-                          className="px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 text-xs rounded-md flex items-center"
-                          onClick={() => addStageNode('survey')}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                          Survey
-                        </button>
-                        <button
-                          className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs rounded-md flex items-center"
-                          onClick={() => addStageNode('break')}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                          Break
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Legend */}
-                    <div className="p-2 bg-white border border-gray-200 rounded shadow-sm mb-4">
-                      <div className="flex flex-wrap items-center gap-4">
-                        <div className="flex items-center">
-                          <div className="w-3 h-3 rounded-full bg-purple-500 mr-1"></div>
-                          <span className="text-xs text-gray-600">Instructions</span>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
-                          <span className="text-xs text-gray-600">Scenarios</span>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
-                          <span className="text-xs text-gray-600">Surveys</span>
-                        </div>
-                        <div className="flex items-center">
-                          <div className="w-3 h-3 rounded-full bg-amber-500 mr-1"></div>
-                          <span className="text-xs text-gray-600">Breaks</span>
-                        </div>
-                      </div>
-                    </div>
                     
                     {/* Stages List - Vertically arranged */}
                     {nodes.map((node, index) => (
@@ -915,8 +689,17 @@ export default function ExperimentDesignerPage() {
                       if (response.ok) {
                         toast.success('Experiment saved as draft');
                       } else {
-                        const errorData = await response.json();
-                        throw new Error(`Failed to save experiment: ${errorData.message || response.statusText}`);
+                        let errorMessage = response.statusText;
+                        try {
+                          // Try to parse the response as JSON
+                          const errorData = await response.json();
+                          errorMessage = errorData.message || response.statusText;
+                        } catch (jsonError) {
+                          // If response is not JSON, use the status text
+                          console.error('Error parsing response:', jsonError);
+                          errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
+                        }
+                        throw new Error(`Failed to save experiment: ${errorMessage}`);
                       }
                     } catch (apiError) {
                       console.error('API Error:', apiError);
@@ -996,8 +779,17 @@ export default function ExperimentDesignerPage() {
                           router.push('/admin/experiments');
                         }, 1500);
                       } else {
-                        const errorData = await response.json();
-                        throw new Error(`Failed to publish experiment: ${errorData.message || response.statusText}`);
+                        let errorMessage = response.statusText;
+                        try {
+                          // Try to parse the response as JSON
+                          const errorData = await response.json();
+                          errorMessage = errorData.message || response.statusText;
+                        } catch (jsonError) {
+                          // If response is not JSON, use the status text
+                          console.error('Error parsing response:', jsonError);
+                          errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
+                        }
+                        throw new Error(`Failed to publish experiment: ${errorMessage}`);
                       }
                     } catch (apiError) {
                       console.error('API Error:', apiError);
