@@ -2,7 +2,32 @@
 
 import React, { useState } from 'react';
 import { Node } from '@reactflow/core';
-import { NodeData } from './StageNodes';
+import { 
+  NodeData, 
+  StageDataBase,
+  InstructionsStageData,
+  ScenarioStageData,
+  SurveyStageData,
+  BreakStageData,
+  SurveyQuestion
+} from './StageNodes';
+
+// Type guards
+function isInstructionsData(data: any): data is InstructionsStageData {
+  return data !== undefined && data.type === 'instructions';
+}
+
+function isScenarioData(data: any): data is ScenarioStageData {
+  return data !== undefined && data.type === 'scenario';
+}
+
+function isSurveyData(data: any): data is SurveyStageData {
+  return data !== undefined && data.type === 'survey';
+}
+
+function isBreakData(data: any): data is BreakStageData {
+  return data !== undefined && data.type === 'break';
+};
 
 type StagePropertiesProps = {
   selectedNode: Node<NodeData> | null;
@@ -164,6 +189,9 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
   const renderTypeSpecificProperties = () => {
     switch (stageData.type) {
       case 'instructions':
+        // Get the proper typed data
+        const instructionsData = stageData.stageData as InstructionsStageData;
+        
         return (
           <div className="mt-4">
             <div>
@@ -173,7 +201,7 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
               <textarea
                 className="w-full px-3 py-2 border rounded-md text-sm"
                 rows={5}
-                value={stageData.stageData?.content || ''}
+                value={instructionsData?.content || ''}
                 onChange={(e) => handleStageDataChange('content', e.target.value)}
               />
             </div>
@@ -184,7 +212,7 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
               </label>
               <select
                 className="w-full px-3 py-2 border rounded-md text-sm"
-                value={stageData.stageData?.format || 'text'}
+                value={instructionsData?.format || 'text'}
                 onChange={(e) => handleStageDataChange('format', e.target.value)}
               >
                 <option value="text">Plain Text</option>
@@ -196,6 +224,9 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
         );
         
       case 'scenario':
+        // Get the properly typed data
+        const scenarioData = stageData.stageData as ScenarioStageData;
+        
         return (
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -203,7 +234,7 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
             </label>
             <select
               className="w-full px-3 py-2 border rounded-md text-sm"
-              value={stageData.stageData?.scenarioId || ''}
+              value={scenarioData?.scenarioId ? String(scenarioData.scenarioId) : ''}
               onChange={(e) => handleStageDataChange('scenarioId', e.target.value)}
             >
               <option value="">-- Select a scenario --</option>
@@ -217,7 +248,9 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
         );
         
       case 'survey':
-        const questions = stageData.stageData?.questions || [];
+        // Get the properly typed data
+        const surveyData = stageData.stageData as SurveyStageData;
+        const questions = surveyData?.questions || [];
         return (
           <div className="mt-4">
             <div className="flex justify-between items-center mb-2">
@@ -405,6 +438,9 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
         );
         
       case 'break':
+        // Get the properly typed data
+        const breakData = stageData.stageData as BreakStageData;
+        
         return (
           <div className="mt-4">
             <div>
@@ -414,7 +450,7 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
               <textarea
                 className="w-full px-3 py-2 border rounded-md text-sm"
                 rows={3}
-                value={stageData.stageData?.message || 'Take a short break before continuing...'}
+                value={breakData?.message || 'Take a short break before continuing...'}
                 onChange={(e) => handleStageDataChange('message', e.target.value)}
               />
             </div>

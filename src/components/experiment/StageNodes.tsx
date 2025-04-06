@@ -3,22 +3,22 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@reactflow/core';
 
-type StageDataBase = {
+export type StageDataBase = {
   durationSeconds?: number;
   required?: boolean;
   order?: number;
 };
 
-type InstructionsStageData = StageDataBase & {
+export type InstructionsStageData = StageDataBase & {
   content?: string;
   format?: 'text' | 'markdown' | 'html';
 };
 
-type ScenarioStageData = StageDataBase & {
+export type ScenarioStageData = StageDataBase & {
   scenarioId?: string | number;
 };
 
-type SurveyQuestion = {
+export type SurveyQuestion = {
   id: string;
   text: string;
   type: 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
@@ -26,15 +26,15 @@ type SurveyQuestion = {
   options?: string[];
 };
 
-type SurveyStageData = StageDataBase & {
+export type SurveyStageData = StageDataBase & {
   questions?: SurveyQuestion[];
 };
 
-type BreakStageData = StageDataBase & {
+export type BreakStageData = StageDataBase & {
   message?: string;
 };
 
-type StageData = 
+export type StageData = 
   | InstructionsStageData
   | ScenarioStageData
   | SurveyStageData
