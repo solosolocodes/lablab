@@ -428,7 +428,7 @@ export default function UserGroupsPage() {
       );
       
       // Create updated user list
-      let updatedUserIds = userInGroup
+      const updatedUserIds = userInGroup
         ? group.users.filter(u => u.id !== userId).map(u => u.id)  // Remove user
         : [...group.users.map(u => u.id), userId];                 // Add user
       
@@ -1103,7 +1103,7 @@ export default function UserGroupsPage() {
                             (async () => {
                               try {
                                 // Get all user IDs for the updated group
-                                let updatedUserIds = [
+                                const updatedUserIds = [
                                   ...selectedGroup.users.map(u => u.id),
                                   ...usersToAdd.map(u => u.id)
                                 ];
