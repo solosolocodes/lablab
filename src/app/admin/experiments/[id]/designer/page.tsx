@@ -577,122 +577,157 @@ export default function ExperimentDesignerPage() {
               </div>
             </div>
             
-            {/* ReactFlow Canvas */}
+            {/* Experiment Flow Canvas */}
             <div className="border border-gray-300 bg-gray-50 rounded-lg min-h-[500px] flex flex-col">
-              {nodes.length > 0 ? (
-                <div className="h-full relative">
-                  <div className="absolute top-0 left-0 right-0 z-10 p-3 bg-white border-b border-gray-200 flex items-center justify-between">
-                    <div className="text-sm font-medium text-gray-700">
-                      Flow View: {nodes.length} stages - {edges.length} connections
-                    </div>
-                    <div className="flex space-x-3">
-                      <button 
-                        className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs rounded-md"
-                        onClick={() => {
-                          setShowOverview(true);
-                          toast.success("Current flow saved! Showing overview.");
-                        }}
-                      >
-                        Save Flow
-                      </button>
-                      <button 
-                        className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs rounded-md"
-                        onClick={() => {
-                          toast.success("Flow preview mode activated");
-                        }}
-                      >
-                        Preview
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <ReactFlow
-                    nodes={nodes}
-                    edges={edges}
-                    onNodesChange={onNodesChange}
-                    onEdgesChange={onEdgesChange}
-                    onConnect={onConnect}
-                    nodeTypes={nodeTypes}
-                    onNodeClick={onNodeClick}
-                    fitView
-                    attributionPosition="bottom-right"
-                    defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-                    style={{ marginTop: '42px' }}
-                  >
-                    <Controls />
-                    <MiniMap />
-                    <Background gap={12} size={1} />
-                    <Panel position="top-left">
-                      <div className="p-3 bg-white border border-gray-300 rounded shadow-sm">
-                        <h4 className="text-xs font-medium text-gray-600 mb-2">Add Stages</h4>
-                        <div className="flex space-x-2 mb-2">
-                          <button
-                            className="px-2 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs rounded-md flex items-center"
-                            onClick={() => addStageNode('instructions')}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                            </svg>
-                            Instructions
-                          </button>
-                          <button
-                            className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs rounded-md flex items-center"
-                            onClick={() => addStageNode('scenario')}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                            </svg>
-                            Scenario
-                          </button>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button
-                            className="px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 text-xs rounded-md flex items-center"
-                            onClick={() => addStageNode('survey')}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                            </svg>
-                            Survey
-                          </button>
-                          <button
-                            className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs rounded-md flex items-center"
-                            onClick={() => addStageNode('break')}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                            </svg>
-                            Break
-                          </button>
-                        </div>
-                      </div>
-                    </Panel>
-                    
-                    <Panel position="bottom-center">
-                      <div className="p-2 bg-white border border-gray-200 rounded shadow-sm">
-                        <div className="flex items-center space-x-4">
-                          <div className="flex items-center">
-                            <div className="w-3 h-3 rounded-full bg-purple-500 mr-1"></div>
-                            <span className="text-xs text-gray-600">Instructions</span>
-                          </div>
-                          <div className="flex items-center">
-                            <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
-                            <span className="text-xs text-gray-600">Scenarios</span>
-                          </div>
-                          <div className="flex items-center">
-                            <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
-                            <span className="text-xs text-gray-600">Surveys</span>
-                          </div>
-                          <div className="flex items-center">
-                            <div className="w-3 h-3 rounded-full bg-amber-500 mr-1"></div>
-                            <span className="text-xs text-gray-600">Breaks</span>
-                          </div>
-                        </div>
-                      </div>
-                    </Panel>
-                  </ReactFlow>
+              <div className="p-3 bg-white border-b border-gray-200 flex items-center justify-between">
+                <div className="text-sm font-medium text-gray-700">
+                  Experiment Flow Overview: {nodes.length} stages
                 </div>
-              ) : (
+                <div className="flex space-x-3">
+                  <button 
+                    className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs rounded-md"
+                    onClick={() => {
+                      toast.success("Current flow saved!");
+                    }}
+                  >
+                    Save Flow
+                  </button>
+                  <button 
+                    className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs rounded-md"
+                    onClick={() => {
+                      toast.success("Flow preview mode activated");
+                    }}
+                  >
+                    Preview
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-4 overflow-y-auto flex-grow">
+                {nodes.length > 0 ? (
+                  <div className="space-y-3">
+                    {/* Stage Controls */}
+                    <div className="p-3 bg-white border border-gray-300 rounded shadow-sm mb-4">
+                      <h4 className="text-xs font-medium text-gray-600 mb-2">Add Stages</h4>
+                      <div className="flex space-x-2 mb-2">
+                        <button
+                          className="px-2 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs rounded-md flex items-center"
+                          onClick={() => addStageNode('instructions')}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          Instructions
+                        </button>
+                        <button
+                          className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs rounded-md flex items-center"
+                          onClick={() => addStageNode('scenario')}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          Scenario
+                        </button>
+                        <button
+                          className="px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 text-xs rounded-md flex items-center"
+                          onClick={() => addStageNode('survey')}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          Survey
+                        </button>
+                        <button
+                          className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 text-xs rounded-md flex items-center"
+                          onClick={() => addStageNode('break')}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          Break
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Legend */}
+                    <div className="p-2 bg-white border border-gray-200 rounded shadow-sm mb-4">
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full bg-purple-500 mr-1"></div>
+                          <span className="text-xs text-gray-600">Instructions</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
+                          <span className="text-xs text-gray-600">Scenarios</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
+                          <span className="text-xs text-gray-600">Surveys</span>
+                        </div>
+                        <div className="flex items-center">
+                          <div className="w-3 h-3 rounded-full bg-amber-500 mr-1"></div>
+                          <span className="text-xs text-gray-600">Breaks</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Stages List - Vertically arranged */}
+                    {nodes.map((node, index) => (
+                      <div 
+                        key={node.id} 
+                        className={`p-3 rounded-lg border ${
+                          node.data.type === 'instructions' ? 'border-purple-200 bg-purple-50' :
+                          node.data.type === 'scenario' ? 'border-blue-200 bg-blue-50' :
+                          node.data.type === 'survey' ? 'border-green-200 bg-green-50' :
+                          'border-amber-200 bg-amber-50'
+                        } ${selectedNode?.id === node.id ? 'ring-2 ring-purple-500' : ''}`}
+                        onClick={() => setSelectedNode(node as Node<NodeData>)}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="font-medium flex items-center">
+                            <span className="mr-2">{index + 1}.</span> 
+                            <span>{node.data.label}</span>
+                            {index > 0 && (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mx-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4" />
+                              </svg>
+                            )}
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            node.data.type === 'instructions' ? 'bg-purple-100 text-purple-700' :
+                            node.data.type === 'scenario' ? 'bg-blue-100 text-blue-700' :
+                            node.data.type === 'survey' ? 'bg-green-100 text-green-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {node.data.type}
+                            {node.data.type === 'scenario' && node.data.stageData?.rounds && (
+                              <span className="ml-1">
+                                ({node.data.stageData.rounds} rounds)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        
+                        <p className="text-sm text-gray-500 mt-1">{node.data.description || 'No description'}</p>
+                        
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-xs text-gray-500">
+                            Duration: {node.data.stageData?.durationSeconds || 0} seconds
+                          </span>
+                          <button 
+                            className="text-xs text-purple-600 hover:text-purple-800 px-2 py-1 bg-purple-50 rounded"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedNode(node as Node<NodeData>);
+                            }}
+                          >
+                            Edit Properties
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                 <div className="flex flex-col items-center justify-center min-h-[500px]">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

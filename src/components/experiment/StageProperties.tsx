@@ -139,18 +139,21 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
         />
       </div>
       
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Duration (seconds)
-        </label>
-        <input
-          type="number"
-          min="0"
-          className="w-full px-3 py-2 border rounded-md text-sm"
-          value={stageData.stageData?.durationSeconds || 30}
-          onChange={(e) => handleStageDataChange('durationSeconds', parseInt(e.target.value))}
-        />
-      </div>
+      {/* Duration field - Not shown for scenario type since it's calculated */}
+      {stageData.type !== 'scenario' && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Duration (seconds)
+          </label>
+          <input
+            type="number"
+            min="0"
+            className="w-full px-3 py-2 border rounded-md text-sm"
+            value={stageData.stageData?.durationSeconds || 30}
+            onChange={(e) => handleStageDataChange('durationSeconds', parseInt(e.target.value))}
+          />
+        </div>
+      )}
       
       <div className="flex items-center">
         <input
@@ -220,6 +223,9 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
       case 'scenario':
         // Get the properly typed data
         const scenarioData = stageData.stageData as ScenarioStageData;
+        const rounds = Number(scenarioData?.rounds || 1);
+        const roundDuration = Number(scenarioData?.roundDuration || 60);
+        const calculatedDuration = rounds * roundDuration;
         
         return (
           <div className="mt-4">
@@ -238,6 +244,51 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                 </option>
               ))}
             </select>
+            
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Number of Rounds
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                  value={rounds}
+                  onChange={(e) => handleStageDataChange('rounds', parseInt(e.target.value) || 1)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Round Duration (seconds)
+                </label>
+                <input
+                  type="number"
+                  min="10"
+                  className="w-full px-3 py-2 border rounded-md text-sm"
+                  value={roundDuration}
+                  onChange={(e) => handleStageDataChange('roundDuration', parseInt(e.target.value) || 60)}
+                />
+              </div>
+            </div>
+            
+            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-700">Total Duration:</span>
+                <span className="text-sm text-gray-900">{calculatedDuration} seconds</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Calculated as {rounds} rounds × {roundDuration} seconds per round
+              </p>
+              
+              {/* Update the actual durationSeconds with the calculated value without rendering */}
+              <span className="hidden">
+                {React.useEffect(() => {
+                  handleStageDataChange('durationSeconds', calculatedDuration);
+                }, [calculatedDuration])}
+              </span>
+            </div>
             
             <div className="mt-5">
               <button 

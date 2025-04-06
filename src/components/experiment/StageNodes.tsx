@@ -16,6 +16,8 @@ export type InstructionsStageData = StageDataBase & {
 
 export type ScenarioStageData = StageDataBase & {
   scenarioId?: string | number;
+  rounds?: number;
+  roundDuration?: number;
 };
 
 export type SurveyQuestion = {
