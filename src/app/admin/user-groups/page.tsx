@@ -129,18 +129,42 @@ export default function UserGroupsPage() {
   
   // Initialize data on component mount
   useEffect(() => {
-    const groups = generateDummyUserGroups();
-    setUserGroups(groups);
+    const fetchData = async () => {
+      try {
+        // Fetch participants from API
+        const response = await fetch('/api/users?role=participant');
+        if (!response.ok) {
+          throw new Error('Failed to fetch participants');
+        }
+        
+        const participants = await response.json();
+        setAllUsers(participants);
+        
+        // For now, we'll still use dummy groups, but we'll populate them with real users
+        const groups = generateDummyUserGroups();
+        
+        // Distribute real users among groups
+        if (participants.length > 0) {
+          groups.forEach((group, groupIndex) => {
+            // Empty the dummy users first
+            group.users = [];
+            
+            // Add some real users to each group
+            participants.forEach((user, userIndex) => {
+              if (userIndex % groups.length === groupIndex) {
+                group.users.push(user);
+              }
+            });
+          });
+        }
+        
+        setUserGroups(groups);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
     
-    // Create a combined list of all users
-    const uniqueUsers: Record<string, User> = {};
-    groups.forEach(group => {
-      group.users.forEach(user => {
-        uniqueUsers[user.id] = user;
-      });
-    });
-    
-    setAllUsers(Object.values(uniqueUsers));
+    fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -192,7 +216,7 @@ export default function UserGroupsPage() {
   };
   
   // Handle form submission
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const generateId = () => Math.random().toString(36).substring(2, 10);
@@ -217,43 +241,97 @@ export default function UserGroupsPage() {
       setUserGroups(updatedGroups);
     }
     else if (modalType === 'createUser') {
-      const newUser: User = {
-        id: 'usr-' + generateId(),
-        name: formData.name,
-        email: formData.email,
-        role: 'participant',
-        createdAt: new Date().toISOString(),
-      };
-      setAllUsers([...allUsers, newUser]);
-      
-      // Add user to selected group if a group ID was provided
-      if (formData.groupId) {
-        const updatedGroups = userGroups.map(group => 
-          group.id === formData.groupId 
-            ? { ...group, users: [...group.users, newUser] }
-            : group
-        );
-        setUserGroups(updatedGroups);
+      try {
+        // First create the participant in MongoDB
+        const response = await fetch('/api/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: formData.name,
+            email: formData.email,
+            role: 'participant',
+          }),
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || 'Failed to create participant');
+        }
+        
+        const responseData = await response.json();
+        
+        // Create the user locally with the MongoDB ID
+        const newUser: User = {
+          id: responseData.user.id || 'usr-' + generateId(),
+          name: formData.name,
+          email: formData.email,
+          role: 'participant',
+          createdAt: new Date().toISOString(),
+        };
+        
+        setAllUsers([...allUsers, newUser]);
+        
+        // Add user to selected group if a group ID was provided
+        if (formData.groupId) {
+          const updatedGroups = userGroups.map(group => 
+            group.id === formData.groupId 
+              ? { ...group, users: [...group.users, newUser] }
+              : group
+          );
+          setUserGroups(updatedGroups);
+        }
+      } catch (error) {
+        console.error('Error creating participant:', error);
+        // You would typically show an error message here
+        alert('Failed to create participant: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        return; // Don't close the modal so they can try again
       }
     }
     else if (modalType === 'editUser' && selectedUser) {
-      const updatedUsers = allUsers.map(user => 
-        user.id === selectedUser.id 
-          ? { ...user, name: formData.name, email: formData.email }
-          : user
-      );
-      setAllUsers(updatedUsers);
-      
-      // Update user in all groups
-      const updatedGroups = userGroups.map(group => ({
-        ...group,
-        users: group.users.map(user => 
+      try {
+        // Update user in MongoDB
+        const response = await fetch('/api/users', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: selectedUser.id,
+            name: formData.name,
+            email: formData.email,
+          }),
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || 'Failed to update participant');
+        }
+        
+        // Update in local state
+        const updatedUsers = allUsers.map(user => 
           user.id === selectedUser.id 
             ? { ...user, name: formData.name, email: formData.email }
             : user
-        )
-      }));
-      setUserGroups(updatedGroups);
+        );
+        setAllUsers(updatedUsers);
+        
+        // Update user in all groups
+        const updatedGroups = userGroups.map(group => ({
+          ...group,
+          users: group.users.map(user => 
+            user.id === selectedUser.id 
+              ? { ...user, name: formData.name, email: formData.email }
+              : user
+          )
+        }));
+        setUserGroups(updatedGroups);
+      } catch (error) {
+        console.error('Error updating participant:', error);
+        alert('Failed to update participant');
+        return;
+      }
     }
     
     // Close modal
