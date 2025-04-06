@@ -1,7 +1,13 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { JWT } from 'next-auth/jwt';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
+
+// Extend the JWT type to include our custom fields
+interface ExtendedJWT extends JWT {
+  id?: string;
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -47,14 +53,16 @@ export const authOptions: NextAuthOptions = {
   },
   callbacks: {
     async jwt({ token, user }) {
+      const extendedToken = token as ExtendedJWT;
       if (user) {
-        token.id = user.id;
+        extendedToken.id = user.id;
       }
-      return token;
+      return extendedToken;
     },
     async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id;
+      const extendedToken = token as ExtendedJWT;
+      if (extendedToken.id) {
+        session.user.id = extendedToken.id;
       }
       return session;
     },
