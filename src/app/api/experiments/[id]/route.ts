@@ -132,8 +132,61 @@ export async function PUT(request: NextRequest) {
     
     // Only update optional fields if provided
     if (status) experiment.status = status;
-    if (userGroups) experiment.userGroups = userGroups;
-    if (stages) experiment.stages = stages;
+    
+    // Handle userGroups
+    if (userGroups) {
+      // Ensure maxParticipants is a number or undefined
+      experiment.userGroups = userGroups.map(group => ({
+        userGroupId: group.userGroupId,
+        condition: group.condition,
+        maxParticipants: group.maxParticipants !== undefined ? Number(group.maxParticipants) : undefined
+      }));
+    }
+    
+    // Handle stages - need to ensure all required fields are present based on type
+    if (stages) {
+      experiment.stages = [];
+      
+      // Process each stage
+      for (const stage of stages) {
+        // Common fields for all stage types
+        const stageData: any = {
+          type: stage.type,
+          title: stage.title,
+          description: stage.description,
+          durationSeconds: Number(stage.durationSeconds),
+          required: stage.required !== undefined ? Boolean(stage.required) : true,
+          order: Number(stage.order)
+        };
+        
+        // Add type-specific fields
+        if (stage.type === 'instructions') {
+          stageData.content = stage.content;
+          stageData.format = stage.format || 'markdown';
+        } 
+        else if (stage.type === 'scenario') {
+          stageData.scenarioId = stage.scenarioId;
+          stageData.rounds = stage.rounds ? Number(stage.rounds) : 1;
+          stageData.roundDuration = stage.roundDuration ? Number(stage.roundDuration) : 60;
+        }
+        else if (stage.type === 'survey') {
+          stageData.questions = (stage.questions || []).map(q => ({
+            id: q.id,
+            text: q.text,
+            type: q.type,
+            options: q.options || [],
+            required: q.required !== undefined ? Boolean(q.required) : true
+          }));
+        }
+        else if (stage.type === 'break') {
+          stageData.message = stage.message;
+        }
+        
+        // Add the stage to the experiment
+        experiment.stages.push(stageData);
+      }
+    }
+    
     if (branches) experiment.branches = branches;
     if (startStageId) experiment.startStageId = startStageId;
     
@@ -158,8 +211,32 @@ export async function PUT(request: NextRequest) {
       }
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    // Detailed error logging
     console.error('Error updating experiment:', error);
+    
+    // Handle MongoDB validation errors
+    if (error instanceof Error && 'name' in error && error.name === 'ValidationError') {
+      const validationError = error as any;
+      const errors: Record<string, string> = {};
+      
+      // Extract validation error messages
+      if (validationError.errors) {
+        Object.keys(validationError.errors).forEach(key => {
+          errors[key] = validationError.errors[key].message;
+        });
+      }
+      
+      return NextResponse.json(
+        { 
+          message: 'Validation error when updating experiment', 
+          errors,
+          error: validationError.message 
+        },
+        { status: 400 }
+      );
+    }
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json(
       { message: 'Error updating experiment', error: errorMessage },
       { status: 500 }
