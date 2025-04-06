@@ -88,42 +88,6 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
     );
   }
 
-  // Tab navigation
-  const renderTabs = () => (
-    <div className="flex border-b border-gray-200">
-      <button 
-        className={`flex-1 px-4 py-2 text-center text-sm font-medium ${
-          activeTab === 'properties' 
-            ? 'text-purple-600 border-b-2 border-purple-600' 
-            : 'text-gray-500 hover:text-gray-700'
-        }`}
-        onClick={() => setActiveTab('properties')}
-      >
-        Properties
-      </button>
-      <button 
-        className={`flex-1 px-4 py-2 text-center text-sm font-medium ${
-          activeTab === 'logic' 
-            ? 'text-purple-600 border-b-2 border-purple-600' 
-            : 'text-gray-500 hover:text-gray-700'
-        }`}
-        onClick={() => setActiveTab('logic')}
-      >
-        Logic
-      </button>
-      <button 
-        className={`flex-1 px-4 py-2 text-center text-sm font-medium ${
-          activeTab === 'conditions' 
-            ? 'text-purple-600 border-b-2 border-purple-600' 
-            : 'text-gray-500 hover:text-gray-700'
-        }`}
-        onClick={() => setActiveTab('conditions')}
-      >
-        Conditions
-      </button>
-    </div>
-  );
-
   // Common properties for all stage types
   const renderCommonProperties = () => (
     <div className="space-y-3">
@@ -322,23 +286,6 @@ const InstructionsProperties = ({
   );
 };
 
-// Type-specific properties
-const renderTypeSpecificProperties = () => {
-  switch (stageData.type) {
-    case 'instructions':
-      // Get the proper typed data
-      const instructionsData = stageData.stageData as InstructionsStageData;
-      return <InstructionsProperties instructionsData={instructionsData} handleStageDataChange={handleStageDataChange} />;
-        
-    case 'scenario':
-      // Get the properly typed data
-      const scenarioData = stageData.stageData as ScenarioStageData;
-      return <ScenarioProperties 
-        scenarioData={scenarioData} 
-        scenarios={scenarios} 
-        handleStageDataChange={handleStageDataChange} 
-      />;
-        
 // Survey Properties Component
 const SurveyProperties = ({
   surveyData,
@@ -698,6 +645,42 @@ const renderTypeSpecificProperties = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  // Tab navigation
+  const renderTabs = () => (
+    <div className="flex border-b border-gray-200">
+      <button 
+        className={`flex-1 px-4 py-2 text-center text-sm font-medium ${
+          activeTab === 'properties' 
+            ? 'text-purple-600 border-b-2 border-purple-600' 
+            : 'text-gray-500 hover:text-gray-700'
+        }`}
+        onClick={() => setActiveTab('properties')}
+      >
+        Properties
+      </button>
+      <button 
+        className={`flex-1 px-4 py-2 text-center text-sm font-medium ${
+          activeTab === 'logic' 
+            ? 'text-purple-600 border-b-2 border-purple-600' 
+            : 'text-gray-500 hover:text-gray-700'
+        }`}
+        onClick={() => setActiveTab('logic')}
+      >
+        Logic
+      </button>
+      <button 
+        className={`flex-1 px-4 py-2 text-center text-sm font-medium ${
+          activeTab === 'conditions' 
+            ? 'text-purple-600 border-b-2 border-purple-600' 
+            : 'text-gray-500 hover:text-gray-700'
+        }`}
+        onClick={() => setActiveTab('conditions')}
+      >
+        Conditions
+      </button>
     </div>
   );
 
