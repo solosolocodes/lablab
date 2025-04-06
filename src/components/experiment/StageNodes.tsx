@@ -82,7 +82,7 @@ const ScenarioNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
         </svg>
         <span>Scenario</span>
-        {data.stageData?.scenarioId && <span className="ml-1 text-gray-500">#{String(data.stageData.scenarioId).substring(0, 4)}</span>}
+        {data.stageData?.scenarioId && <span className="ml-1 text-gray-500">#{typeof data.stageData.scenarioId === 'string' ? data.stageData.scenarioId.substring(0, 4) : String(data.stageData.scenarioId).substring(0, 4)}</span>}
       </div>
     </BaseStageNode>
   );
@@ -92,7 +92,7 @@ export const ScenarioNode = memo(ScenarioNodeComponent);
 
 // Survey Stage Node
 const SurveyNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
-  const questionCount = data.stageData?.questions?.length || 0;
+  const questionCount = Array.isArray(data.stageData?.questions) ? data.stageData.questions.length : 0;
   
   return (
     <BaseStageNode data={data} selected={selected}>
@@ -111,7 +111,7 @@ export const SurveyNode = memo(SurveyNodeComponent);
 
 // Break Stage Node
 const BreakNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
-  const duration = data.stageData?.durationSeconds || 0;
+  const duration = typeof data.stageData?.durationSeconds === 'number' ? data.stageData.durationSeconds : 0;
   
   return (
     <BaseStageNode data={data} selected={selected}>
