@@ -463,7 +463,18 @@ export default function ExperimentDesignerPage() {
         try {
           // Try to parse the response as JSON
           const errorData = await response.json();
-          errorMessage = errorData.message || response.statusText;
+          // Log detailed error information
+          console.log('Detailed error response:', errorData);
+          
+          if (errorData.errors && Object.keys(errorData.errors).length > 0) {
+            // If there are validation errors, format them nicely
+            const errorDetails = Object.entries(errorData.errors)
+              .map(([field, message]) => `${field}: ${message}`)
+              .join(', ');
+            errorMessage = `${errorData.message} (${errorDetails})`;
+          } else {
+            errorMessage = errorData.message || response.statusText;
+          }
         } catch {
           // If response is not JSON, use the status text
           errorMessage = `HTTP error: ${response.status} ${response.statusText}`;

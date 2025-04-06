@@ -142,12 +142,31 @@ export async function PUT(request: NextRequest) {
         maxParticipants?: number | string;
       }
       
+      // Get mongoose for ObjectId conversion
+      const mongoose = require('mongoose');
+      
+      // Log userGroups for debugging
+      console.log('Processing userGroups:', JSON.stringify(userGroups, null, 2));
+      
       // Ensure maxParticipants is a number or undefined
-      experiment.userGroups = userGroups.map((group: UserGroupInput) => ({
-        userGroupId: group.userGroupId,
-        condition: group.condition,
-        maxParticipants: group.maxParticipants !== undefined ? Number(group.maxParticipants) : undefined
-      }));
+      experiment.userGroups = userGroups.map((group: UserGroupInput) => {
+        // Convert userGroupId to ObjectId if it's a string
+        let userGroupId;
+        try {
+          userGroupId = mongoose.Types.ObjectId.isValid(group.userGroupId) 
+            ? new mongoose.Types.ObjectId(group.userGroupId) 
+            : group.userGroupId;
+        } catch (err) {
+          console.error('Error converting userGroupId to ObjectId:', err);
+          userGroupId = group.userGroupId;
+        }
+        
+        return {
+          userGroupId: userGroupId,
+          condition: group.condition,
+          maxParticipants: group.maxParticipants !== undefined ? Number(group.maxParticipants) : undefined
+        };
+      });
     }
     
     // Handle stages - need to ensure all required fields are present based on type
@@ -211,11 +230,23 @@ export async function PUT(request: NextRequest) {
         
         // Add type-specific fields
         if (stage.type === 'instructions') {
-          stageData.content = stage.content;
+          stageData.content = stage.content || 'Enter instructions here...';
           stageData.format = stage.format || 'markdown';
         } 
         else if (stage.type === 'scenario') {
-          stageData.scenarioId = stage.scenarioId;
+          // Convert scenarioId to ObjectId if it's a string
+          if (stage.scenarioId) {
+            try {
+              const mongoose = require('mongoose');
+              stageData.scenarioId = mongoose.Types.ObjectId.isValid(stage.scenarioId) 
+                ? new mongoose.Types.ObjectId(stage.scenarioId) 
+                : stage.scenarioId;
+            } catch (err) {
+              console.error('Error converting scenarioId to ObjectId:', err);
+              stageData.scenarioId = stage.scenarioId;
+            }
+          }
+          
           stageData.rounds = stage.rounds ? Number(stage.rounds) : 1;
           stageData.roundDuration = stage.roundDuration ? Number(stage.roundDuration) : 60;
         }
@@ -240,8 +271,20 @@ export async function PUT(request: NextRequest) {
     if (branches) experiment.branches = branches;
     if (startStageId) experiment.startStageId = startStageId;
     
-    // Save changes
-    await experiment.save();
+    // Log experiment before saving for debugging
+    console.log('About to save experiment, stages:', JSON.stringify(experiment.stages, null, 2));
+    console.log('About to save experiment, userGroups:', JSON.stringify(experiment.userGroups, null, 2));
+    
+    try {
+      // Save changes
+      await experiment.save();
+    } catch (saveError) {
+      console.error('Error saving experiment:', saveError);
+      if (saveError instanceof Error && saveError.name === 'ValidationError') {
+        throw saveError;
+      }
+      throw new Error(`Failed to save experiment: ${saveError instanceof Error ? saveError.message : String(saveError)}`);
+    }
     
     // Return successful response
     return NextResponse.json({
@@ -270,9 +313,12 @@ export async function PUT(request: NextRequest) {
       const validationError = error as any;
       const errors: Record<string, string> = {};
       
-      // Extract validation error messages
+      // Extract validation error messages and log details
+      console.log('Full validation error:', JSON.stringify(validationError, null, 2));
+      
       if (validationError.errors) {
         Object.keys(validationError.errors).forEach(key => {
+          console.log(`Validation error for ${key}:`, validationError.errors[key]);
           errors[key] = validationError.errors[key].message;
         });
       }
