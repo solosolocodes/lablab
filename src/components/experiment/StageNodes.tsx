@@ -7,7 +7,7 @@ export type NodeData = {
   label: string;
   description?: string;
   type: 'instructions' | 'scenario' | 'survey' | 'break';
-  stageData?: Record<string, any>;
+  stageData?: Record<string, unknown>;
 };
 
 // Base Node layout and styling for all stage types
@@ -58,7 +58,7 @@ const BaseStageNode = ({
 };
 
 // Instructions Stage Node
-export const InstructionsNode = memo(({ data, selected }: NodeProps<NodeData>) => {
+const InstructionsNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
   return (
     <BaseStageNode data={data} selected={selected}>
       <div className="flex items-center text-xs text-purple-600">
@@ -69,10 +69,12 @@ export const InstructionsNode = memo(({ data, selected }: NodeProps<NodeData>) =
       </div>
     </BaseStageNode>
   );
-});
+};
+InstructionsNodeComponent.displayName = 'InstructionsNode';
+export const InstructionsNode = memo(InstructionsNodeComponent);
 
 // Scenario Stage Node
-export const ScenarioNode = memo(({ data, selected }: NodeProps<NodeData>) => {
+const ScenarioNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
   return (
     <BaseStageNode data={data} selected={selected}>
       <div className="flex items-center text-xs text-blue-600">
@@ -80,14 +82,16 @@ export const ScenarioNode = memo(({ data, selected }: NodeProps<NodeData>) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
         </svg>
         <span>Scenario</span>
-        {data.stageData?.scenarioId && <span className="ml-1 text-gray-500">#{data.stageData.scenarioId.toString().substring(0, 4)}</span>}
+        {data.stageData?.scenarioId && <span className="ml-1 text-gray-500">#{String(data.stageData.scenarioId).substring(0, 4)}</span>}
       </div>
     </BaseStageNode>
   );
-});
+};
+ScenarioNodeComponent.displayName = 'ScenarioNode';
+export const ScenarioNode = memo(ScenarioNodeComponent);
 
 // Survey Stage Node
-export const SurveyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
+const SurveyNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
   const questionCount = data.stageData?.questions?.length || 0;
   
   return (
@@ -101,10 +105,12 @@ export const SurveyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       </div>
     </BaseStageNode>
   );
-});
+};
+SurveyNodeComponent.displayName = 'SurveyNode';
+export const SurveyNode = memo(SurveyNodeComponent);
 
 // Break Stage Node
-export const BreakNode = memo(({ data, selected }: NodeProps<NodeData>) => {
+const BreakNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
   const duration = data.stageData?.durationSeconds || 0;
   
   return (
@@ -122,4 +128,6 @@ export const BreakNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       </div>
     </BaseStageNode>
   );
-});
+};
+BreakNodeComponent.displayName = 'BreakNode';
+export const BreakNode = memo(BreakNodeComponent);

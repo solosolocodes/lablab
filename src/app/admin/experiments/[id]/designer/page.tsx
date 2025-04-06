@@ -5,10 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
-import ReactFlow, { 
-  Background, 
-  Controls, 
-  MiniMap, 
+import { 
+  ReactFlow, 
   addEdge, 
   Node, 
   Edge,
@@ -18,6 +16,9 @@ import ReactFlow, {
   NodeTypes,
   Panel
 } from '@reactflow/core';
+import { Background } from '@reactflow/core';
+import { Controls } from '@reactflow/controls';
+import { MiniMap } from '@reactflow/minimap';
 import '@reactflow/core/dist/style.css';
 import { 
   InstructionsNode, 

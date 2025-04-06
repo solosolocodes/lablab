@@ -42,7 +42,7 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
     onUpdateNode(selectedNode.id, updatedData);
   };
 
-  const handleStageDataChange = (field: string, value: any) => {
+  const handleStageDataChange = (field: string, value: unknown) => {
     if (!stageData || !selectedNode) return;
     
     const updatedData = { 
@@ -242,13 +242,13 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
             
             {questions.length > 0 ? (
               <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                {questions.map((question: any, index: number) => (
-                  <div key={question.id} className="border border-gray-200 rounded-md p-2">
+                {questions.map((question: Record<string, unknown>, index: number) => (
+                  <div key={String(question.id)} className="border border-gray-200 rounded-md p-2">
                     <div className="flex justify-between items-start">
                       <input
                         type="text"
                         className="w-full px-2 py-1 text-xs border rounded"
-                        value={question.text}
+                        value={String(question.text || '')}
                         onChange={(e) => {
                           const updatedQuestions = [...questions];
                           updatedQuestions[index].text = e.target.value;
@@ -331,7 +331,8 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                               className="ml-1 text-red-500 hover:text-red-700"
                               onClick={() => {
                                 const updatedQuestions = [...questions];
-                                updatedQuestions[index].options = question.options.filter((_: any, i: number) => i !== optionIndex);
+                                updatedQuestions[index].options = Array.isArray(question.options) ? 
+                                  question.options.filter((_, i: number) => i !== optionIndex) : [];
                                 handleStageDataChange('questions', updatedQuestions);
                               }}
                             >
