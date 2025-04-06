@@ -280,7 +280,7 @@ export default function ExperimentDesignerPage() {
   };
 
   // Handle form input changes for stage editing
-  const handleStageFormChange = (field: string, value: any) => {
+  const handleStageFormChange = (field: string, value: unknown) => {
     if (!stageFormData) return;
     
     setStageFormData({
@@ -366,7 +366,7 @@ export default function ExperimentDesignerPage() {
   };
 
   // Update a user group's settings
-  const updateUserGroup = (userGroupId: string, field: string, value: any) => {
+  const updateUserGroup = (userGroupId: string, field: string, value: string | number | boolean) => {
     if (!experiment) return;
     
     const updatedUserGroups = experiment.userGroups.map(group => {
@@ -421,7 +421,8 @@ export default function ExperimentDesignerPage() {
           // Try to parse the response as JSON
           const errorData = await response.json();
           errorMessage = errorData.message || response.statusText;
-        } catch (jsonError) {
+        } catch (_) {
+          // If response is not JSON, use the status text
           errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
         }
         throw new Error(`Failed to save experiment: ${errorMessage}`);
