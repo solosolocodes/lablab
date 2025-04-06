@@ -201,10 +201,12 @@ const ScenarioProperties = ({
           <input
             type="number"
             min="1"
-            className="w-full px-3 py-2 border rounded-md text-sm"
+            className="w-full px-3 py-2 border rounded-md text-sm bg-gray-100"
             value={rounds}
-            onChange={(e) => handleStageDataChange('rounds', parseInt(e.target.value) || 1)}
+            readOnly
+            disabled
           />
+          <p className="text-xs text-gray-500 mt-1">Set in scenario settings</p>
         </div>
         
         <div>
@@ -214,10 +216,12 @@ const ScenarioProperties = ({
           <input
             type="number"
             min="10"
-            className="w-full px-3 py-2 border rounded-md text-sm"
+            className="w-full px-3 py-2 border rounded-md text-sm bg-gray-100"
             value={roundDuration}
-            onChange={(e) => handleStageDataChange('roundDuration', parseInt(e.target.value) || 60)}
+            readOnly
+            disabled
           />
+          <p className="text-xs text-gray-500 mt-1">Set in scenario settings</p>
         </div>
       </div>
       
@@ -280,6 +284,20 @@ const InstructionsProperties = ({
           onChange={(e) => setContentValue(e.target.value)}
           onBlur={updateContent}
         />
+      </div>
+      
+      <div className="mt-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Duration (seconds)
+        </label>
+        <input
+          type="number"
+          min="5"
+          className="w-full px-3 py-2 border rounded-md text-sm"
+          value={instructionsData?.durationSeconds || 30}
+          onChange={(e) => handleStageDataChange('durationSeconds', parseInt(e.target.value) || 30)}
+        />
+        <p className="text-xs text-gray-500 mt-1">How long participants should have to read instructions</p>
       </div>
       
       <div className="mt-5">
