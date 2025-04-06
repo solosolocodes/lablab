@@ -64,6 +64,7 @@ export default function AdminDashboard() {
                 <Link href="/admin/dashboard" className="px-3 py-2 rounded bg-purple-600">Dashboard</Link>
                 <Link href="/admin/user-groups" className="px-3 py-2 rounded hover:bg-purple-600">User Groups</Link>
                 <Link href="/admin/wallets" className="px-3 py-2 rounded hover:bg-purple-600">Wallets</Link>
+                <Link href="/admin/scenarios" className="px-3 py-2 rounded hover:bg-purple-600">Scenarios</Link>
                 <Link href="#" className="px-3 py-2 rounded hover:bg-purple-600">Experiments</Link>
               </div>
             </div>
