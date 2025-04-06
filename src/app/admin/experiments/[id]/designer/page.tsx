@@ -436,7 +436,7 @@ export default function ExperimentDesignerPage() {
     
     try {
       // Validate data before sending
-      const validationErrors = [];
+      const validationErrors: string[] = [];
       
       // Check for scenario stages without scenario ID
       if (experiment.stages) {
