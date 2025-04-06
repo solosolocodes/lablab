@@ -154,16 +154,77 @@ const ScenarioProperties = ({
   scenarios: Array<{ id: string; name: string }>; 
   handleStageDataChange: (field: string, value: unknown) => void;
 }) => {
-  // Create local state for scenario ID to fix the dropdown issue
+  // Create local state for scenario ID and details
   const [scenarioId, setScenarioId] = useState(scenarioData?.scenarioId ? String(scenarioData.scenarioId) : '');
-  const rounds = Number(scenarioData?.rounds || 1);
-  const roundDuration = Number(scenarioData?.roundDuration || 60);
-  const calculatedDuration = rounds * roundDuration;
+  const [scenarioDetails, setScenarioDetails] = useState<{
+    rounds: number;
+    roundDuration: number;
+    loading: boolean;
+    error: string | null;
+  }>({
+    rounds: Number(scenarioData?.rounds || 1),
+    roundDuration: Number(scenarioData?.roundDuration || 60),
+    loading: false,
+    error: null
+  });
   
-  // Use our custom hook to update the duration
-  useCalculatedDuration(rounds, roundDuration, handleStageDataChange);
+  // Calculate duration from the scenario details
+  const calculatedDuration = scenarioDetails.rounds * scenarioDetails.roundDuration;
   
-  // Update parent state when local state changes
+  // Fetch scenario details when scenarioId changes
+  useEffect(() => {
+    if (!scenarioId) {
+      // Reset to defaults if no scenario selected
+      setScenarioDetails({
+        rounds: 1,
+        roundDuration: 60,
+        loading: false,
+        error: null
+      });
+      return;
+    }
+    
+    const fetchScenarioDetails = async () => {
+      // Set loading state
+      setScenarioDetails(prev => ({ ...prev, loading: true, error: null }));
+      
+      try {
+        // Make API request to get scenario details
+        const response = await fetch(`/api/scenarios/${scenarioId}`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch scenario details: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Update scenario details with actual data from API
+        setScenarioDetails({
+          rounds: Number(data.rounds || 1),
+          roundDuration: Number(data.roundDuration || 60),
+          loading: false,
+          error: null
+        });
+        
+        // Update stage data with scenario values
+        handleStageDataChange('rounds', Number(data.rounds || 1));
+        handleStageDataChange('roundDuration', Number(data.roundDuration || 60));
+        handleStageDataChange('durationSeconds', Number(data.rounds || 1) * Number(data.roundDuration || 60));
+        
+      } catch (error) {
+        console.error('Error fetching scenario details:', error);
+        setScenarioDetails(prev => ({
+          ...prev,
+          loading: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        }));
+      }
+    };
+    
+    fetchScenarioDetails();
+  }, [scenarioId, handleStageDataChange]);
+  
+  // Update parent state when scenarioId changes
   useEffect(() => {
     if (scenarioId !== (scenarioData?.scenarioId ? String(scenarioData.scenarioId) : '')) {
       handleStageDataChange('scenarioId', scenarioId);
@@ -201,8 +262,10 @@ const ScenarioProperties = ({
           <input
             type="number"
             min="1"
-            className="w-full px-3 py-2 border rounded-md text-sm bg-gray-100"
-            value={rounds}
+            className={`w-full px-3 py-2 border rounded-md text-sm bg-gray-100 ${
+              scenarioDetails.loading ? 'opacity-50' : ''
+            }`}
+            value={scenarioDetails.loading ? 'Loading...' : scenarioDetails.rounds}
             readOnly
             disabled
           />
@@ -216,8 +279,10 @@ const ScenarioProperties = ({
           <input
             type="number"
             min="10"
-            className="w-full px-3 py-2 border rounded-md text-sm bg-gray-100"
-            value={roundDuration}
+            className={`w-full px-3 py-2 border rounded-md text-sm bg-gray-100 ${
+              scenarioDetails.loading ? 'opacity-50' : ''
+            }`}
+            value={scenarioDetails.loading ? 'Loading...' : scenarioDetails.roundDuration}
             readOnly
             disabled
           />
@@ -225,13 +290,21 @@ const ScenarioProperties = ({
         </div>
       </div>
       
+      {scenarioDetails.error && (
+        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
+          Error loading scenario details: {scenarioDetails.error}
+        </div>
+      )}
+      
       <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium text-gray-700">Total Duration:</span>
-          <span className="text-sm text-gray-900">{calculatedDuration} seconds</span>
+          <span className="text-sm text-gray-900">
+            {scenarioDetails.loading ? 'Calculating...' : `${calculatedDuration} seconds`}
+          </span>
         </div>
         <p className="text-xs text-gray-500 mt-1">
-          Calculated as {rounds} rounds × {roundDuration} seconds per round
+          Calculated as {scenarioDetails.rounds} rounds × {scenarioDetails.roundDuration} seconds per round
         </p>
       </div>
       
