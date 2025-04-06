@@ -726,4 +726,4 @@ const renderTypeSpecificProperties = () => {
       {renderTabContent()}
     </>
   );
-};
+}
