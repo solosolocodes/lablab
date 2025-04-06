@@ -89,9 +89,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (roundDuration < 5 || roundDuration > 300) {
+    if (roundDuration < 0.1 || roundDuration > 300) {
       return NextResponse.json(
-        { message: 'Round duration must be between 5 and 300 seconds' },
+        { message: 'Round duration must be between 0.1 and 300 seconds' },
         { status: 400 }
       );
     }

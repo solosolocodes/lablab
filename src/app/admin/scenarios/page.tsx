@@ -165,8 +165,8 @@ export default function ScenariosPage() {
       toast.error('Number of rounds must be between 1 and 50');
       return;
     }
-    if (formData.roundDuration < 5 || formData.roundDuration > 300) {
-      toast.error('Round duration must be between 5 and 300 seconds');
+    if (formData.roundDuration < 0.1 || formData.roundDuration > 300) {
+      toast.error('Round duration must be between 0.1 and 300 seconds');
       return;
     }
     
@@ -679,11 +679,11 @@ export default function ScenariosPage() {
                     id="roundDuration"
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     value={formData.roundDuration}
-                    onChange={(e) => setFormData({ ...formData, roundDuration: parseInt(e.target.value) })}
+                    onChange={(e) => setFormData({ ...formData, roundDuration: parseFloat(e.target.value) })}
                     required
-                    min={5}
+                    min={0.1}
                     max={300}
-                    step={5}
+                    step={0.1}
                     disabled={modalType === 'view'}
                   />
                 </div>

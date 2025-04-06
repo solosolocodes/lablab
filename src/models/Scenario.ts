@@ -57,7 +57,7 @@ const ScenarioSchema = new mongoose.Schema<IScenario>(
     roundDuration: {
       type: Number,
       required: [true, 'Round duration is required'],
-      min: [5, 'Round duration must be at least 5 seconds'],
+      min: [0.1, 'Round duration must be at least 0.1 seconds'],
       max: [300, 'Round duration cannot exceed 5 minutes (300 seconds)']
     },
     assetPrices: [AssetPriceSchema],
