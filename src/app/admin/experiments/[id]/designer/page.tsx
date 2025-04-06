@@ -726,28 +726,6 @@ export default function ExperimentDesignerPage() {
                     {nodes.length} stages in experiment
                   </span>
                 </div>
-                <div className="space-x-3">
-                  <button 
-                    className="flex items-center text-gray-600 hover:text-gray-800 text-sm"
-                    onClick={() => {
-                      // Auto-arrange nodes in a grid
-                      setNodes(nds => 
-                        nds.map((node, index) => ({
-                          ...node,
-                          position: {
-                            x: 150 + (index % 3) * 300,
-                            y: 100 + Math.floor(index / 3) * 200
-                          }
-                        }))
-                      );
-                    }}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                    </svg>
-                    Auto-Arrange
-                  </button>
-                </div>
               </div>
             </div>
           </div>

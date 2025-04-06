@@ -36,7 +36,6 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
   scenarios,
   userGroups
 }) => {
-  const [activeTab, setActiveTab] = useState<'properties' | 'logic' | 'conditions'>('properties');
   const [stageData, setStageData] = useState<NodeData | null>(null);
 
   // Update local state when selected node changes
@@ -242,6 +241,19 @@ const InstructionsProperties = ({
   instructionsData: InstructionsStageData;
   handleStageDataChange: (field: string, value: unknown) => void;
 }) => {
+  // Create a local state for the content to fix the cursor issue
+  const [contentValue, setContentValue] = useState(instructionsData?.content || '');
+  
+  // Update the parent's state when done editing
+  const updateContent = () => {
+    handleStageDataChange('content', contentValue);
+  };
+  
+  // Update local state on prop changes
+  useEffect(() => {
+    setContentValue(instructionsData?.content || '');
+  }, [instructionsData?.content]);
+  
   return (
     <div className="mt-4">
       <div>
@@ -251,31 +263,17 @@ const InstructionsProperties = ({
         <textarea
           className="w-full px-3 py-2 border rounded-md text-sm"
           rows={5}
-          value={instructionsData?.content || ''}
-          onChange={(e) => handleStageDataChange('content', e.target.value)}
+          value={contentValue}
+          onChange={(e) => setContentValue(e.target.value)}
+          onBlur={updateContent}
         />
-      </div>
-      
-      <div className="mt-3">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Format
-        </label>
-        <select
-          className="w-full px-3 py-2 border rounded-md text-sm"
-          value={instructionsData?.format || 'text'}
-          onChange={(e) => handleStageDataChange('format', e.target.value)}
-        >
-          <option value="text">Plain Text</option>
-          <option value="markdown">Markdown</option>
-          <option value="html">HTML</option>
-        </select>
       </div>
       
       <div className="mt-5">
         <button 
           className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded"
           onClick={() => {
-            // Apply changes and show confirmation
+            updateContent();
             toast.success('Instructions updated successfully!');
           }}
         >
@@ -580,133 +578,10 @@ const renderTypeSpecificProperties = () => {
   }
 };
 
-  // Logic tab contents (simplified for now)
-  const renderLogicTab = () => (
-    <div className="p-4">
-      <p className="text-sm text-gray-500 mb-3">Configure how this stage connects to other stages in the experiment flow.</p>
-      
-      <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-        <h4 className="text-sm font-medium text-blue-700 mb-1">Next Steps</h4>
-        <p className="text-xs text-blue-600 mb-2">
-          This stage will proceed to:
-        </p>
-        
-        <div className="bg-white border border-gray-200 rounded p-2 mb-2">
-          <p className="text-xs text-gray-700">Connected to next stage by default</p>
-        </div>
-        
-        <button className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          Add Conditional Branch
-        </button>
-      </div>
-    </div>
-  );
-
-  // Conditions tab contents (simplified for now)
-  const renderConditionsTab = () => (
-    <div className="p-4">
-      <p className="text-sm text-gray-500 mb-3">Define specific conditions that determine which participants see this stage.</p>
-      
-      <div className="space-y-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            User Groups
-          </label>
-          <select
-            className="w-full px-3 py-2 border rounded-md text-sm"
-            multiple
-            size={3}
-          >
-            <option value="">All User Groups</option>
-            {userGroups.map(group => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-gray-500 mt-1">Leave empty to show this stage to all groups</p>
-        </div>
-        
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <label className="text-sm font-medium text-gray-700">
-              Condition Rules
-            </label>
-            <button className="text-purple-600 hover:text-purple-800 text-xs font-medium">
-              + Add Rule
-            </button>
-          </div>
-          
-          <div className="text-center py-3 border border-dashed border-gray-300 rounded-md">
-            <p className="text-gray-400 text-sm">No conditions set yet</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Tab navigation
-  const renderTabs = () => (
-    <div className="flex border-b border-gray-200">
-      <button 
-        className={`flex-1 px-4 py-2 text-center text-sm font-medium ${
-          activeTab === 'properties' 
-            ? 'text-purple-600 border-b-2 border-purple-600' 
-            : 'text-gray-500 hover:text-gray-700'
-        }`}
-        onClick={() => setActiveTab('properties')}
-      >
-        Properties
-      </button>
-      <button 
-        className={`flex-1 px-4 py-2 text-center text-sm font-medium ${
-          activeTab === 'logic' 
-            ? 'text-purple-600 border-b-2 border-purple-600' 
-            : 'text-gray-500 hover:text-gray-700'
-        }`}
-        onClick={() => setActiveTab('logic')}
-      >
-        Logic
-      </button>
-      <button 
-        className={`flex-1 px-4 py-2 text-center text-sm font-medium ${
-          activeTab === 'conditions' 
-            ? 'text-purple-600 border-b-2 border-purple-600' 
-            : 'text-gray-500 hover:text-gray-700'
-        }`}
-        onClick={() => setActiveTab('conditions')}
-      >
-        Conditions
-      </button>
-    </div>
-  );
-
-  // Render active tab content
-  const renderTabContent = () => {
-    switch (activeTab) {
-      case 'properties':
-        return (
-          <div className="p-4">
-            {renderCommonProperties()}
-            {renderTypeSpecificProperties()}
-          </div>
-        );
-      case 'logic':
-        return renderLogicTab();
-      case 'conditions':
-        return renderConditionsTab();
-      default:
-        return null;
-    }
-  };
-
   return (
-    <>
-      {renderTabs()}
-      {renderTabContent()}
-    </>
+    <div className="p-4">
+      {renderCommonProperties()}
+      {renderTypeSpecificProperties()}
+    </div>
   );
 }
