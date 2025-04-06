@@ -750,7 +750,7 @@ export default function ExperimentDesignerPage() {
                                 <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">
                                   Condition: {group.condition}
                                 </span>
-                                {group.maxParticipants > 0 && (
+                                {(group.maxParticipants !== undefined && group.maxParticipants > 0) && (
                                   <span className="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded-full">
                                     Max: {group.maxParticipants}
                                   </span>
@@ -1114,7 +1114,7 @@ export default function ExperimentDesignerPage() {
                             type="number"
                             min="0"
                             className="w-full px-3 py-2 border rounded-md text-sm"
-                            value={group.maxParticipants || 0}
+                            value={group.maxParticipants !== undefined ? group.maxParticipants : 0}
                             onChange={(e) => updateUserGroup(selectedUserGroup, 'maxParticipants', parseInt(e.target.value) || 0)}
                           />
                         </div>
