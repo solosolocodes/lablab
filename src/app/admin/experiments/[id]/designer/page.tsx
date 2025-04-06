@@ -920,7 +920,7 @@ export default function ExperimentDesignerPage() {
                       }
                     } catch (apiError) {
                       console.error('API Error:', apiError);
-                      throw new Error(`API Error: ${apiError.message}`);
+                      throw new Error(`API Error: ${apiError instanceof Error ? apiError.message : String(apiError)}`);
                     }
                   } catch (error) {
                     console.error('Error saving experiment:', error);
@@ -1001,7 +1001,7 @@ export default function ExperimentDesignerPage() {
                       }
                     } catch (apiError) {
                       console.error('API Error:', apiError);
-                      throw new Error(`API Error: ${apiError.message}`);
+                      throw new Error(`API Error: ${apiError instanceof Error ? apiError.message : String(apiError)}`);
                     }
                   } catch (error) {
                     console.error('Error publishing experiment:', error);
