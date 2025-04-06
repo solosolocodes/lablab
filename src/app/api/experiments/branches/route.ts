@@ -39,7 +39,8 @@ export async function POST(request: NextRequest) {
     }
     
     // Validate that stages exist
-    const stageIds = experiment.stages.map(stage => stage._id.toString());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stageIds = experiment.stages.map((stage: any) => stage._id.toString());
     if (!stageIds.includes(branch.fromStageId)) {
       return NextResponse.json(
         { message: 'From stage not found in experiment' },
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest) {
     }
     
     // Check if a branch already exists from this stage
-    const existingBranchIndex = experiment.branches.findIndex(b => 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const existingBranchIndex = experiment.branches.findIndex((b: any) => 
       b.fromStageId.toString() === branch.fromStageId
     );
     
@@ -226,7 +228,8 @@ export async function PUT(request: NextRequest) {
     }
     
     // Find the branch
-    const branchIndex = experiment.branches.findIndex(b => 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const branchIndex = experiment.branches.findIndex((b: any) => 
       b._id.toString() === branchId
     );
     
@@ -238,7 +241,8 @@ export async function PUT(request: NextRequest) {
     }
     
     // Validate that stages exist
-    const stageIds = experiment.stages.map(stage => stage._id.toString());
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stageIds = experiment.stages.map((stage: any) => stage._id.toString());
     if (!stageIds.includes(branch.defaultTargetStageId)) {
       return NextResponse.json(
         { message: 'Default target stage not found in experiment' },
@@ -361,7 +365,8 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Find branch index
-    const branchIndex = experiment.branches.findIndex(branch => 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const branchIndex = experiment.branches.findIndex((branch: any) => 
       branch._id.toString() === branchId
     );
     

@@ -126,7 +126,8 @@ export async function PUT(request: NextRequest) {
     }
     
     // Find and update the stage
-    const stageIndex = experiment.stages.findIndex(stage => 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stageIndex = experiment.stages.findIndex((stage: any) => 
       stage._id.toString() === stageId
     );
     
@@ -209,7 +210,8 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Find stage index
-    const stageIndex = experiment.stages.findIndex(stage => 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stageIndex = experiment.stages.findIndex((stage: any) => 
       stage._id.toString() === stageId
     );
     
@@ -224,14 +226,17 @@ export async function DELETE(request: NextRequest) {
     experiment.stages.splice(stageIndex, 1);
     
     // Also remove any branches that reference this stage
-    experiment.branches = experiment.branches.filter(branch => 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    experiment.branches = experiment.branches.filter((branch: any) => 
       branch.fromStageId.toString() !== stageId && 
       branch.defaultTargetStageId.toString() !== stageId
     );
     
     // Update branch conditions that reference this stage
-    experiment.branches.forEach(branch => {
-      branch.conditions = branch.conditions.filter(condition => 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    experiment.branches.forEach((branch: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      branch.conditions = branch.conditions.filter((condition: any) => 
         condition.targetStageId.toString() !== stageId &&
         (!condition.sourceStageId || condition.sourceStageId.toString() !== stageId)
       );
@@ -270,7 +275,7 @@ function validateStageData(stage: {
     options?: string[];
   }>;
   message?: string;
-  [key: string]: any;
+  [key: string]: string | number | boolean | Array<unknown> | Record<string, unknown> | undefined;
 }) {
   const { type, title, description, durationSeconds } = stage;
   
@@ -284,7 +289,7 @@ function validateStageData(stage: {
   switch (type) {
     case 'instructions':
       if (!stage.content) return 'Content is required for instruction stages';
-      if (!['text', 'markdown', 'html'].includes(stage.format)) {
+      if (!stage.format || !['text', 'markdown', 'html'].includes(stage.format)) {
         return 'Invalid format for instruction stage. Must be text, markdown, or html';
       }
       break;
@@ -300,10 +305,10 @@ function validateStageData(stage: {
       for (const question of stage.questions) {
         if (!question.id) return 'Each question must have an ID';
         if (!question.text) return 'Each question must have text';
-        if (!['text', 'multipleChoice', 'rating', 'checkboxes'].includes(question.type)) {
+        if (!question.type || !['text', 'multipleChoice', 'rating', 'checkboxes'].includes(question.type)) {
           return 'Invalid question type. Must be text, multipleChoice, rating, or checkboxes';
         }
-        if (['multipleChoice', 'checkboxes'].includes(question.type) && 
+        if (question.type && ['multipleChoice', 'checkboxes'].includes(question.type) && 
             (!question.options || !Array.isArray(question.options) || question.options.length < 2)) {
           return 'Multiple choice and checkbox questions must have at least 2 options';
         }

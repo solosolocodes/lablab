@@ -13,7 +13,42 @@ export default function ExperimentDesignerPage() {
   const experimentId = params.id as string;
   
   const [isLoading, setIsLoading] = useState(true);
-  const [experiment, setExperiment] = useState<any>(null);
+  const [experiment, setExperiment] = useState<{
+    id: string;
+    name: string;
+    description: string;
+    status: string;
+    stages: Array<{
+      id: string;
+      type: string;
+      title: string;
+      description: string;
+      durationSeconds: number;
+      required: boolean;
+      order: number;
+      [key: string]: string | number | boolean | Array<unknown> | Record<string, unknown>; // For type-specific properties
+    }>;
+    userGroups: Array<{
+      userGroupId: string;
+      condition: string;
+      maxParticipants?: number;
+    }>;
+    branches: Array<{
+      id: string;
+      fromStageId: string;
+      defaultTargetStageId: string;
+      conditions: Array<{
+        type: string;
+        targetStageId: string;
+        sourceStageId?: string;
+        [key: string]: string | number | boolean | undefined;
+      }>;
+    }>;
+    startStageId?: string;
+    createdAt: string;
+    updatedAt: string;
+    lastEditedAt: string;
+  } | null>(null);
 
   // Redirect if not admin
   useEffect(() => {

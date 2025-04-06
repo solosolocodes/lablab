@@ -112,9 +112,13 @@ const ExperimentSchema = new mongoose.Schema<IExperiment>({
 }, { timestamps: true });
 
 // Set up discriminators for different stage types
+// @ts-expect-error - TypeScript doesn't recognize discriminator on schema path
 ExperimentSchema.path('stages').discriminator('instructions', InstructionsStageSchema);
+// @ts-expect-error - TypeScript doesn't recognize discriminator on schema path
 ExperimentSchema.path('stages').discriminator('scenario', ScenarioStageSchema);
+// @ts-expect-error - TypeScript doesn't recognize discriminator on schema path
 ExperimentSchema.path('stages').discriminator('survey', SurveyStageSchema);
+// @ts-expect-error - TypeScript doesn't recognize discriminator on schema path
 ExperimentSchema.path('stages').discriminator('break', BreakStageSchema);
 
 // Check if model exists before creating a new one (for Next.js hot reloading)

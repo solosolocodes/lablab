@@ -45,7 +45,8 @@ export interface IBreakStage extends IStageBase {
 export type IStage = IInstructionsStage | IScenarioStage | ISurveyStage | IBreakStage;
 
 // Base schema for all stages
-const StageBaseSchema = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const StageBaseSchema: Record<string, any> = {
   type: {
     type: String,
     required: [true, 'Stage type is required'],
@@ -133,7 +134,7 @@ export const SurveyStageSchema = new mongoose.Schema({
     type: [QuestionSchema],
     required: [true, 'Questions are required for a survey'],
     validate: {
-      validator: function(questions: mongoose.Types.DocumentArray<mongoose.Document> | any[]) {
+      validator: function(questions: mongoose.Types.DocumentArray<mongoose.Document> | Array<Record<string, unknown>>) {
         return questions.length > 0;
       },
       message: 'Survey must have at least one question',

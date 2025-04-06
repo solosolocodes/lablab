@@ -5,10 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
 // Get a specific experiment by ID
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     
@@ -22,7 +19,8 @@ export async function GET(
     
     await connectDB();
     
-    const experimentId = params.id;
+    const pathParts = request.nextUrl.pathname.split('/');
+    const experimentId = pathParts[pathParts.length - 1];
     
     // Find the experiment
     const experiment = await Experiment.findById(experimentId)
@@ -44,7 +42,8 @@ export async function GET(
       status: experiment.status,
       createdBy: experiment.createdBy,
       userGroups: experiment.userGroups,
-      stages: experiment.stages.map(stage => ({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stages: experiment.stages.map((stage: any) => ({
         id: stage._id,
         type: stage.type,
         title: stage.title,

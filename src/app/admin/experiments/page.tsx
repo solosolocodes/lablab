@@ -45,6 +45,7 @@ export default function ExperimentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   // Using "_" prefix to signal this state is meant to be unused in this context
   // but we're keeping it for future functionality
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_selectedExperiment, _setSelectedExperiment] = useState<Experiment | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
