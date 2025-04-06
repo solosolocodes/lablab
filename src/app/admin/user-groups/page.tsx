@@ -150,7 +150,7 @@ export default function UserGroupsPage() {
             group.users = [];
             
             // Add some real users to each group
-            participants.forEach((user, userIndex) => {
+            participants.forEach((user: User, userIndex: number) => {
               if (userIndex % groups.length === groupIndex) {
                 group.users.push(user);
               }
