@@ -497,6 +497,13 @@ const SurveyProperties = ({
                 options: ['High School', 'Some College', 'Bachelor\'s Degree', 'Master\'s Degree', 'Doctorate', 'Other']
               },
               {
+                id: `q${Date.now()}-occupation`,
+                text: 'What is your current occupation?',
+                type: 'multipleChoice',
+                required: true,
+                options: ['Student', 'Employed (full-time)', 'Employed (part-time)', 'Self-employed', 'Unemployed', 'Retired', 'Other']
+              },
+              {
                 id: `q${Date.now()}-income`,
                 text: 'What is your annual income range?',
                 type: 'multipleChoice',
@@ -504,15 +511,44 @@ const SurveyProperties = ({
                 options: ['Under $25,000', '$25,000-$49,999', '$50,000-$74,999', '$75,000-$99,999', '$100,000+', 'Prefer not to say']
               },
               {
-                id: `q${Date.now()}-trading`,
+                id: `q${Date.now()}-trading-exp`,
                 text: 'How much experience do you have with financial trading?',
                 type: 'multipleChoice',
                 required: true,
-                options: ['None', 'Beginner', 'Intermediate', 'Advanced', 'Professional']
+                options: ['None', 'Beginner (less than 1 year)', 'Intermediate (1-3 years)', 'Advanced (3-5 years)', 'Expert (5+ years)']
+              },
+              {
+                id: `q${Date.now()}-crypto-exp`,
+                text: 'How much experience do you have with cryptocurrency trading?',
+                type: 'multipleChoice',
+                required: true,
+                options: ['None', 'Beginner (less than 1 year)', 'Intermediate (1-3 years)', 'Advanced (3-5 years)', 'Expert (5+ years)']
+              },
+              {
+                id: `q${Date.now()}-risk`,
+                text: 'How would you describe your risk tolerance in financial matters?',
+                type: 'multipleChoice',
+                required: true,
+                options: ['Very Low (highly risk-averse)', 'Low', 'Moderate', 'High', 'Very High (risk-seeking)']
+              },
+              {
+                id: `q${Date.now()}-invest-horizon`,
+                text: 'What is your typical investment time horizon?',
+                type: 'multipleChoice',
+                required: true,
+                options: ['Very short-term (days/weeks)', 'Short-term (months)', 'Medium-term (1-3 years)', 'Long-term (3-10 years)', 'Very long-term (10+ years)']
+              },
+              {
+                id: `q${Date.now()}-decision`,
+                text: 'How would you describe your decision-making style when trading?',
+                type: 'multipleChoice',
+                required: true,
+                options: ['Very analytical/methodical', 'Somewhat analytical', 'Balanced between analysis and intuition', 'Somewhat intuitive', 'Very intuitive/gut feeling-based']
               }
             ];
             
             handleStageDataChange('questions', [...questions, ...demographicQuestions]);
+            toast.success('Demographic questions added successfully!');
           }}
         >
           Add Demographic Questions
