@@ -161,58 +161,224 @@ export default function ExperimentDesignerPage() {
           </div>
         </div>
         
-        {/* Experiment Designer Placeholder */}
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="max-w-2xl mx-auto">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Experiment Designer</h2>
-            <p className="text-gray-600 mb-6">
-              The drag-and-drop experiment designer is currently under development. This feature will allow you to:
-            </p>
+        {/* Experiment Designer Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Sidebar: Components Panel */}
+          <div className="bg-white rounded-lg shadow lg:col-span-1">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="font-semibold text-lg text-gray-800">Experiment Components</h3>
+            </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left mb-8">
-              <div className="bg-purple-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-purple-700 mb-2">Create Experiment Stages</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-1">
-                  <li>Add instruction stages</li>
-                  <li>Configure scenario stages</li>
-                  <li>Create survey questions</li>
-                  <li>Add breaks between activities</li>
-                </ul>
+            {/* Component Types Accordion */}
+            <div className="p-4">
+              {/* Instructions Component */}
+              <div className="mb-4 border border-gray-200 rounded-md shadow-sm">
+                <div className="flex items-center justify-between p-3 bg-purple-50 cursor-pointer rounded-t-md">
+                  <div className="flex items-center">
+                    <div className="p-2 rounded-full bg-purple-100 mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <span className="font-medium text-purple-700">Instructions</span>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+                <div className="p-3 bg-white">
+                  <p className="text-sm text-gray-600 mb-2">Add instruction stages for participants to read before starting tasks.</p>
+                  <button className="text-purple-600 hover:text-purple-800 text-sm font-medium flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Add Instructions
+                  </button>
+                </div>
               </div>
               
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-blue-700 mb-2">Design Complex Flows</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-1">
-                  <li>Set up branching logic</li>
-                  <li>Create conditional paths</li>
-                  <li>Define completion criteria</li>
-                  <li>Configure randomization rules</li>
-                </ul>
+              {/* Scenario Component */}
+              <div className="mb-4 border border-gray-200 rounded-md shadow-sm">
+                <div className="flex items-center justify-between p-3 bg-blue-50 cursor-pointer rounded-t-md">
+                  <div className="flex items-center">
+                    <div className="p-2 rounded-full bg-blue-100 mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                      </svg>
+                    </div>
+                    <span className="font-medium text-blue-700">Scenarios</span>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+                <div className="p-3 bg-white">
+                  <p className="text-sm text-gray-600 mb-2">Select from existing trading scenarios where participants make investment decisions.</p>
+                  <button className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Add Scenario
+                  </button>
+                </div>
               </div>
               
-              <div className="bg-green-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-green-700 mb-2">Manage User Groups</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-1">
-                  <li>Assign participants to conditions</li>
-                  <li>Set group-specific parameters</li>
-                  <li>Balance participant assignments</li>
-                  <li>Track completion statistics</li>
-                </ul>
+              {/* Survey Component */}
+              <div className="mb-4 border border-gray-200 rounded-md shadow-sm">
+                <div className="flex items-center justify-between p-3 bg-green-50 cursor-pointer rounded-t-md">
+                  <div className="flex items-center">
+                    <div className="p-2 rounded-full bg-green-100 mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                      </svg>
+                    </div>
+                    <span className="font-medium text-green-700">Surveys</span>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+                <div className="p-3 bg-white">
+                  <p className="text-sm text-gray-600 mb-2">Create survey questions including demographic data to analyze trading behavior patterns.</p>
+                  <div className="space-y-2">
+                    <button className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Add Demographics
+                    </button>
+                    <button className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Add Custom Survey
+                    </button>
+                  </div>
+                </div>
               </div>
               
-              <div className="bg-amber-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-amber-700 mb-2">Preview & Test</h3>
-                <ul className="list-disc list-inside text-gray-700 space-y-1">
-                  <li>Preview the participant experience</li>
-                  <li>Test different flow paths</li>
-                  <li>Validate experiment configuration</li>
-                  <li>Share preview links with team</li>
-                </ul>
+              {/* Break Component */}
+              <div className="mb-4 border border-gray-200 rounded-md shadow-sm">
+                <div className="flex items-center justify-between p-3 bg-amber-50 cursor-pointer rounded-t-md">
+                  <div className="flex items-center">
+                    <div className="p-2 rounded-full bg-amber-100 mr-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <span className="font-medium text-amber-700">Breaks</span>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+                <div className="p-3 bg-white">
+                  <p className="text-sm text-gray-600 mb-2">Add timed breaks or pauses between activities to prevent participant fatigue.</p>
+                  <button className="text-amber-600 hover:text-amber-800 text-sm font-medium flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Add Break
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Center: Design Canvas */}
+          <div className="bg-white rounded-lg shadow p-4 lg:col-span-2">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-lg text-gray-800">Experiment Flow</h3>
+              <div className="space-x-2">
+                <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-md">
+                  Undo
+                </button>
+                <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-md">
+                  Redo
+                </button>
               </div>
             </div>
             
-            <div className="text-gray-600">
-              <p>Please check back soon for the full interactive experiment designer!</p>
+            {/* Flow Design Canvas - Empty State */}
+            <div className="border-2 border-dashed border-gray-300 bg-gray-50 rounded-lg p-6 min-h-[400px] flex flex-col items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <p className="text-gray-500 font-medium mb-1">Start Building Your Experiment</p>
+              <p className="text-gray-400 text-sm text-center mb-4">Drag components from the left panel to add them to your experiment flow</p>
+              <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-md">
+                Add First Stage
+              </button>
+            </div>
+            
+            {/* Flow Canvas Controls */}
+            <div className="flex justify-end mt-3 space-x-3">
+              <button className="flex items-center text-gray-600 hover:text-gray-800 text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                Layout Auto-Arrange
+              </button>
+              <button className="flex items-center text-gray-600 hover:text-gray-800 text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                Zoom
+              </button>
+            </div>
+          </div>
+          
+          {/* Right Sidebar: Properties & Settings */}
+          <div className="bg-white rounded-lg shadow lg:col-span-1">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="font-semibold text-lg text-gray-800">Properties</h3>
+            </div>
+            
+            {/* No Component Selected State */}
+            <div className="p-4">
+              <div className="text-center py-8">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                </svg>
+                <p className="text-gray-500 text-sm">Select a component to view and edit its properties</p>
+              </div>
+            </div>
+            
+            {/* Tabs for Properties Panel */}
+            <div className="border-t border-gray-200">
+              <div className="flex border-b border-gray-200">
+                <button className="flex-1 px-4 py-2 text-center text-sm font-medium text-purple-600 border-b-2 border-purple-600">
+                  Properties
+                </button>
+                <button className="flex-1 px-4 py-2 text-center text-sm font-medium text-gray-500 hover:text-gray-700">
+                  Logic
+                </button>
+                <button className="flex-1 px-4 py-2 text-center text-sm font-medium text-gray-500 hover:text-gray-700">
+                  Conditions
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Bottom Controls */}
+        <div className="bg-white rounded-lg shadow mt-6 p-4">
+          <div className="flex justify-between items-center">
+            <div className="flex space-x-4">
+              <button className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                Test Mode
+              </button>
+              <button className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                Preview
+              </button>
+            </div>
+            <div className="flex space-x-4">
+              <button className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                Save as Draft
+              </button>
+              <button className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md">
+                Publish Experiment
+              </button>
             </div>
           </div>
         </div>
