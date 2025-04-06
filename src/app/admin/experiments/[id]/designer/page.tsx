@@ -13,10 +13,6 @@ import {
 } from '@reactflow/core';
 import '@reactflow/core/dist/style.css';
 import { 
-  InstructionsNode, 
-  ScenarioNode,
-  SurveyNode,
-  BreakNode,
   NodeData 
 } from '@/components/experiment/StageNodes';
 import { StageProperties } from '@/components/experiment/StageProperties';
