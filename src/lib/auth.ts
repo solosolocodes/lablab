@@ -7,6 +7,7 @@ import User from '@/models/User';
 // Extend the JWT type to include our custom fields
 interface ExtendedJWT extends JWT {
   id?: string;
+  role?: 'participant' | 'admin';
 }
 
 export const authOptions: NextAuthOptions = {
@@ -40,6 +41,7 @@ export const authOptions: NextAuthOptions = {
           id: user._id.toString(),
           name: user.name,
           email: user.email,
+          role: user.role,
         };
       },
     }),
@@ -56,6 +58,7 @@ export const authOptions: NextAuthOptions = {
       const extendedToken = token as ExtendedJWT;
       if (user) {
         extendedToken.id = user.id;
+        extendedToken.role = user.role;
       }
       return extendedToken;
     },
@@ -63,6 +66,9 @@ export const authOptions: NextAuthOptions = {
       const extendedToken = token as ExtendedJWT;
       if (extendedToken.id) {
         session.user.id = extendedToken.id;
+      }
+      if (extendedToken.role) {
+        session.user.role = extendedToken.role;
       }
       return session;
     },

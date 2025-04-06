@@ -5,6 +5,7 @@ export interface IUser extends mongoose.Document {
   name: string;
   email: string;
   password: string;
+  role: 'participant' | 'admin';
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -32,6 +33,12 @@ const UserSchema = new mongoose.Schema<IUser>(
       type: String,
       required: [true, 'Please provide a password'],
       minlength: [6, 'Password should be at least 6 characters'],
+    },
+    role: {
+      type: String,
+      enum: ['participant', 'admin'],
+      default: 'participant',
+      required: true,
     },
   },
   { timestamps: true }

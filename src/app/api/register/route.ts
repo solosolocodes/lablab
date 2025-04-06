@@ -4,11 +4,19 @@ import User from '@/models/User';
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password } = await request.json();
+    const { name, email, password, role = 'participant' } = await request.json();
 
     if (!name || !email || !password) {
       return NextResponse.json(
         { message: 'Name, email, and password are required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate role
+    if (role !== 'participant' && role !== 'admin') {
+      return NextResponse.json(
+        { message: 'Invalid role specified' },
         { status: 400 }
       );
     }
@@ -29,6 +37,7 @@ export async function POST(request: NextRequest) {
       name,
       email,
       password,
+      role,
     });
 
     // Return success but don't include password
@@ -39,6 +48,7 @@ export async function POST(request: NextRequest) {
           id: user._id,
           name: user.name,
           email: user.email,
+          role: user.role,
         },
       },
       { status: 201 }
