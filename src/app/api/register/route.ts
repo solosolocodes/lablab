@@ -6,9 +6,15 @@ export async function POST(request: NextRequest) {
   try {
     const { name, email, password, role = 'participant' } = await request.json();
 
-    if (!name || !email || !password) {
+    // Validate based on role
+    if (role === 'admin' && (!name || !email || !password)) {
       return NextResponse.json(
-        { message: 'Name, email, and password are required' },
+        { message: 'Name, email, and password are required for admin accounts' },
+        { status: 400 }
+      );
+    } else if (role === 'participant' && (!name || !email)) {
+      return NextResponse.json(
+        { message: 'Name and email are required' },
         { status: 400 }
       );
     }
@@ -32,13 +38,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create new user
-    const user = await User.create({
-      name,
-      email,
-      password,
-      role,
-    });
+    // Create user based on role
+    const userData = role === 'admin' 
+      ? { name, email, password, role } 
+      : { name, email, role };
+      
+    const user = await User.create(userData);
 
     // Return success but don't include password
     return NextResponse.json(

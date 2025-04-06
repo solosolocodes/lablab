@@ -21,21 +21,17 @@ function LoginContent() {
   const callbackUrl = searchParams.get('callbackUrl') || '/participant/dashboard';
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
+  const [email, setEmail] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setEmail(e.target.value);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.email || !formData.password) {
-      setError('Please fill in all fields');
+    if (!email) {
+      setError('Please enter your email address');
       return;
     }
     
@@ -43,9 +39,8 @@ function LoginContent() {
       setIsLoading(true);
       setError('');
       
-      const result = await signIn('credentials', {
-        email: formData.email,
-        password: formData.password,
+      const result = await signIn('participant-login', {
+        email: email,
         redirect: false,
       });
       
@@ -93,18 +88,7 @@ function LoginContent() {
               label="Email Address"
               placeholder="your@email.com"
               required
-              value={formData.email}
-              onChange={handleChange}
-            />
-            
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              label="Password"
-              placeholder="••••••••"
-              required
-              value={formData.password}
+              value={email}
               onChange={handleChange}
             />
           </div>

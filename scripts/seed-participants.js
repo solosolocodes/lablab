@@ -7,7 +7,6 @@
  */
 
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 require('dotenv').config({ path: '.env.local' });
 
 // MongoDB connection string from environment variables
@@ -20,7 +19,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     unique: true
   },
-  password: String,
   role: {
     type: String,
     default: 'participant'
@@ -75,7 +73,6 @@ function generateUsers(count) {
     users.push({
       name: `${firstName} ${lastName}`,
       email: `${alphaId}@email.com`,
-      password: '123123', // Will be hashed before saving
       role: 'participant'
     });
   }
@@ -92,13 +89,6 @@ async function seedUsers() {
     
     console.log('Generating 100 participants...');
     const participants = generateUsers(100);
-    
-    console.log('Hashing passwords...');
-    // Hash all passwords
-    const salt = await bcrypt.genSalt(10);
-    for (const user of participants) {
-      user.password = await bcrypt.hash(user.password, salt);
-    }
     
     console.log('Inserting participants into database...');
     // Insert all users, but skip duplicates (in case some random emails match)

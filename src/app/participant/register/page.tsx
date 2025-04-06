@@ -13,8 +13,6 @@ export default function ParticipantRegisterPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    password: '',
-    confirmPassword: '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,18 +24,8 @@ export default function ParticipantRegisterPage() {
     e.preventDefault();
     
     // Basic validation
-    if (!formData.name || !formData.email || !formData.password) {
+    if (!formData.name || !formData.email) {
       setError('Please fill in all fields');
-      return;
-    }
-    
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-    
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
       return;
     }
     
@@ -53,7 +41,6 @@ export default function ParticipantRegisterPage() {
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
-          password: formData.password,
           role: 'participant',
         }),
       });
@@ -112,27 +99,6 @@ export default function ParticipantRegisterPage() {
               onChange={handleChange}
             />
             
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              label="Password"
-              placeholder="••••••••"
-              required
-              value={formData.password}
-              onChange={handleChange}
-            />
-            
-            <Input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              label="Confirm Password"
-              placeholder="••••••••"
-              required
-              value={formData.confirmPassword}
-              onChange={handleChange}
-            />
           </div>
           
           <Button

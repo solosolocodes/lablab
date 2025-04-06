@@ -12,8 +12,10 @@ interface ExtendedJWT extends JWT {
 
 export const authOptions: NextAuthOptions = {
   providers: [
+    // Admin authentication provider (with password)
     CredentialsProvider({
-      name: 'credentials',
+      id: 'admin-login',
+      name: 'Admin Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
@@ -25,10 +27,17 @@ export const authOptions: NextAuthOptions = {
 
         await connectDB();
         
-        const user = await User.findOne({ email: credentials.email });
+        const user = await User.findOne({ 
+          email: credentials.email,
+          role: 'admin'
+        });
         
         if (!user) {
-          throw new Error('No user found with this email');
+          throw new Error('No admin account found with this email');
+        }
+        
+        if (!user.password) {
+          throw new Error('Admin account requires a password');
         }
         
         const isPasswordValid = await user.comparePassword(credentials.password);
@@ -45,7 +54,43 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    
+    // Participant authentication provider (email-only)
+    CredentialsProvider({
+      id: 'participant-login',
+      name: 'Participant Email',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email) {
+          throw new Error('Email is required');
+        }
+
+        await connectDB();
+        
+        const user = await User.findOne({ 
+          email: credentials.email,
+          role: 'participant'
+        });
+        
+        if (!user) {
+          throw new Error('No participant found with this email');
+        }
+        
+        // For participants, we just verify they exist in the database
+        // No password check needed
+        
+        return {
+          id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        };
+      },
+    }),
   ],
+  
   session: {
     strategy: 'jwt',
   },

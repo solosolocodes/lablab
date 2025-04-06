@@ -43,7 +43,7 @@ function LoginContent() {
       setIsLoading(true);
       setError('');
       
-      const result = await signIn('credentials', {
+      const result = await signIn('admin-login', {
         email: formData.email,
         password: formData.password,
         redirect: false,
