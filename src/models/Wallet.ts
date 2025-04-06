@@ -1,13 +1,14 @@
 import mongoose from 'mongoose';
 import { IUser } from './User';
 
-export interface IAsset extends mongoose.Document {
+export interface IAsset {
   _id?: mongoose.Types.ObjectId;
   type: 'share' | 'cryptocurrency' | 'fiat';
   name: string;
   symbol: string;
   amount: number;
   initialAmount: number;
+  toString?: () => string;
 }
 
 const AssetSchema = new mongoose.Schema<IAsset>({
