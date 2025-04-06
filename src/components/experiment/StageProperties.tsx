@@ -4,30 +4,11 @@ import React, { useState } from 'react';
 import { Node } from '@reactflow/core';
 import { 
   NodeData, 
-  StageDataBase,
   InstructionsStageData,
   ScenarioStageData,
   SurveyStageData,
-  BreakStageData,
-  SurveyQuestion
+  BreakStageData
 } from './StageNodes';
-
-// Type guards
-function isInstructionsData(data: any): data is InstructionsStageData {
-  return data !== undefined && data.type === 'instructions';
-}
-
-function isScenarioData(data: any): data is ScenarioStageData {
-  return data !== undefined && data.type === 'scenario';
-}
-
-function isSurveyData(data: any): data is SurveyStageData {
-  return data !== undefined && data.type === 'survey';
-}
-
-function isBreakData(data: any): data is BreakStageData {
-  return data !== undefined && data.type === 'break';
-};
 
 type StagePropertiesProps = {
   selectedNode: Node<NodeData> | null;
