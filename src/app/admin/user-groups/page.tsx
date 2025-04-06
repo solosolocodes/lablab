@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Button from '@/components/Button';
 import Link from 'next/link';
+import { toast } from 'react-hot-toast';
 
 // Type definitions
 type User = {
@@ -131,41 +132,36 @@ export default function UserGroupsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Create loading state (could also use a loading state variable)
+        toast.loading('Loading data...', { id: 'loading-data' });
+        
         // Fetch participants from API
-        const response = await fetch('/api/users?role=participant');
-        if (!response.ok) {
+        const usersResponse = await fetch('/api/users?role=participant');
+        if (!usersResponse.ok) {
           throw new Error('Failed to fetch participants');
         }
         
-        const participants = await response.json();
+        const participants = await usersResponse.json();
         setAllUsers(participants);
         
-        // For now, we'll still use dummy groups, but we'll populate them with real users
-        const groups = generateDummyUserGroups();
-        
-        // Distribute real users among groups
-        if (participants.length > 0) {
-          groups.forEach((group, groupIndex) => {
-            // Empty the dummy users first
-            group.users = [];
-            
-            // Add some real users to each group
-            participants.forEach((user: User, userIndex: number) => {
-              if (userIndex % groups.length === groupIndex) {
-                group.users.push(user);
-              }
-            });
-          });
+        // Fetch actual user groups from API
+        const groupsResponse = await fetch('/api/user-groups');
+        if (!groupsResponse.ok) {
+          throw new Error('Failed to fetch user groups');
         }
         
+        const groups = await groupsResponse.json();
         setUserGroups(groups);
+        
+        // Dismiss loading toast
+        toast.success('Data loaded successfully', { id: 'loading-data' });
       } catch (error) {
         console.error('Error fetching data:', error);
+        toast.error('Failed to load data: ' + (error instanceof Error ? error.message : 'Unknown error'), { id: 'loading-data' });
       }
     };
     
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Filter groups based on search query
@@ -222,23 +218,81 @@ export default function UserGroupsPage() {
     const generateId = () => Math.random().toString(36).substring(2, 10);
     
     if (modalType === 'createGroup') {
-      const newGroup: UserGroup = {
-        id: 'grp-' + generateId(),
-        name: formData.name,
-        description: formData.description,
-        users: [],
-        experimentsCount: 0,
-        createdAt: new Date().toISOString(),
-      };
-      setUserGroups([...userGroups, newGroup]);
+      try {
+        // Create loading state
+        toast.loading('Creating group...', { id: 'create-group' });
+        
+        // Create the group in MongoDB
+        const response = await fetch('/api/user-groups', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: formData.name,
+            description: formData.description,
+            users: [],
+          }),
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || 'Failed to create group');
+        }
+        
+        const responseData = await response.json();
+        
+        // Add new group to state
+        setUserGroups([...userGroups, responseData.group]);
+        toast.success('Group created successfully', { id: 'create-group' });
+      } catch (error) {
+        console.error('Error creating group:', error);
+        toast.error('Failed to create group: ' + (error instanceof Error ? error.message : 'Unknown error'), { id: 'create-group' });
+        return; // Don't close the modal
+      }
     } 
     else if (modalType === 'editGroup' && selectedGroup) {
-      const updatedGroups = userGroups.map(group => 
-        group.id === selectedGroup.id 
-          ? { ...group, name: formData.name, description: formData.description }
-          : group
-      );
-      setUserGroups(updatedGroups);
+      try {
+        // Loading state
+        toast.loading('Updating group...', { id: 'edit-group' });
+        
+        // Get selected user IDs
+        const selectedUserIds = selectedGroup.users.map(user => user.id);
+        
+        // Update the group in MongoDB
+        const response = await fetch('/api/user-groups', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: selectedGroup.id,
+            name: formData.name,
+            description: formData.description,
+            users: selectedUserIds,
+          }),
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || 'Failed to update group');
+        }
+        
+        const responseData = await response.json();
+        
+        // Update group in state
+        const updatedGroups = userGroups.map(group => 
+          group.id === selectedGroup.id 
+            ? responseData.group
+            : group
+        );
+        setUserGroups(updatedGroups);
+        toast.success('Group updated successfully', { id: 'edit-group' });
+      } catch (error) {
+        console.error('Error updating group:', error);
+        toast.error('Failed to update group: ' + (error instanceof Error ? error.message : 'Unknown error'), { id: 'edit-group' });
+        return; // Don't close the modal
+      }
     }
     else if (modalType === 'createUser') {
       try {
@@ -341,7 +395,7 @@ export default function UserGroupsPage() {
   };
 
   // Add/remove user from group
-  const toggleUserInGroup = (userId: string, groupId: string) => {
+  const toggleUserInGroup = async (userId: string, groupId: string) => {
     const group = userGroups.find(g => g.id === groupId);
     if (!group) return;
     
@@ -349,22 +403,90 @@ export default function UserGroupsPage() {
     const user = allUsers.find(u => u.id === userId);
     if (!user) return;
     
-    if (userInGroup) {
-      // Remove user from group
+    try {
+      // Start loading indicator
+      toast.loading(
+        userInGroup ? 'Removing user from group...' : 'Adding user to group...', 
+        { id: `toggle-user-${userId}` }
+      );
+      
+      // Create updated user list
+      let updatedUserIds = userInGroup
+        ? group.users.filter(u => u.id !== userId).map(u => u.id)  // Remove user
+        : [...group.users.map(u => u.id), userId];                 // Add user
+      
+      // Update the group in MongoDB
+      const response = await fetch('/api/user-groups', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: groupId,
+          name: group.name,
+          description: group.description,
+          users: updatedUserIds,
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to update group');
+      }
+      
+      const responseData = await response.json();
+      
+      // Update in local state
       const updatedGroups = userGroups.map(g => 
-        g.id === groupId 
-          ? { ...g, users: g.users.filter(u => u.id !== userId) }
-          : g
+        g.id === groupId ? responseData.group : g
       );
       setUserGroups(updatedGroups);
-    } else {
-      // Add user to group
-      const updatedGroups = userGroups.map(g => 
-        g.id === groupId 
-          ? { ...g, users: [...g.users, user] }
-          : g
+      
+      // Show success message
+      toast.success(
+        userInGroup ? 'User removed from group' : 'User added to group', 
+        { id: `toggle-user-${userId}` }
       );
-      setUserGroups(updatedGroups);
+    } catch (error) {
+      console.error('Error updating group:', error);
+      toast.error(
+        'Failed to update group: ' + (error instanceof Error ? error.message : 'Unknown error'), 
+        { id: `toggle-user-${userId}` }
+      );
+    }
+  };
+  
+  // Delete a user group
+  const deleteGroup = async (groupId: string) => {
+    if (!confirm('Are you sure you want to delete this group?')) {
+      return;
+    }
+    
+    try {
+      // Start loading
+      toast.loading('Deleting group...', { id: `delete-group-${groupId}` });
+      
+      // Send delete request to API
+      const response = await fetch(`/api/user-groups?id=${groupId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to delete group');
+      }
+      
+      // Remove from local state
+      setUserGroups(userGroups.filter(group => group.id !== groupId));
+      
+      // Show success message
+      toast.success('Group deleted successfully', { id: `delete-group-${groupId}` });
+    } catch (error) {
+      console.error('Error deleting group:', error);
+      toast.error(
+        'Failed to delete group: ' + (error instanceof Error ? error.message : 'Unknown error'), 
+        { id: `delete-group-${groupId}` }
+      );
     }
   };
 
@@ -386,6 +508,8 @@ export default function UserGroupsPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
+      {/* Toast container for notifications */}
+      <div>
       {/* Navbar */}
       <nav className="bg-purple-700 text-white shadow-md">
         <div className="container mx-auto px-4 py-3">
@@ -423,7 +547,7 @@ export default function UserGroupsPage() {
               className={`px-4 py-2 ${activeTab === 'users' ? 'bg-purple-600' : 'bg-gray-200 text-gray-800'}`}
               onClick={() => setActiveTab('users')}
             >
-              Users
+              Participants
             </Button>
           </div>
         </div>
@@ -533,6 +657,7 @@ export default function UserGroupsPage() {
                         Edit
                       </button>
                       <button 
+                        onClick={() => deleteGroup(group.id)}
                         className="text-red-600 hover:text-red-900"
                       >
                         Delete
