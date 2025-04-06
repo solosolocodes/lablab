@@ -17,12 +17,7 @@ type Asset = {
   initialAmount: number;
 };
 
-type User = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-};
+// User type no longer needed since we removed owner requirement
 
 type Wallet = {
   id: string;
