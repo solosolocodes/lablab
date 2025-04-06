@@ -2,20 +2,52 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter, useParams } from 'next/navigation';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
-import { 
-  Node, 
-  Edge,
-  useNodesState,
-  useEdgesState
-} from '@reactflow/core';
-import '@reactflow/core/dist/style.css';
-import { 
-  NodeData 
-} from '@/components/experiment/StageNodes';
-import { StageProperties } from '@/components/experiment/StageProperties';
+
+// Type definitions for experiment stages
+type StageType = 'instructions' | 'scenario' | 'survey' | 'break';
+
+interface BaseStage {
+  id: string;
+  type: StageType;
+  title: string;
+  description: string;
+  durationSeconds: number;
+  required: boolean;
+  order: number;
+}
+
+interface InstructionsStage extends BaseStage {
+  type: 'instructions';
+  content: string;
+}
+
+interface ScenarioStage extends BaseStage {
+  type: 'scenario';
+  scenarioId: string;
+  rounds: number;
+  roundDuration: number;
+}
+
+interface SurveyStage extends BaseStage {
+  type: 'survey';
+  questions: Array<{
+    id: string;
+    text: string;
+    type: 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
+    required: boolean;
+    options?: string[];
+  }>;
+}
+
+interface BreakStage extends BaseStage {
+  type: 'break';
+  message: string;
+}
+
+type Stage = InstructionsStage | ScenarioStage | SurveyStage | BreakStage;
 
 export default function ExperimentDesignerPage() {
   const { data: session, status } = useSession();
@@ -23,6 +55,7 @@ export default function ExperimentDesignerPage() {
   const params = useParams();
   const experimentId = params.id as string;
   
+  // State for the experiment data
   const [isLoading, setIsLoading] = useState(true);
   const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
   const [userGroups, setUserGroups] = useState<Array<{ id: string; name: string }>>([]);
@@ -31,46 +64,24 @@ export default function ExperimentDesignerPage() {
     name: string;
     description: string;
     status: string;
-    stages: Array<{
-      id: string;
-      type: string;
-      title: string;
-      description: string;
-      durationSeconds: number;
-      required: boolean;
-      order: number;
-      [key: string]: string | number | boolean | Array<unknown> | Record<string, unknown>; // For type-specific properties
-    }>;
+    stages: Stage[];
     userGroups: Array<{
       userGroupId: string;
+      name?: string;
       condition: string;
       maxParticipants?: number;
     }>;
-    branches: Array<{
-      id: string;
-      fromStageId: string;
-      defaultTargetStageId: string;
-      conditions: Array<{
-        type: string;
-        targetStageId: string;
-        sourceStageId?: string;
-        [key: string]: string | number | boolean | undefined;
-      }>;
-    }>;
-    startStageId?: string;
     createdAt: string;
     updatedAt: string;
     lastEditedAt: string;
   } | null>(null);
-  
-  // ReactFlow state
-  const [nodes, setNodes] = useNodesState([]);
-  const [edges, setEdges] = useEdgesState([]);
-  const [selectedNode, setSelectedNode] = useState<Node<NodeData> | null>(null);
-  const [showOverview, setShowOverview] = useState(false);
-  
-  // ReactFlow reference for fitting view
-  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  // State for the editor
+  const [selectedStage, setSelectedStage] = useState<Stage | null>(null);
+  const [selectedUserGroup, setSelectedUserGroup] = useState<string | null>(null);
+
+  // State for temporary form data when editing
+  const [stageFormData, setStageFormData] = useState<Partial<Stage> | null>(null);
   
   // Redirect if not admin
   useEffect(() => {
@@ -135,114 +146,303 @@ export default function ExperimentDesignerPage() {
     
     fetchExperiment();
   }, [experimentId, status]);
-  
-  // Convert experiment stages to nodes and edges for ReactFlow
-  useEffect(() => {
-    if (!experiment || !experiment.stages) return;
+
+  // Add a new stage
+  const addStage = (type: StageType) => {
+    if (!experiment) return;
     
-    // Create nodes from stages
-    const flowNodes: Node<NodeData>[] = experiment.stages.map((stage, index) => ({
-      id: stage.id,
-      type: stage.type as 'instructions' | 'scenario' | 'survey' | 'break',
-      position: { x: 250, y: index * 150 }, // Initial positions
-      data: {
-        label: stage.title,
-        description: stage.description,
-        type: stage.type as 'instructions' | 'scenario' | 'survey' | 'break',
-        stageData: {...stage}
-      }
-    }));
+    const stageCount = experiment.stages.length;
+    const id = `stage-${Date.now()}`;
     
-    // Create edges from branches
-    const flowEdges: Edge[] = [];
+    let newStage: Stage;
     
-    // Default connections (stage to next stage)
-    for (let i = 0; i < flowNodes.length - 1; i++) {
-      flowEdges.push({
-        id: `e-${flowNodes[i].id}-${flowNodes[i+1].id}`,
-        source: flowNodes[i].id,
-        target: flowNodes[i+1].id,
-        type: 'default'
-      });
+    switch (type) {
+      case 'instructions':
+        newStage = {
+          id,
+          type: 'instructions',
+          title: `New Instructions`,
+          description: 'Description for instructions',
+          content: 'Enter your instructions here...',
+          durationSeconds: 60,
+          required: true,
+          order: stageCount
+        };
+        break;
+      case 'scenario':
+        newStage = {
+          id,
+          type: 'scenario',
+          title: `New Scenario`,
+          description: 'Description for scenario',
+          scenarioId: '',
+          rounds: 1,
+          roundDuration: 60,
+          durationSeconds: 60,
+          required: true,
+          order: stageCount
+        };
+        break;
+      case 'survey':
+        newStage = {
+          id,
+          type: 'survey',
+          title: `New Survey`,
+          description: 'Description for survey',
+          questions: [],
+          durationSeconds: 300,
+          required: true,
+          order: stageCount
+        };
+        break;
+      case 'break':
+        newStage = {
+          id,
+          type: 'break',
+          title: `New Break`,
+          description: 'Description for break',
+          message: 'Take a short break...',
+          durationSeconds: 60,
+          required: true,
+          order: stageCount
+        };
+        break;
     }
     
-    // Add custom branch connections
-    if (experiment.branches) {
-      experiment.branches.forEach(branch => {
-        // Remove default connection if it exists
-        const defaultEdgeIndex = flowEdges.findIndex(
-          e => e.source === branch.fromStageId && e.target === branch.defaultTargetStageId
-        );
-        
-        if (defaultEdgeIndex !== -1) {
-          flowEdges.splice(defaultEdgeIndex, 1);
-        }
-        
-        // Add custom branch edge
-        flowEdges.push({
-          id: `e-branch-${branch.id}`,
-          source: branch.fromStageId,
-          target: branch.defaultTargetStageId,
-          type: 'default',
-          animated: true
-        });
-      });
-    }
-    
-    setNodes(flowNodes);
-    setEdges(flowEdges);
-  }, [experiment, setNodes, setEdges]);
-  
-  // Handle node updates from properties panel
-  const onUpdateNode = useCallback((nodeId: string, data: NodeData) => {
-    setNodes(nds => 
-      nds.map(node => {
-        if (node.id === nodeId) {
-          return {
-            ...node,
-            data
-          };
-        }
-        return node;
-      })
-    );
-  }, [setNodes]);
-  
-  // Add new stage node
-  const addStageNode = useCallback((type: 'instructions' | 'scenario' | 'survey' | 'break') => {
-    const newNodeId = `stage-${Date.now()}`;
-    const typeLabels: Record<string, string> = {
-      instructions: 'Instructions',
-      scenario: 'Scenario',
-      survey: 'Survey',
-      break: 'Break'
+    const updatedExperiment = {
+      ...experiment,
+      stages: [...experiment.stages, newStage]
     };
     
-    const newNode: Node<NodeData> = {
-      id: newNodeId,
-      type,
-      position: { 
-        x: Math.random() * 300 + 100, 
-        y: Math.random() * 300 + 100 
-      },
-      data: {
-        label: `New ${typeLabels[type]}`,
-        description: `Description for ${typeLabels[type]}`,
-        type,
-        stageData: {
-          durationSeconds: 30,
-          required: true
-        }
-      }
+    setExperiment(updatedExperiment);
+    setSelectedStage(newStage);
+    setStageFormData(newStage);
+  };
+
+  // Delete a stage
+  const deleteStage = (stageId: string) => {
+    if (!experiment) return;
+    
+    const updatedStages = experiment.stages.filter(stage => stage.id !== stageId);
+    
+    // Reorder the stages
+    updatedStages.forEach((stage, index) => {
+      stage.order = index;
+    });
+    
+    const updatedExperiment = {
+      ...experiment,
+      stages: updatedStages
     };
     
-    setNodes(nds => [...nds, newNode]);
+    setExperiment(updatedExperiment);
     
-    // If there are no nodes yet, select the new node
-    if (nodes.length === 0) {
-      setSelectedNode(newNode);
+    if (selectedStage?.id === stageId) {
+      setSelectedStage(null);
+      setStageFormData(null);
     }
-  }, [nodes, setNodes]);
+  };
+
+  // Move a stage up or down
+  const moveStage = (stageId: string, direction: 'up' | 'down') => {
+    if (!experiment) return;
+    
+    const stageIndex = experiment.stages.findIndex(stage => stage.id === stageId);
+    if (stageIndex === -1) return;
+    
+    // If trying to move up the first stage or down the last stage, do nothing
+    if (
+      (direction === 'up' && stageIndex === 0) || 
+      (direction === 'down' && stageIndex === experiment.stages.length - 1)
+    ) {
+      return;
+    }
+    
+    const updatedStages = [...experiment.stages];
+    const newIndex = direction === 'up' ? stageIndex - 1 : stageIndex + 1;
+    
+    // Swap the stages
+    const temp = updatedStages[stageIndex];
+    updatedStages[stageIndex] = updatedStages[newIndex];
+    updatedStages[newIndex] = temp;
+    
+    // Update the order property
+    updatedStages.forEach((stage, index) => {
+      stage.order = index;
+    });
+    
+    const updatedExperiment = {
+      ...experiment,
+      stages: updatedStages
+    };
+    
+    setExperiment(updatedExperiment);
+  };
+
+  // Handle form input changes for stage editing
+  const handleStageFormChange = (field: string, value: any) => {
+    if (!stageFormData) return;
+    
+    setStageFormData({
+      ...stageFormData,
+      [field]: value
+    });
+  };
+
+  // Save the stage form changes
+  const saveStageForm = () => {
+    if (!experiment || !stageFormData || !selectedStage) return;
+    
+    const updatedStages = experiment.stages.map(stage => {
+      if (stage.id === selectedStage.id) {
+        return {
+          ...stage,
+          ...stageFormData,
+          // Special handling for scenario stages to calculate duration
+          ...(stage.type === 'scenario' && {
+            durationSeconds: (stageFormData.rounds as number || 1) * (stageFormData.roundDuration as number || 60)
+          })
+        };
+      }
+      return stage;
+    });
+    
+    const updatedExperiment = {
+      ...experiment,
+      stages: updatedStages
+    };
+    
+    setExperiment(updatedExperiment);
+    
+    // Update the selected stage
+    const updatedSelectedStage = updatedStages.find(stage => stage.id === selectedStage.id) as Stage;
+    setSelectedStage(updatedSelectedStage);
+    
+    toast.success('Stage updated successfully');
+  };
+
+  // Add a user group to the experiment
+  const addUserGroup = (userGroupId: string) => {
+    if (!experiment) return;
+    
+    // Check if user group is already added
+    if (experiment.userGroups.some(group => group.userGroupId === userGroupId)) {
+      toast.error('This user group is already added to the experiment');
+      return;
+    }
+    
+    const userGroup = userGroups.find(group => group.id === userGroupId);
+    
+    const updatedExperiment = {
+      ...experiment,
+      userGroups: [
+        ...experiment.userGroups,
+        {
+          userGroupId,
+          name: userGroup?.name,
+          condition: 'control',
+          maxParticipants: 0
+        }
+      ]
+    };
+    
+    setExperiment(updatedExperiment);
+  };
+
+  // Remove a user group from the experiment
+  const removeUserGroup = (userGroupId: string) => {
+    if (!experiment) return;
+    
+    const updatedExperiment = {
+      ...experiment,
+      userGroups: experiment.userGroups.filter(group => group.userGroupId !== userGroupId)
+    };
+    
+    setExperiment(updatedExperiment);
+    
+    if (selectedUserGroup === userGroupId) {
+      setSelectedUserGroup(null);
+    }
+  };
+
+  // Update a user group's settings
+  const updateUserGroup = (userGroupId: string, field: string, value: any) => {
+    if (!experiment) return;
+    
+    const updatedUserGroups = experiment.userGroups.map(group => {
+      if (group.userGroupId === userGroupId) {
+        return {
+          ...group,
+          [field]: value
+        };
+      }
+      return group;
+    });
+    
+    const updatedExperiment = {
+      ...experiment,
+      userGroups: updatedUserGroups
+    };
+    
+    setExperiment(updatedExperiment);
+  };
+
+  // Save the experiment (as draft)
+  const saveExperiment = async (status: 'draft' | 'published' = 'draft') => {
+    if (!experiment) return;
+    
+    try {
+      const updatedExperiment = {
+        ...experiment,
+        status,
+        lastEditedAt: new Date().toISOString()
+      };
+      
+      const response = await fetch(`/api/experiments/${experimentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updatedExperiment)
+      });
+      
+      if (response.ok) {
+        toast.success(status === 'draft' ? 'Experiment saved as draft' : 'Experiment published successfully!');
+        
+        if (status === 'published') {
+          // Redirect to experiments list after publishing
+          setTimeout(() => {
+            router.push('/admin/experiments');
+          }, 1500);
+        }
+      } else {
+        let errorMessage = response.statusText;
+        try {
+          // Try to parse the response as JSON
+          const errorData = await response.json();
+          errorMessage = errorData.message || response.statusText;
+        } catch (jsonError) {
+          errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(`Failed to save experiment: ${errorMessage}`);
+      }
+    } catch (error) {
+      console.error('Error saving experiment:', error);
+      toast.error('Failed to save experiment: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  // Publish the experiment
+  const publishExperiment = async () => {
+    if (!experiment) return;
+    
+    if (experiment.stages.length === 0) {
+      toast.error('Cannot publish an empty experiment. Add at least one stage.');
+      return;
+    }
+    
+    await saveExperiment('published');
+  };
 
   // Loading state
   if (isLoading) {
@@ -288,7 +488,6 @@ export default function ExperimentDesignerPage() {
                 <Link href="/admin/scenarios" className="px-3 py-2 rounded hover:bg-purple-600">Scenarios</Link>
                 <Link href="/admin/wallets" className="px-3 py-2 rounded hover:bg-purple-600">Wallets</Link>
                 <Link href="/admin/user-groups" className="px-3 py-2 rounded hover:bg-purple-600">User Groups</Link>
-                <Link href="#" className="px-3 py-2 rounded hover:bg-purple-600">Reporting</Link>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -322,34 +521,34 @@ export default function ExperimentDesignerPage() {
           </div>
         </div>
         
-        {/* Experiment Designer Layout */}
+        {/* Main Designer Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Quick Add Buttons */}
+          {/* Add Components Section */}
           <div className="bg-white rounded-lg shadow p-4 lg:col-span-3 mb-4">
             <div className="flex justify-between items-center">
               <h3 className="font-semibold text-lg text-gray-800">Add New Components</h3>
               <div className="flex space-x-3">
                 <button 
                   className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-md"
-                  onClick={() => addStageNode('instructions')}
+                  onClick={() => addStage('instructions')}
                 >
                   Add Instructions
                 </button>
                 <button 
                   className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md"
-                  onClick={() => addStageNode('scenario')}
+                  onClick={() => addStage('scenario')}
                 >
                   Add Scenario
                 </button>
                 <button 
                   className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md"
-                  onClick={() => addStageNode('survey')}
+                  onClick={() => addStage('survey')}
                 >
                   Add Survey
                 </button>
                 <button 
                   className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded-md"
-                  onClick={() => addStageNode('break')}
+                  onClick={() => addStage('break')}
                 >
                   Add Break
                 </button>
@@ -357,99 +556,67 @@ export default function ExperimentDesignerPage() {
             </div>
           </div>
           
-          {/* Center: Design Canvas */}
-          <div className="bg-white rounded-lg shadow p-4 lg:col-span-2" ref={reactFlowWrapper}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold text-lg text-gray-800">Experiment Flow</h3>
-              <div className="space-x-2">
-                <button 
-                  onClick={() => setNodes(nodes => {
-                    // Simple undo implementation - just for demo purposes
-                    const lastNode = nodes[nodes.length - 1];
-                    if (lastNode && lastNode.id === selectedNode?.id) {
-                      setSelectedNode(null);
-                    }
-                    return nodes.slice(0, -1);
-                  })}
-                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-md"
-                  disabled={nodes.length === 0}
-                >
-                  Undo
-                </button>
-                <button className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-md">
-                  Redo
-                </button>
+          {/* Left Column: Stages List */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="font-semibold text-lg text-gray-800">Experiment Stages</h3>
+                <p className="text-sm text-gray-500">
+                  Drag stages to reorder or click to edit their properties
+                </p>
               </div>
-            </div>
-            
-            {/* Experiment Flow Canvas */}
-            <div className="border border-gray-300 bg-gray-50 rounded-lg min-h-[500px] flex flex-col">
-              <div className="p-3 bg-white border-b border-gray-200 flex items-center justify-between">
-                <div className="text-sm font-medium text-gray-700">
-                  Experiment Flow Overview: {nodes.length} stages
-                </div>
-                <div className="flex space-x-3">
-                  <button 
-                    className="px-3 py-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs rounded-md"
-                    onClick={() => {
-                      toast.success("Current flow saved!");
-                    }}
-                  >
-                    Save Flow
-                  </button>
-                  <button 
-                    className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 text-xs rounded-md"
-                    onClick={() => {
-                      toast.success("Flow preview mode activated");
-                    }}
-                  >
-                    Preview
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-4 overflow-y-auto flex-grow">
-                {nodes.length > 0 ? (
+              <div className="p-4">
+                {experiment.stages.length > 0 ? (
                   <div className="space-y-3">
-                    
-                    {/* Stages List - Vertically arranged */}
-                    {nodes.map((node, index) => (
+                    {experiment.stages.map((stage, index) => (
                       <div 
-                        key={node.id} 
+                        key={stage.id} 
                         className={`p-3 rounded-lg border ${
-                          node.data.type === 'instructions' ? 'border-purple-200 bg-purple-50' :
-                          node.data.type === 'scenario' ? 'border-blue-200 bg-blue-50' :
-                          node.data.type === 'survey' ? 'border-green-200 bg-green-50' :
+                          stage.type === 'instructions' ? 'border-purple-200 bg-purple-50' :
+                          stage.type === 'scenario' ? 'border-blue-200 bg-blue-50' :
+                          stage.type === 'survey' ? 'border-green-200 bg-green-50' :
                           'border-amber-200 bg-amber-50'
-                        } ${selectedNode?.id === node.id ? 'ring-2 ring-purple-500' : ''}`}
-                        onClick={() => setSelectedNode(node as Node<NodeData>)}
+                        } ${selectedStage?.id === stage.id ? 'ring-2 ring-purple-500' : ''}`}
+                        onClick={() => {
+                          setSelectedStage(stage);
+                          setStageFormData(stage);
+                        }}
                       >
                         <div className="flex justify-between items-start">
                           <div className="font-medium flex items-center">
                             <span className="mr-2">{index + 1}.</span> 
-                            <span>{node.data.label}</span>
-                            
-                            {/* Order adjustment buttons */}
-                            <div className="flex space-x-1 ml-2">
+                            <span>{stage.title}</span>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            stage.type === 'instructions' ? 'bg-purple-100 text-purple-700' :
+                            stage.type === 'scenario' ? 'bg-blue-100 text-blue-700' :
+                            stage.type === 'survey' ? 'bg-green-100 text-green-700' :
+                            'bg-amber-100 text-amber-700'
+                          }`}>
+                            {stage.type}
+                            {stage.type === 'scenario' && (
+                              <span className="ml-1">
+                                ({(stage as ScenarioStage).rounds} rounds)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        
+                        <p className="text-sm text-gray-500 mt-1">{stage.description || 'No description'}</p>
+                        
+                        <div className="flex justify-between items-center mt-2">
+                          <span className="text-xs text-gray-500">
+                            Duration: {stage.durationSeconds} seconds
+                          </span>
+                          <div className="flex space-x-2">
+                            {/* Reordering buttons */}
+                            <div className="flex space-x-1">
                               {index > 0 && (
                                 <button 
                                   className="p-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    // Move node up in order
-                                    const newNodes = [...nodes];
-                                    const temp = newNodes[index];
-                                    newNodes[index] = newNodes[index - 1];
-                                    newNodes[index - 1] = temp;
-                                    
-                                    // Update the order property for persistence
-                                    newNodes.forEach((node, idx) => {
-                                      if (node.data.stageData) {
-                                        node.data.stageData.order = idx;
-                                      }
-                                    });
-                                    
-                                    setNodes(newNodes);
+                                    moveStage(stage.id, 'up');
                                   }}
                                 >
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -458,25 +625,12 @@ export default function ExperimentDesignerPage() {
                                 </button>
                               )}
                               
-                              {index < nodes.length - 1 && (
+                              {index < experiment.stages.length - 1 && (
                                 <button 
                                   className="p-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    // Move node down in order
-                                    const newNodes = [...nodes];
-                                    const temp = newNodes[index];
-                                    newNodes[index] = newNodes[index + 1];
-                                    newNodes[index + 1] = temp;
-                                    
-                                    // Update the order property for persistence
-                                    newNodes.forEach((node, idx) => {
-                                      if (node.data.stageData) {
-                                        node.data.stageData.order = idx;
-                                      }
-                                    });
-                                    
-                                    setNodes(newNodes);
+                                    moveStage(stage.id, 'down');
                                   }}
                                 >
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -485,59 +639,12 @@ export default function ExperimentDesignerPage() {
                                 </button>
                               )}
                             </div>
-                          </div>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            node.data.type === 'instructions' ? 'bg-purple-100 text-purple-700' :
-                            node.data.type === 'scenario' ? 'bg-blue-100 text-blue-700' :
-                            node.data.type === 'survey' ? 'bg-green-100 text-green-700' :
-                            'bg-amber-100 text-amber-700'
-                          }`}>
-                            {node.data.type}
-                            {node.data.type === 'scenario' && node.data.stageData?.rounds && (
-                              <span className="ml-1">
-                                ({node.data.stageData.rounds} rounds)
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                        
-                        <p className="text-sm text-gray-500 mt-1">{node.data.description || 'No description'}</p>
-                        
-                        <div className="flex justify-between items-center mt-2">
-                          <span className="text-xs text-gray-500">
-                            Duration: {node.data.stageData?.durationSeconds || 0} seconds
-                          </span>
-                          <div className="flex space-x-2">
-                            <button 
-                              className="text-xs text-purple-600 hover:text-purple-800 px-2 py-1 bg-purple-50 rounded"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedNode(node as Node<NodeData>);
-                              }}
-                            >
-                              Edit
-                            </button>
+                            
                             <button 
                               className="text-xs text-red-600 hover:text-red-800 px-2 py-1 bg-red-50 rounded"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                
-                                // Remove from nodes list
-                                const updatedNodes = nodes.filter(n => n.id !== node.id);
-                                
-                                // Re-number the order property
-                                updatedNodes.forEach((node, idx) => {
-                                  if (node.data.stageData) {
-                                    node.data.stageData.order = idx;
-                                  }
-                                });
-                                
-                                setNodes(updatedNodes);
-                                
-                                // If deleting selected node, clear selection
-                                if (selectedNode?.id === node.id) {
-                                  setSelectedNode(null);
-                                }
+                                deleteStage(stage.id);
                               }}
                             >
                               Delete
@@ -548,22 +655,22 @@ export default function ExperimentDesignerPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center min-h-[500px]">
+                  <div className="flex flex-col items-center justify-center py-12">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                     <p className="text-gray-500 font-medium mb-1">Start Building Your Experiment</p>
-                    <p className="text-gray-400 text-sm text-center mb-4">Add components to build your experiment flow</p>
+                    <p className="text-gray-400 text-sm text-center mb-4">Add stages to build your experiment flow</p>
                     <div className="flex space-x-3">
                       <button 
                         className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-md"
-                        onClick={() => addStageNode('instructions')}
+                        onClick={() => addStage('instructions')}
                       >
                         Add Instructions
                       </button>
                       <button 
                         className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md"
-                        onClick={() => addStageNode('scenario')}
+                        onClick={() => addStage('scenario')}
                       >
                         Add Scenario
                       </button>
@@ -571,235 +678,449 @@ export default function ExperimentDesignerPage() {
                   </div>
                 )}
               </div>
-              
-              {/* Flow Canvas Controls */}
-              <div className="flex justify-between mt-3">
-                <div>
-                  <span className="text-sm text-gray-500">
-                    {nodes.length} stages in experiment
-                  </span>
+            </div>
+            
+            {/* User Groups Section */}
+            <div className="bg-white rounded-lg shadow mt-6">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="font-semibold text-lg text-gray-800">User Groups</h3>
+                <p className="text-sm text-gray-500">
+                  Assign user groups to this experiment
+                </p>
+              </div>
+              <div className="p-4">
+                {experiment.userGroups.length > 0 ? (
+                  <div className="space-y-3">
+                    {experiment.userGroups.map((group) => {
+                      const userGroup = userGroups.find(ug => ug.id === group.userGroupId);
+                      return (
+                        <div 
+                          key={group.userGroupId} 
+                          className={`p-3 rounded-lg border border-gray-200 ${selectedUserGroup === group.userGroupId ? 'ring-2 ring-purple-500' : ''}`}
+                          onClick={() => setSelectedUserGroup(group.userGroupId)}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <span className="font-medium">{userGroup?.name || 'Unknown Group'}</span>
+                              <div className="flex space-x-2 mt-1">
+                                <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">
+                                  Condition: {group.condition}
+                                </span>
+                                {group.maxParticipants > 0 && (
+                                  <span className="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded-full">
+                                    Max: {group.maxParticipants}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button 
+                              className="text-xs text-red-600 hover:text-red-800 px-2 py-1 bg-red-50 rounded"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeUserGroup(group.userGroupId);
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-gray-500 mb-3">No user groups assigned to this experiment</p>
+                  </div>
+                )}
+                
+                {/* Add User Group Dropdown */}
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Add User Group
+                  </label>
+                  <div className="flex space-x-2">
+                    <select 
+                      className="flex-1 px-3 py-2 border rounded-md text-sm"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          addUserGroup(e.target.value);
+                          e.target.value = '';
+                        }
+                      }}
+                    >
+                      <option value="">Select a user group...</option>
+                      {userGroups.filter(ug => 
+                        !experiment.userGroups.some(g => g.userGroupId === ug.id)
+                      ).map(group => (
+                        <option key={group.id} value={group.id}>
+                          {group.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
           
-          {/* Right Sidebar: Properties & Settings */}
-          <div className="bg-white rounded-lg shadow lg:col-span-1">
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+          {/* Right Column: Properties */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-4 border-b border-gray-200">
               <h3 className="font-semibold text-lg text-gray-800">
-                {selectedNode ? `${selectedNode.data.type.charAt(0).toUpperCase() + selectedNode.data.type.slice(1)} Properties` : 'Properties'}
+                {selectedStage 
+                  ? `Edit ${selectedStage.type.charAt(0).toUpperCase() + selectedStage.type.slice(1)}` 
+                  : selectedUserGroup
+                    ? 'User Group Settings'
+                    : 'Properties'
+                }
               </h3>
-              {selectedNode && (
-                <span className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded-full">
-                  Stage Selected
-                </span>
-              )}
             </div>
             
-            {/* Stage Properties Component */}
-            <StageProperties 
-              selectedNode={selectedNode}
-              onUpdateNode={onUpdateNode}
-              scenarios={scenarios}
-              userGroups={userGroups}
-            />
+            <div className="p-4">
+              {/* Stage Properties Form */}
+              {selectedStage && stageFormData && (
+                <div className="space-y-4">
+                  {/* Common fields for all stage types */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Title
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border rounded-md text-sm"
+                      value={stageFormData.title || ''}
+                      onChange={(e) => handleStageFormChange('title', e.target.value)}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Description
+                    </label>
+                    <textarea
+                      className="w-full px-3 py-2 border rounded-md text-sm"
+                      rows={2}
+                      value={stageFormData.description || ''}
+                      onChange={(e) => handleStageFormChange('description', e.target.value)}
+                    />
+                  </div>
+                  
+                  {/* Type-specific fields */}
+                  {selectedStage.type === 'instructions' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Instructions Content
+                      </label>
+                      <textarea
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        rows={5}
+                        value={(stageFormData as Partial<InstructionsStage>).content || ''}
+                        onChange={(e) => handleStageFormChange('content', e.target.value)}
+                      />
+                    </div>
+                  )}
+                  
+                  {selectedStage.type === 'scenario' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Scenario
+                        </label>
+                        <select
+                          className="w-full px-3 py-2 border rounded-md text-sm"
+                          value={(stageFormData as Partial<ScenarioStage>).scenarioId || ''}
+                          onChange={(e) => handleStageFormChange('scenarioId', e.target.value)}
+                        >
+                          <option value="">-- Select a scenario --</option>
+                          {scenarios.map(scenario => (
+                            <option key={scenario.id} value={scenario.id}>
+                              {scenario.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Number of Rounds
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="w-full px-3 py-2 border rounded-md text-sm"
+                            value={(stageFormData as Partial<ScenarioStage>).rounds || 1}
+                            onChange={(e) => handleStageFormChange('rounds', parseInt(e.target.value) || 1)}
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Round Duration (seconds)
+                          </label>
+                          <input
+                            type="number"
+                            min="10"
+                            className="w-full px-3 py-2 border rounded-md text-sm"
+                            value={(stageFormData as Partial<ScenarioStage>).roundDuration || 60}
+                            onChange={(e) => handleStageFormChange('roundDuration', parseInt(e.target.value) || 60)}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-700">Total Duration:</span>
+                          <span className="text-sm text-gray-900">
+                            {((stageFormData as Partial<ScenarioStage>).rounds || 1) * 
+                              ((stageFormData as Partial<ScenarioStage>).roundDuration || 60)} seconds
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Calculated as {(stageFormData as Partial<ScenarioStage>).rounds || 1} rounds × 
+                          {(stageFormData as Partial<ScenarioStage>).roundDuration || 60} seconds per round
+                        </p>
+                      </div>
+                    </>
+                  )}
+                  
+                  {selectedStage.type === 'survey' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Questions
+                      </label>
+                      <button
+                        className="w-full py-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100"
+                        onClick={() => {
+                          const currentQuestions = (stageFormData as Partial<SurveyStage>).questions || [];
+                          handleStageFormChange('questions', [
+                            ...currentQuestions, 
+                            {
+                              id: `q-${Date.now()}`,
+                              text: 'New Question',
+                              type: 'text',
+                              required: true
+                            }
+                          ]);
+                        }}
+                      >
+                        + Add Question
+                      </button>
+                      
+                      <div className="mt-2 space-y-2 max-h-[300px] overflow-y-auto">
+                        {((stageFormData as Partial<SurveyStage>).questions || []).map((question, index) => (
+                          <div key={question.id} className="border border-gray-200 rounded-md p-2">
+                            <div className="flex justify-between items-start">
+                              <input
+                                type="text"
+                                className="flex-1 px-2 py-1 text-xs border rounded"
+                                value={question.text}
+                                onChange={(e) => {
+                                  const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
+                                  questions[index].text = e.target.value;
+                                  handleStageFormChange('questions', questions);
+                                }}
+                              />
+                              <button
+                                className="ml-2 text-red-500 hover:text-red-700"
+                                onClick={() => {
+                                  const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
+                                  questions.splice(index, 1);
+                                  handleStageFormChange('questions', questions);
+                                }}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </div>
+                            
+                            <div className="mt-1 flex items-center space-x-2">
+                              <select
+                                className="px-2 py-1 text-xs border rounded"
+                                value={question.type}
+                                onChange={(e) => {
+                                  const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
+                                  questions[index].type = e.target.value as 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
+                                  handleStageFormChange('questions', questions);
+                                }}
+                              >
+                                <option value="text">Text</option>
+                                <option value="multipleChoice">Multiple Choice</option>
+                                <option value="rating">Rating</option>
+                                <option value="checkboxes">Checkboxes</option>
+                              </select>
+                              
+                              <label className="text-xs flex items-center">
+                                <input
+                                  type="checkbox"
+                                  className="mr-1"
+                                  checked={question.required}
+                                  onChange={(e) => {
+                                    const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
+                                    questions[index].required = e.target.checked;
+                                    handleStageFormChange('questions', questions);
+                                  }}
+                                />
+                                Required
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedStage.type === 'break' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Break Message
+                      </label>
+                      <textarea
+                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        rows={3}
+                        value={(stageFormData as Partial<BreakStage>).message || ''}
+                        onChange={(e) => handleStageFormChange('message', e.target.value)}
+                      />
+                      
+                      <div className="mt-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Duration (seconds)
+                        </label>
+                        <input
+                          type="number"
+                          min="5"
+                          className="w-full px-3 py-2 border rounded-md text-sm"
+                          value={stageFormData.durationSeconds || 30}
+                          onChange={(e) => handleStageFormChange('durationSeconds', parseInt(e.target.value) || 30)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Common fields for all stage types */}
+                  <div className="flex items-center mt-2">
+                    <input
+                      type="checkbox"
+                      id="required"
+                      className="mr-2"
+                      checked={stageFormData.required !== false}
+                      onChange={(e) => handleStageFormChange('required', e.target.checked)}
+                    />
+                    <label htmlFor="required" className="text-sm font-medium text-gray-700">
+                      Required stage
+                    </label>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <button
+                      className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded"
+                      onClick={saveStageForm}
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* User Group Settings */}
+              {selectedUserGroup && (
+                <div className="space-y-4">
+                  {(() => {
+                    const group = experiment.userGroups.find(g => g.userGroupId === selectedUserGroup);
+                    const userGroup = userGroups.find(ug => ug.id === selectedUserGroup);
+                    
+                    if (!group) return null;
+                    
+                    return (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Group Name
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 border rounded-md text-sm bg-gray-50"
+                            value={userGroup?.name || ''}
+                            disabled
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Condition
+                          </label>
+                          <select
+                            className="w-full px-3 py-2 border rounded-md text-sm"
+                            value={group.condition}
+                            onChange={(e) => updateUserGroup(selectedUserGroup, 'condition', e.target.value)}
+                          >
+                            <option value="control">Control</option>
+                            <option value="treatment">Treatment</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Max Participants (0 = unlimited)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="w-full px-3 py-2 border rounded-md text-sm"
+                            value={group.maxParticipants || 0}
+                            onChange={(e) => updateUserGroup(selectedUserGroup, 'maxParticipants', parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                        
+                        <div className="mt-4">
+                          <button
+                            className="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded"
+                            onClick={() => removeUserGroup(selectedUserGroup)}
+                          >
+                            Remove User Group
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+              
+              {/* No selection state */}
+              {!selectedStage && !selectedUserGroup && (
+                <div className="text-center py-8">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                  </svg>
+                  <p className="text-gray-500">Select a stage or user group to edit its properties</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         
         {/* Bottom Controls */}
         <div className="bg-white rounded-lg shadow mt-6 p-4">
           <div className="flex justify-between items-center">
-            <div className="flex space-x-4">
-              <button 
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                onClick={() => {
-                  // Test mode functionality would go here
-                  toast.success('Test mode activated. This would allow you to run through the experiment.');
-                }}
-              >
-                Test Mode
-              </button>
-              <button 
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                onClick={() => {
-                  // Preview functionality would go here
-                  toast.success('Preview activated. This would show you how the experiment looks to participants.');
-                }}
-              >
-                Preview
-              </button>
+            <div>
+              <span className="text-sm text-gray-500">
+                {experiment.stages.length} stages, {experiment.userGroups.length} user groups
+              </span>
             </div>
             <div className="flex space-x-4">
               <button 
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                onClick={async () => {
-                  if (!experiment) return;
-                  
-                  try {
-                    // First, ensure all nodes have an order property that matches their array index
-                    nodes.forEach((node, index) => {
-                      if (node.data.stageData) {
-                        node.data.stageData.order = index;
-                      }
-                    });
-                    
-                    // Convert nodes and edges to experiment stages and branches
-                    const stages = nodes.map((node) => ({
-                      id: node.id,
-                      type: node.data.type,
-                      title: node.data.label,
-                      description: node.data.description || '',
-                      order: node.data.stageData?.order || 0,
-                      durationSeconds: node.data.stageData?.durationSeconds || 30,
-                      required: node.data.stageData?.required !== false,
-                      ...node.data.stageData
-                    }));
-                    
-                    // Create branches from edges
-                    const branches = edges.map((edge) => ({
-                      id: edge.id,
-                      fromStageId: edge.source,
-                      defaultTargetStageId: edge.target,
-                      conditions: []
-                    }));
-                    
-                    // Start stage is the first node (this would be more sophisticated in a real app)
-                    const startStageId = nodes.length > 0 ? nodes[0].id : undefined;
-                    
-                    const updatedExperiment = {
-                      ...experiment,
-                      stages,
-                      branches,
-                      startStageId,
-                      status: 'draft',
-                      lastEditedAt: new Date().toISOString()
-                    };
-                    
-                    console.log('Saving experiment:', JSON.stringify(updatedExperiment, null, 2));
-                    
-                    try {
-                      const response = await fetch(`/api/experiments/${experimentId}`, {
-                        method: 'PUT',
-                        headers: {
-                          'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(updatedExperiment)
-                      });
-                      
-                      if (response.ok) {
-                        toast.success('Experiment saved as draft');
-                      } else {
-                        let errorMessage = response.statusText;
-                        try {
-                          // Try to parse the response as JSON
-                          const errorData = await response.json();
-                          errorMessage = errorData.message || response.statusText;
-                        } catch (jsonError) {
-                          // If response is not JSON, use the status text
-                          console.error('Error parsing response:', jsonError);
-                          errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
-                        }
-                        throw new Error(`Failed to save experiment: ${errorMessage}`);
-                      }
-                    } catch (apiError) {
-                      console.error('API Error:', apiError);
-                      throw new Error(`API Error: ${apiError instanceof Error ? apiError.message : String(apiError)}`);
-                    }
-                  } catch (error) {
-                    console.error('Error saving experiment:', error);
-                    toast.error('Failed to save experiment: ' + (error instanceof Error ? error.message : 'Unknown error'));
-                  }
-                }}
+                onClick={() => saveExperiment('draft')}
               >
                 Save as Draft
               </button>
               <button 
                 className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md"
-                onClick={async () => {
-                  if (!experiment) return;
-                  
-                  if (nodes.length === 0) {
-                    toast.error('Cannot publish an empty experiment. Add at least one stage.');
-                    return;
-                  }
-                  
-                  try {
-                    // First, ensure all nodes have an order property that matches their array index
-                    nodes.forEach((node, index) => {
-                      if (node.data.stageData) {
-                        node.data.stageData.order = index;
-                      }
-                    });
-                    
-                    // Convert nodes and edges to experiment stages and branches
-                    const stages = nodes.map((node) => ({
-                      id: node.id,
-                      type: node.data.type,
-                      title: node.data.label,
-                      description: node.data.description || '',
-                      order: node.data.stageData?.order || 0,
-                      durationSeconds: node.data.stageData?.durationSeconds || 30,
-                      required: node.data.stageData?.required !== false,
-                      ...node.data.stageData
-                    }));
-                    
-                    const branches = edges.map((edge) => ({
-                      id: edge.id,
-                      fromStageId: edge.source,
-                      defaultTargetStageId: edge.target,
-                      conditions: []
-                    }));
-                    
-                    const startStageId = nodes.length > 0 ? nodes[0].id : undefined;
-                    
-                    const updatedExperiment = {
-                      ...experiment,
-                      stages,
-                      branches,
-                      startStageId,
-                      status: 'published',
-                      lastEditedAt: new Date().toISOString()
-                    };
-                    
-                    console.log('Publishing experiment:', JSON.stringify(updatedExperiment, null, 2));
-                    
-                    try {
-                      const response = await fetch(`/api/experiments/${experimentId}`, {
-                        method: 'PUT',
-                        headers: {
-                          'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(updatedExperiment)
-                      });
-                      
-                      if (response.ok) {
-                        toast.success('Experiment published successfully!');
-                        // Optionally redirect to the experiments list
-                        setTimeout(() => {
-                          router.push('/admin/experiments');
-                        }, 1500);
-                      } else {
-                        let errorMessage = response.statusText;
-                        try {
-                          // Try to parse the response as JSON
-                          const errorData = await response.json();
-                          errorMessage = errorData.message || response.statusText;
-                        } catch (jsonError) {
-                          // If response is not JSON, use the status text
-                          console.error('Error parsing response:', jsonError);
-                          errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
-                        }
-                        throw new Error(`Failed to publish experiment: ${errorMessage}`);
-                      }
-                    } catch (apiError) {
-                      console.error('API Error:', apiError);
-                      throw new Error(`API Error: ${apiError instanceof Error ? apiError.message : String(apiError)}`);
-                    }
-                  } catch (error) {
-                    console.error('Error publishing experiment:', error);
-                    toast.error('Failed to publish experiment: ' + (error instanceof Error ? error.message : 'Unknown error'));
-                  }
-                }}
+                onClick={publishExperiment}
+                disabled={experiment.stages.length === 0}
               >
                 Publish Experiment
               </button>
@@ -807,117 +1128,9 @@ export default function ExperimentDesignerPage() {
           </div>
         </div>
       </main>
-
-      {/* Overview Modal */}
-      {showOverview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg shadow-xl w-4/5 max-w-5xl max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="font-bold text-xl text-gray-800">Experiment Flow Overview</h3>
-              <button 
-                onClick={() => setShowOverview(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <div className="p-4 overflow-y-auto flex-grow">
-              <div className="mb-4">
-                <h4 className="font-medium text-gray-700 mb-2">Experiment Stages ({nodes.length})</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {nodes.map((node, index) => (
-                    <div 
-                      key={node.id} 
-                      className={`p-3 rounded-lg border ${
-                        node.data.type === 'instructions' ? 'border-purple-200 bg-purple-50' :
-                        node.data.type === 'scenario' ? 'border-blue-200 bg-blue-50' :
-                        node.data.type === 'survey' ? 'border-green-200 bg-green-50' :
-                        'border-amber-200 bg-amber-50'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <div className="font-medium">
-                          {index + 1}. {node.data.label}
-                        </div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          node.data.type === 'instructions' ? 'bg-purple-100 text-purple-700' :
-                          node.data.type === 'scenario' ? 'bg-blue-100 text-blue-700' :
-                          node.data.type === 'survey' ? 'bg-green-100 text-green-700' :
-                          'bg-amber-100 text-amber-700'
-                        }`}>
-                          {node.data.type}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-500 truncate">{node.data.description || 'No description'}</p>
-                      <button 
-                        className="mt-2 text-xs text-purple-600 hover:text-purple-800"
-                        onClick={() => {
-                          setSelectedNode(node as Node<NodeData>);
-                          setShowOverview(false);
-                        }}
-                      >
-                        Edit Properties
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="mt-4">
-                <h4 className="font-medium text-gray-700 mb-2">Flow Connections ({edges.length})</h4>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {edges.map(edge => {
-                        const sourceNode = nodes.find(n => n.id === edge.source);
-                        const targetNode = nodes.find(n => n.id === edge.target);
-                        return (
-                          <tr key={edge.id}>
-                            <td className="px-4 py-2 text-sm text-gray-700">{sourceNode?.data.label || edge.source}</td>
-                            <td className="px-4 py-2 text-sm text-gray-700">{targetNode?.data.label || edge.target}</td>
-                            <td className="px-4 py-2 text-sm text-gray-700">{edge.animated ? 'Conditional' : 'Default'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-4 border-t border-gray-200 flex justify-between">
-              <button 
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded"
-                onClick={() => setShowOverview(false)}
-              >
-                Close
-              </button>
-              <button 
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded"
-                onClick={() => {
-                  toast.success("Experiment flow saved successfully!");
-                  setShowOverview(false);
-                }}
-              >
-                Save & Continue Editing
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      
       {/* Footer */}
-      <footer className="bg-white py-4 shadow-inner">
+      <footer className="bg-white py-4 shadow-inner mt-auto">
         <div className="container mx-auto px-4">
           <p className="text-center text-gray-600 text-sm">
             © {new Date().getFullYear()} LabLab Platform. All rights reserved.
