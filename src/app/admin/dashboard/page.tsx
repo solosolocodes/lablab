@@ -62,10 +62,11 @@ export default function AdminDashboard() {
               <h1 className="text-xl font-bold">LabLab Admin</h1>
               <div className="hidden md:flex space-x-4">
                 <Link href="/admin/dashboard" className="px-3 py-2 rounded bg-purple-600">Dashboard</Link>
-                <Link href="/admin/user-groups" className="px-3 py-2 rounded hover:bg-purple-600">User Groups</Link>
-                <Link href="/admin/wallets" className="px-3 py-2 rounded hover:bg-purple-600">Wallets</Link>
-                <Link href="/admin/scenarios" className="px-3 py-2 rounded hover:bg-purple-600">Scenarios</Link>
                 <Link href="#" className="px-3 py-2 rounded hover:bg-purple-600">Experiments</Link>
+                <Link href="/admin/scenarios" className="px-3 py-2 rounded hover:bg-purple-600">Scenarios</Link>
+                <Link href="/admin/wallets" className="px-3 py-2 rounded hover:bg-purple-600">Wallets</Link>
+                <Link href="/admin/user-groups" className="px-3 py-2 rounded hover:bg-purple-600">User Groups</Link>
+                <Link href="#" className="px-3 py-2 rounded hover:bg-purple-600">Reporting</Link>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -174,7 +175,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Quick Access Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
             <div className="flex items-center">
               <div className="p-3 rounded-full bg-purple-100 mr-4">
@@ -236,6 +237,20 @@ export default function AdminDashboard() {
               </div>
             </div>
           </Link>
+          
+          <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-indigo-100 mr-4">
+                <svg className="h-6 w-6 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Reporting</h3>
+                <p className="text-gray-500 text-sm">Export and analyze data</p>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
