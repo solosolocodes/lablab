@@ -95,6 +95,7 @@ const BaseStageNode = ({
 };
 
 // Type guards
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function isInstructionsData(data: StageData | undefined): data is InstructionsStageData {
   return data !== undefined;
 }
