@@ -728,58 +728,59 @@ export default function ExperimentDesignerPage() {
                     ))}
                   </div>
                 ) : (
-                <div className="flex flex-col items-center justify-center min-h-[500px]">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  <p className="text-gray-500 font-medium mb-1">Start Building Your Experiment</p>
-                  <p className="text-gray-400 text-sm text-center mb-4">Add components to build your experiment flow</p>
-                  <div className="flex space-x-3">
-                    <button 
-                      className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-md"
-                      onClick={() => addStageNode('instructions')}
-                    >
-                      Add Instructions
-                    </button>
-                    <button 
-                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md"
-                      onClick={() => addStageNode('scenario')}
-                    >
-                      Add Scenario
-                    </button>
+                  <div className="flex flex-col items-center justify-center min-h-[500px]">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <p className="text-gray-500 font-medium mb-1">Start Building Your Experiment</p>
+                    <p className="text-gray-400 text-sm text-center mb-4">Add components to build your experiment flow</p>
+                    <div className="flex space-x-3">
+                      <button 
+                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-md"
+                        onClick={() => addStageNode('instructions')}
+                      >
+                        Add Instructions
+                      </button>
+                      <button 
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md"
+                        onClick={() => addStageNode('scenario')}
+                      >
+                        Add Scenario
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Flow Canvas Controls */}
-            <div className="flex justify-between mt-3">
-              <div>
-                <span className="text-sm text-gray-500">
-                  {nodes.length} stages in experiment
-                </span>
+                )}
               </div>
-              <div className="space-x-3">
-                <button 
-                  className="flex items-center text-gray-600 hover:text-gray-800 text-sm"
-                  onClick={() => {
-                    // Auto-arrange nodes in a grid
-                    setNodes(nds => 
-                      nds.map((node, index) => ({
-                        ...node,
-                        position: {
-                          x: 150 + (index % 3) * 300,
-                          y: 100 + Math.floor(index / 3) * 200
-                        }
-                      }))
-                    );
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                  </svg>
-                  Auto-Arrange
-                </button>
+              
+              {/* Flow Canvas Controls */}
+              <div className="flex justify-between mt-3">
+                <div>
+                  <span className="text-sm text-gray-500">
+                    {nodes.length} stages in experiment
+                  </span>
+                </div>
+                <div className="space-x-3">
+                  <button 
+                    className="flex items-center text-gray-600 hover:text-gray-800 text-sm"
+                    onClick={() => {
+                      // Auto-arrange nodes in a grid
+                      setNodes(nds => 
+                        nds.map((node, index) => ({
+                          ...node,
+                          position: {
+                            x: 150 + (index % 3) * 300,
+                            y: 100 + Math.floor(index / 3) * 200
+                          }
+                        }))
+                      );
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                    Auto-Arrange
+                  </button>
+                </div>
               </div>
             </div>
           </div>
