@@ -282,12 +282,14 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                 Calculated as {rounds} rounds × {roundDuration} seconds per round
               </p>
               
-              {/* Update the actual durationSeconds with the calculated value without rendering */}
-              <span className="hidden">
-                {React.useEffect(() => {
+              {/* Update the actual durationSeconds with the calculated value */}
+              {/* useEffect is called here to update duration when rounds or roundDuration changes */}
+              {(() => {
+                React.useEffect(() => {
                   handleStageDataChange('durationSeconds', calculatedDuration);
-                }, [calculatedDuration])}
-              </span>
+                }, [calculatedDuration]);
+                return null;
+              })()}
             </div>
             
             <div className="mt-5">
