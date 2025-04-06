@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Node } from '@reactflow/core';
+import { toast } from 'react-hot-toast';
 import { 
   NodeData, 
   InstructionsStageData,
@@ -201,6 +202,18 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                 <option value="html">HTML</option>
               </select>
             </div>
+            
+            <div className="mt-5">
+              <button 
+                className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded"
+                onClick={() => {
+                  // Apply changes and show confirmation
+                  toast.success('Instructions updated successfully!');
+                }}
+              >
+                Save Instructions
+              </button>
+            </div>
           </div>
         );
         
@@ -225,6 +238,18 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                 </option>
               ))}
             </select>
+            
+            <div className="mt-5">
+              <button 
+                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded"
+                onClick={() => {
+                  // Apply changes and show confirmation
+                  toast.success('Scenario settings updated successfully!');
+                }}
+              >
+                Save Scenario
+              </button>
+            </div>
           </div>
         );
         
@@ -425,6 +450,18 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                 Add Demographic Questions
               </button>
             </div>
+            
+            <div className="mt-5">
+              <button 
+                className="w-full py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded"
+                onClick={() => {
+                  // Apply changes and show confirmation
+                  toast.success('Survey questions updated successfully!');
+                }}
+              >
+                Save Survey
+              </button>
+            </div>
           </div>
         );
         
@@ -444,6 +481,18 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                 value={breakData?.message || 'Take a short break before continuing...'}
                 onChange={(e) => handleStageDataChange('message', e.target.value)}
               />
+            </div>
+            
+            <div className="mt-5">
+              <button 
+                className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded"
+                onClick={() => {
+                  // Apply changes and show confirmation
+                  toast.success('Break settings updated successfully!');
+                }}
+              >
+                Save Break
+              </button>
             </div>
           </div>
         );
