@@ -133,7 +133,7 @@ export const SurveyStageSchema = new mongoose.Schema({
     type: [QuestionSchema],
     required: [true, 'Questions are required for a survey'],
     validate: {
-      validator: function(questions: any[]) {
+      validator: function(questions: mongoose.Types.DocumentArray<mongoose.Document> | any[]) {
         return questions.length > 0;
       },
       message: 'Survey must have at least one question',

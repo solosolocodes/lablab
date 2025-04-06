@@ -43,7 +43,9 @@ export default function ExperimentsPage() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedExperiment, setSelectedExperiment] = useState<Experiment | null>(null);
+  // Using "_" prefix to signal this state is meant to be unused in this context
+  // but we're keeping it for future functionality
+  const [_selectedExperiment, _setSelectedExperiment] = useState<Experiment | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -111,7 +113,7 @@ export default function ExperimentsPage() {
   // Open experiment creation modal
   const openExperimentModal = () => {
     setIsModalOpen(true);
-    setSelectedExperiment(null);
+    _setSelectedExperiment(null);
     setFormData({
       name: '',
       description: '',

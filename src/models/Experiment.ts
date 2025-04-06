@@ -19,7 +19,7 @@ export interface IExperiment extends mongoose.Document {
   status: 'draft' | 'active' | 'paused' | 'completed' | 'archived';
   createdBy: mongoose.Types.ObjectId;
   userGroups: IUserGroupAssignment[];
-  stages: mongoose.Types.DocumentArray<any>; // Will contain different stage types
+  stages: mongoose.Types.DocumentArray<mongoose.Document>; // Will contain different stage types
   branches: {
     fromStageId: mongoose.Types.ObjectId;
     conditions: {

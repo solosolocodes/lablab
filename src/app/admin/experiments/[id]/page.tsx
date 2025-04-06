@@ -7,6 +7,102 @@ import Link from 'next/link';
 import Button from '@/components/Button';
 import { toast } from 'react-hot-toast';
 
+// Type definitions
+interface QuestionType {
+  id: string;
+  text: string;
+  type: 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
+  options?: string[];
+  required: boolean;
+}
+
+interface BaseStage {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  durationSeconds: number;
+  required: boolean;
+  order: number;
+}
+
+interface InstructionsStage extends BaseStage {
+  type: 'instructions';
+  content: string;
+  format: 'text' | 'markdown' | 'html';
+}
+
+interface ScenarioStage extends BaseStage {
+  type: 'scenario';
+  scenarioId: string;
+}
+
+interface SurveyStage extends BaseStage {
+  type: 'survey';
+  questions: QuestionType[];
+}
+
+interface BreakStage extends BaseStage {
+  type: 'break';
+  message: string;
+}
+
+type Stage = InstructionsStage | ScenarioStage | SurveyStage | BreakStage;
+
+interface BranchCondition {
+  type: 'response' | 'completion' | 'time' | 'random' | 'always';
+  sourceStageId?: string;
+  targetStageId: string;
+  questionId?: string;
+  expectedResponse?: string;
+  operator?: 'equals' | 'contains' | 'greaterThan' | 'lessThan';
+  threshold?: number;
+  probability?: number;
+}
+
+interface Branch {
+  id: string;
+  fromStageId: string;
+  conditions: BranchCondition[];
+  defaultTargetStageId: string;
+}
+
+interface UserGroupAssignment {
+  userGroupId: string;
+  condition: string;
+  maxParticipants?: number;
+}
+
+interface Experiment {
+  id: string;
+  name: string;
+  description: string;
+  status: 'draft' | 'active' | 'paused' | 'completed' | 'archived';
+  createdBy: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  userGroups: UserGroupAssignment[];
+  stages: Stage[];
+  branches: Branch[];
+  startStageId?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastEditedAt: string;
+}
+
+interface UserGroup {
+  id: string;
+  name: string;
+  description: string;
+  users: {
+    id: string;
+    name: string;
+    email: string;
+  }[];
+}
+
 export default function ExperimentDetailsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -14,8 +110,8 @@ export default function ExperimentDetailsPage() {
   const experimentId = params.id as string;
   
   const [isLoading, setIsLoading] = useState(true);
-  const [experiment, setExperiment] = useState<any>(null);
-  const [userGroups, setUserGroups] = useState<any[]>([]);
+  const [experiment, setExperiment] = useState<Experiment | null>(null);
+  const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
 
   // Redirect if not admin
   useEffect(() => {
@@ -231,7 +327,7 @@ export default function ExperimentDetailsPage() {
               
               {experiment.stages.length > 0 ? (
                 <div className="divide-y divide-gray-100">
-                  {experiment.stages.sort((a: any, b: any) => a.order - b.order).map((stage: any) => (
+                  {experiment.stages.sort((a, b) => a.order - b.order).map((stage) => (
                     <div key={stage.id} className="px-6 py-4">
                       <div className="flex items-start">
                         <div className="flex-shrink-0 mt-1">
@@ -249,24 +345,26 @@ export default function ExperimentDetailsPage() {
                           {/* Stage-specific details */}
                           {stage.type === 'instructions' && (
                             <div className="mt-2 p-2 bg-blue-50 rounded-md text-sm">
-                              <div className="text-blue-700 font-medium mb-1">Instructions ({stage.format})</div>
+                              <div className="text-blue-700 font-medium mb-1">Instructions ({(stage as InstructionsStage).format})</div>
                               <div className="text-gray-600 text-xs whitespace-pre-line line-clamp-2">
-                                {stage.content.length > 150 ? stage.content.substring(0, 150) + '...' : stage.content}
+                                {(stage as InstructionsStage).content.length > 150 
+                                  ? (stage as InstructionsStage).content.substring(0, 150) + '...' 
+                                  : (stage as InstructionsStage).content}
                               </div>
                             </div>
                           )}
                           
-                          {stage.type === 'survey' && stage.questions && (
+                          {stage.type === 'survey' && (stage as SurveyStage).questions && (
                             <div className="mt-2 p-2 bg-purple-50 rounded-md text-sm">
                               <div className="text-purple-700 font-medium mb-1">
-                                Survey ({stage.questions.length} question{stage.questions.length !== 1 ? 's' : ''})
+                                Survey ({(stage as SurveyStage).questions.length} question{(stage as SurveyStage).questions.length !== 1 ? 's' : ''})
                               </div>
                               <div className="text-gray-600 text-xs">
-                                {stage.questions.slice(0, 2).map((q: any) => (
+                                {(stage as SurveyStage).questions.slice(0, 2).map((q) => (
                                   <div key={q.id} className="mb-1">• {q.text}</div>
                                 ))}
-                                {stage.questions.length > 2 && (
-                                  <div>• ...and {stage.questions.length - 2} more</div>
+                                {(stage as SurveyStage).questions.length > 2 && (
+                                  <div>• ...and {(stage as SurveyStage).questions.length - 2} more</div>
                                 )}
                               </div>
                             </div>
@@ -275,7 +373,7 @@ export default function ExperimentDetailsPage() {
                           {stage.type === 'scenario' && (
                             <div className="mt-2 p-2 bg-green-50 rounded-md text-sm">
                               <div className="text-green-700 font-medium">
-                                Scenario ID: {stage.scenarioId}
+                                Scenario ID: {(stage as ScenarioStage).scenarioId}
                               </div>
                             </div>
                           )}
@@ -284,7 +382,7 @@ export default function ExperimentDetailsPage() {
                             <div className="mt-2 p-2 bg-amber-50 rounded-md text-sm">
                               <div className="text-amber-700 font-medium">Break Message:</div>
                               <div className="text-gray-600 text-xs">
-                                {stage.message}
+                                {(stage as BreakStage).message}
                               </div>
                             </div>
                           )}
@@ -311,10 +409,10 @@ export default function ExperimentDetailsPage() {
               
               {experiment.branches && experiment.branches.length > 0 ? (
                 <div className="divide-y divide-gray-100">
-                  {experiment.branches.map((branch: any) => {
+                  {experiment.branches.map((branch) => {
                     // Find stage names
-                    const fromStage = experiment.stages.find((s: any) => s.id === branch.fromStageId);
-                    const defaultTargetStage = experiment.stages.find((s: any) => s.id === branch.defaultTargetStageId);
+                    const fromStage = experiment.stages.find((s) => s.id === branch.fromStageId);
+                    const defaultTargetStage = experiment.stages.find((s) => s.id === branch.defaultTargetStageId);
                     
                     return (
                       <div key={branch.id} className="px-6 py-4">
@@ -332,8 +430,8 @@ export default function ExperimentDetailsPage() {
                             <div className="mt-3">
                               <div className="text-xs text-gray-500 mb-1">Conditions:</div>
                               <div className="space-y-1">
-                                {branch.conditions.map((condition: any, index: number) => {
-                                  const targetStage = experiment.stages.find((s: any) => s.id === condition.targetStageId);
+                                {branch.conditions.map((condition, index) => {
+                                  const targetStage = experiment.stages.find((s) => s.id === condition.targetStageId);
                                   
                                   return (
                                     <div key={index} className="p-2 bg-gray-50 rounded-md text-xs flex justify-between">
@@ -342,7 +440,7 @@ export default function ExperimentDetailsPage() {
                                         {condition.type === 'response' && condition.questionId && (
                                           <span> (Question: {condition.questionId})</span>
                                         )}
-                                        {condition.type === 'random' && (
+                                        {condition.type === 'random' && condition.probability !== undefined && (
                                           <span> ({condition.probability}% chance)</span>
                                         )}
                                       </div>
@@ -381,7 +479,7 @@ export default function ExperimentDetailsPage() {
               
               {experiment.userGroups && experiment.userGroups.length > 0 ? (
                 <div className="divide-y divide-gray-100">
-                  {experiment.userGroups.map((group: any) => (
+                  {experiment.userGroups.map((group) => (
                     <div key={group.userGroupId} className="px-6 py-4">
                       <div className="flex justify-between items-center">
                         <div>
@@ -412,7 +510,7 @@ export default function ExperimentDetailsPage() {
                 </div>
                 <div className="px-6 py-4">
                   {(() => {
-                    const startStage = experiment.stages.find((s: any) => s.id === experiment.startStageId);
+                    const startStage = experiment.stages.find((s) => s.id === experiment.startStageId);
                     return startStage ? (
                       <div className="flex items-center">
                         <div className="flex-shrink-0">

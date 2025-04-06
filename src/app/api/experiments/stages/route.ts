@@ -255,7 +255,23 @@ export async function DELETE(request: NextRequest) {
 }
 
 // Helper function to validate stage data based on type
-function validateStageData(stage: any) {
+function validateStageData(stage: {
+  type: string;
+  title?: string;
+  description?: string;
+  durationSeconds?: number;
+  content?: string;
+  format?: string;
+  scenarioId?: string;
+  questions?: Array<{
+    id?: string;
+    text?: string;
+    type?: string;
+    options?: string[];
+  }>;
+  message?: string;
+  [key: string]: any;
+}) {
   const { type, title, description, durationSeconds } = stage;
   
   // Common validations
