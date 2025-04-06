@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import connectDB from '@/lib/db';
+import mongoose from 'mongoose';
 import User from '@/models/User';
 import Experiment from '@/models/Experiment';
 import Scenario from '@/models/Scenario';
@@ -74,15 +75,15 @@ export async function GET() {
     // Format experiments for display
     const formattedExperiments = await Promise.all(recentExperiments.map(async (experiment) => {
       // Count total participants assigned to this experiment
-      const userGroupIds = experiment.userGroups.map(group => group.userGroupId);
+      const userGroupIds = experiment.userGroups.map((group: { userGroupId: mongoose.Types.ObjectId }) => group.userGroupId);
       const userGroupsData = await UserGroup.find(
         { _id: { $in: userGroupIds } },
-        { name: 1, participants: 1 }
+        { name: 1, users: 1 }
       );
       
       // Calculate total participants
       const totalParticipants = userGroupsData.reduce(
-        (sum, group) => sum + (group.participants?.length || 0), 
+        (sum, group: any) => sum + (group.users?.length || 0), 
         0
       );
       
