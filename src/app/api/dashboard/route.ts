@@ -82,6 +82,7 @@ export async function GET() {
       );
       
       // Calculate total participants
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const totalParticipants = userGroupsData.reduce(
         (sum, group: any) => sum + (group.users?.length || 0), 
         0
