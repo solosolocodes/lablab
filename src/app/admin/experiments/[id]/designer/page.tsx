@@ -449,7 +449,7 @@ export default function ExperimentDesignerPage() {
       
       // Check user groups for invalid maxParticipants
       if (experiment.userGroups) {
-        experiment.userGroups.forEach((group, index) => {
+        experiment.userGroups.forEach(group => {
           // If maxParticipants is defined but less than 1, flag it
           if (group.maxParticipants !== undefined && Number(group.maxParticipants) < 1) {
             // Fix it automatically
