@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Scenario from '@/models/Scenario';
-import Wallet from '@/models/Wallet';
+import Wallet, { IAsset } from '@/models/Wallet';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     
     // Format price data for the UI
     // Create a structure with assets as columns and rounds as rows
-    const assets = wallet.assets.map(asset => ({
+    const assets = wallet.assets.map((asset: IAsset) => ({
       id: asset._id,
       name: asset.name,
       symbol: asset.symbol,
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     
     // Get price data for each asset
     const priceData = scenario.assetPrices.map(assetPrice => {
-      const asset = wallet.assets.find(a => a._id.toString() === assetPrice.assetId.toString());
+      const asset = wallet.assets.find((a: IAsset) => a._id && a._id.toString() === assetPrice.assetId.toString());
       return {
         assetId: assetPrice.assetId,
         symbol: assetPrice.symbol,
