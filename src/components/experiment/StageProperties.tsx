@@ -321,7 +321,9 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                             className="text-purple-600 hover:text-purple-800 text-xs"
                             onClick={() => {
                               const updatedQuestions = [...questions];
-                              const options = updatedQuestions[index].options || [];
+                              const options = Array.isArray(updatedQuestions[index].options) 
+                                ? updatedQuestions[index].options 
+                                : [];
                               updatedQuestions[index].options = [...options, `Option ${options.length + 1}`];
                               handleStageDataChange('questions', updatedQuestions);
                             }}
@@ -329,7 +331,7 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
                             + Add
                           </button>
                         </div>
-                        {(question.options || []).map((option: string, optionIndex: number) => (
+                        {(Array.isArray(question.options) ? question.options : []).map((option: string, optionIndex: number) => (
                           <div key={optionIndex} className="flex items-center mb-1">
                             <input
                               type="text"
