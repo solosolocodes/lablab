@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 import { IUser } from './User';
 
-export interface IAsset {
+export interface IAsset extends mongoose.Document {
+  _id?: mongoose.Types.ObjectId;
   type: 'share' | 'cryptocurrency' | 'fiat';
   name: string;
   symbol: string;

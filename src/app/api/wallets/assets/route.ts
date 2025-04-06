@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import Wallet from '@/models/Wallet';
+import Wallet, { IAsset } from '@/models/Wallet';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import mongoose from 'mongoose';
 
 // Add an asset to a wallet
 export async function POST(request: NextRequest) {
@@ -121,7 +122,7 @@ export async function PUT(request: NextRequest) {
     }
     
     // Find the index of the asset to update
-    const assetIndex = wallet.assets.findIndex(a => a._id.toString() === assetId);
+    const assetIndex = wallet.assets.findIndex((a: any) => a._id && a._id.toString() === assetId);
     if (assetIndex === -1) {
       return NextResponse.json(
         { message: 'Asset not found in wallet' },
@@ -206,7 +207,7 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Find the index of the asset to remove
-    const assetIndex = wallet.assets.findIndex(a => a._id.toString() === assetId);
+    const assetIndex = wallet.assets.findIndex((a: any) => a._id && a._id.toString() === assetId);
     if (assetIndex === -1) {
       return NextResponse.json(
         { message: 'Asset not found in wallet' },
