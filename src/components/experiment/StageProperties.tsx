@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Node } from '@reactflow/core';
 import { toast } from 'react-hot-toast';
 import { 
@@ -10,6 +10,18 @@ import {
   SurveyStageData,
   BreakStageData
 } from './StageNodes';
+
+// Custom hook to handle duration calculation
+function useCalculatedDuration(
+  rounds: number, 
+  roundDuration: number, 
+  onChange: (field: string, value: number) => void
+) {
+  useEffect(() => {
+    const calculatedDuration = rounds * roundDuration;
+    onChange('durationSeconds', calculatedDuration);
+  }, [rounds, roundDuration, onChange]);
+}
 
 type StagePropertiesProps = {
   selectedNode: Node<NodeData> | null;
@@ -227,6 +239,9 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
         const roundDuration = Number(scenarioData?.roundDuration || 60);
         const calculatedDuration = rounds * roundDuration;
         
+        // Use our custom hook to update the duration
+        useCalculatedDuration(rounds, roundDuration, handleStageDataChange);
+        
         return (
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -281,15 +296,6 @@ export const StageProperties: React.FC<StagePropertiesProps> = ({
               <p className="text-xs text-gray-500 mt-1">
                 Calculated as {rounds} rounds × {roundDuration} seconds per round
               </p>
-              
-              {/* Update the actual durationSeconds with the calculated value */}
-              {/* We call this as a side effect in the render */}
-              <div className="hidden">
-                {React.useMemo(() => {
-                  handleStageDataChange('durationSeconds', calculatedDuration);
-                  return null;
-                }, [calculatedDuration])}
-              </div>
             </div>
             
             <div className="mt-5">
