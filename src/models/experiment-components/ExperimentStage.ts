@@ -47,11 +47,6 @@ export type IStage = IInstructionsStage | IScenarioStage | ISurveyStage | IBreak
 // Base schema for all stages
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const StageBaseSchema: Record<string, any> = {
-  type: {
-    type: String,
-    required: [true, 'Stage type is required'],
-    enum: ['instructions', 'scenario', 'survey', 'break'],
-  },
   title: {
     type: String,
     required: [true, 'Stage title is required'],

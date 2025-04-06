@@ -64,6 +64,30 @@ const StageSchema = new mongoose.Schema({
     required: [true, 'Stage type is required'],
     enum: ['instructions', 'scenario', 'survey', 'break'],
   },
+  title: {
+    type: String,
+    required: [true, 'Stage title is required'],
+    trim: true,
+  },
+  description: {
+    type: String,
+    required: [true, 'Stage description is required'],
+    trim: true,
+  },
+  durationSeconds: {
+    type: Number,
+    required: [true, 'Duration is required'],
+    min: [0, 'Duration cannot be negative'],
+  },
+  required: {
+    type: Boolean,
+    default: true,
+  },
+  order: {
+    type: Number,
+    required: [true, 'Order is required'],
+    min: [0, 'Order must be a non-negative number'],
+  },
 }, { discriminatorKey: 'type' });
 
 const ExperimentSchema = new mongoose.Schema<IExperiment>({
