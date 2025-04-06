@@ -3,11 +3,48 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@reactflow/core';
 
+type StageDataBase = {
+  durationSeconds?: number;
+  required?: boolean;
+  order?: number;
+};
+
+type InstructionsStageData = StageDataBase & {
+  content?: string;
+  format?: 'text' | 'markdown' | 'html';
+};
+
+type ScenarioStageData = StageDataBase & {
+  scenarioId?: string | number;
+};
+
+type SurveyQuestion = {
+  id: string;
+  text: string;
+  type: 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
+  required: boolean;
+  options?: string[];
+};
+
+type SurveyStageData = StageDataBase & {
+  questions?: SurveyQuestion[];
+};
+
+type BreakStageData = StageDataBase & {
+  message?: string;
+};
+
+type StageData = 
+  | InstructionsStageData
+  | ScenarioStageData
+  | SurveyStageData
+  | BreakStageData;
+
 export type NodeData = {
   label: string;
   description?: string;
   type: 'instructions' | 'scenario' | 'survey' | 'break';
-  stageData?: Record<string, unknown>;
+  stageData?: StageData;
 };
 
 // Base Node layout and styling for all stage types
@@ -57,6 +94,23 @@ const BaseStageNode = ({
   );
 };
 
+// Type guards
+function isInstructionsData(data: StageData | undefined): data is InstructionsStageData {
+  return data !== undefined;
+}
+
+function isScenarioData(data: StageData | undefined): data is ScenarioStageData {
+  return data !== undefined;
+}
+
+function isSurveyData(data: StageData | undefined): data is SurveyStageData {
+  return data !== undefined && 'questions' in data;
+}
+
+function isBreakData(data: StageData | undefined): data is BreakStageData {
+  return data !== undefined;
+}
+
 // Instructions Stage Node
 const InstructionsNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
   return (
@@ -75,6 +129,9 @@ export const InstructionsNode = memo(InstructionsNodeComponent);
 
 // Scenario Stage Node
 const ScenarioNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
+  const stageData = isScenarioData(data.stageData) ? data.stageData : undefined;
+  const scenarioId = stageData?.scenarioId;
+  
   return (
     <BaseStageNode data={data} selected={selected}>
       <div className="flex items-center text-xs text-blue-600">
@@ -82,7 +139,11 @@ const ScenarioNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
         </svg>
         <span>Scenario</span>
-        {data.stageData?.scenarioId && <span className="ml-1 text-gray-500">#{typeof data.stageData.scenarioId === 'string' ? data.stageData.scenarioId.substring(0, 4) : String(data.stageData.scenarioId).substring(0, 4)}</span>}
+        {scenarioId && (
+          <span className="ml-1 text-gray-500">
+            #{String(scenarioId).substring(0, 4)}
+          </span>
+        )}
       </div>
     </BaseStageNode>
   );
@@ -92,7 +153,8 @@ export const ScenarioNode = memo(ScenarioNodeComponent);
 
 // Survey Stage Node
 const SurveyNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
-  const questionCount = Array.isArray(data.stageData?.questions) ? data.stageData.questions.length : 0;
+  const stageData = isSurveyData(data.stageData) ? data.stageData : undefined;
+  const questionCount = stageData?.questions?.length || 0;
   
   return (
     <BaseStageNode data={data} selected={selected}>
@@ -111,7 +173,8 @@ export const SurveyNode = memo(SurveyNodeComponent);
 
 // Break Stage Node
 const BreakNodeComponent = ({ data, selected }: NodeProps<NodeData>) => {
-  const duration = typeof data.stageData?.durationSeconds === 'number' ? data.stageData.durationSeconds : 0;
+  const stageData = isBreakData(data.stageData) ? data.stageData : undefined;
+  const duration = stageData?.durationSeconds || 0;
   
   return (
     <BaseStageNode data={data} selected={selected}>
