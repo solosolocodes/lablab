@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import { IUser } from './User';
 
 export interface IAsset {
   _id?: mongoose.Types.ObjectId;

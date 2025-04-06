@@ -22,7 +22,6 @@ export async function GET(request: NextRequest) {
     
     // Get query parameters
     const { searchParams } = new URL(request.url);
-    const ownerId = searchParams.get('ownerId');
     const scenarioId = searchParams.get('scenarioId');
     
     // Create filter based on query parameters

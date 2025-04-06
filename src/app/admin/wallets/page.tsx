@@ -38,7 +38,7 @@ export default function WalletsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  // State for users - no longer needed since we removed owner requirement
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'create' | 'edit'>('create');
@@ -72,14 +72,7 @@ export default function WalletsPage() {
         // Create loading state
         toast.loading('Loading data...', { id: 'loading-data' });
         
-        // Fetch users
-        const usersResponse = await fetch('/api/users');
-        if (!usersResponse.ok) {
-          throw new Error('Failed to fetch users');
-        }
-        
-        const users = await usersResponse.json();
-        setAllUsers(users);
+        // No longer need to fetch users since we removed owner requirement
         
         // Fetch wallets
         const walletsResponse = await fetch('/api/wallets');
