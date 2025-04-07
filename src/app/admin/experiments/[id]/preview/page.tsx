@@ -363,9 +363,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
   
-  // Calculate progress percentage
-  const progressPercentage = ((currentRound - 1) * 100 / totalRounds) + 
-    (roundTimeRemaining === 0 ? 100 : (1 - roundTimeRemaining / roundDuration) * 100 / totalRounds);
+  // Progress calculations removed
   
   // Loading state
   if (isLoading) {
@@ -494,13 +492,18 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
             </div>
           </div>
           
-          {/* Overall Progress - Text only indicator */}
+          {/* Rounds indicator - No progress percentage */}
           <div className="mt-4 md:mt-0 w-full md:w-48">
             <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm text-center">
-              <p className="font-medium text-gray-700 mb-1">Progress</p>
-              <p className="font-bold text-xl text-blue-700">{progressPercentage.toFixed(0)}%</p>
-              <p className="text-xs text-gray-500 mt-1">
-                Round {currentRound}/{totalRounds}
+              <p className="font-medium text-blue-700">
+                Round {currentRound} of {totalRounds}
+              </p>
+              <p className="text-xs text-gray-500 mt-2">
+                {totalRounds - currentRound > 0 ? (
+                  <span>{totalRounds - currentRound} {totalRounds - currentRound === 1 ? 'round' : 'rounds'} remaining</span>
+                ) : (
+                  <span className="text-green-600 font-medium">Final round</span>
+                )}
               </p>
             </div>
           </div>
