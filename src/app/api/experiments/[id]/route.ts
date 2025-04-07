@@ -127,7 +127,7 @@ export async function OPTIONS(_: NextRequest) {
 // Error type for database operations
 type DatabaseError = 
   | mongoose.Error.MongooseServerSelectionError 
-  | mongoose.Error.DisconnectedError 
+  | mongoose.Error
   | mongoose.Error.CastError 
   | Error;
 
@@ -153,8 +153,8 @@ async function retryOperation<T>(
       // Only retry for connection/timeout type errors
       if (
         error instanceof mongoose.Error.MongooseServerSelectionError ||
-        error instanceof mongoose.Error.DisconnectedError ||
         error instanceof mongoose.Error.CastError ||
+        (error instanceof mongoose.Error && error.name === 'DisconnectedError') ||
         (error instanceof Error && error.name === 'MongoError' && 
          (error.message.includes('timeout') || error.message.includes('connection')))
       ) {
