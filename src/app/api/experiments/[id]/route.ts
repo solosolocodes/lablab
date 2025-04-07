@@ -124,31 +124,6 @@ const mockExperimentData = {
   lastEditedAt: new Date().toISOString()
 };
 
-// Define user group interface
-interface UserGroupData {
-  userGroupId: string;
-  condition: string;
-}
-
-// Define stage data interface
-interface StageData {
-  id: string;
-  type: string;
-  title: string;
-  description: string;
-  durationSeconds: number;
-  required: boolean;
-  order: number;
-  content?: string;
-  format?: string;
-  scenarioId?: string;
-  rounds?: number;
-  roundDuration?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  questions?: Array<any>;
-  message?: string;
-}
-
 // Get a specific experiment by ID
 export async function GET(request: NextRequest) {
   try {
@@ -373,12 +348,6 @@ export async function PUT(request: NextRequest) {
     
     // Handle userGroups
     if (userGroups) {
-      // Define interface for userGroup
-      interface UserGroupInput {
-        userGroupId: string;
-        condition: string;
-      }
-      
       // Use already imported mongoose
       // Log userGroups for debugging
       console.log('Processing userGroups:', JSON.stringify(userGroups, null, 2));
