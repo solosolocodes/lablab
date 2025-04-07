@@ -98,157 +98,181 @@ export default function ExperimentDesignerPage() {
     }
   }, [session, status, router]);
 
-  // Fetch experiment data
-  useEffect(() => {
-    // Types for API response with required fields
-    interface ExperimentResponse {
-      id: string;
-      name: string;
-      description: string;
-      status: string;
-      stages: Stage[];
-      userGroups: Array<{
-        userGroupId: string;
-        name?: string;
-        condition: string;
-        maxParticipants?: number;
-      }>;
-      createdAt: string;
-      updatedAt: string;
-      lastEditedAt: string;
-      [key: string]: unknown;
-    }
-    
-    // Type for scenario data
-    interface ScenarioResponse {
-      id: string;
-      name: string;
-      [key: string]: unknown;
-    }
-    
-    // Type for user group data
-    interface UserGroupResponse {
-      id: string;
-      name: string;
-      [key: string]: unknown;
-    }
-    
-    // Generic API response type for other endpoints
-    interface ApiResponse {
-      [key: string]: unknown;
-    }
-    
-    // Types for error tracking
-    interface ApiError extends Error {
-      status?: number;
-      statusText?: string;
-      data?: unknown;
-    }
-    
-    // Common fetchWithRetry function for all API requests
-    const fetchWithRetry = async <T = ApiResponse>(url: string, options: RequestInit = {}, maxRetries = 3, timeout = 10000): Promise<T> => {
-      // Set default headers if not provided
-      const fetchOptions = {
-        ...options,
-        headers: {
-          'Accept': 'application/json',
-          ...(options.headers || {})
-        }
-      };
-      
-      // Implement exponential backoff retry
-      let retries = 0;
-      let lastError: ApiError | null = null;
-      
-      while (retries <= maxRetries) {
-        try {
-          const controller = new AbortController();
-          // Add signal to options, merging with existing signal if present
-          const signal = controller.signal;
-          const timeoutId = setTimeout(() => controller.abort(), timeout);
-          
-          console.log(`API Request (attempt ${retries + 1}/${maxRetries + 1}): ${url}`);
-          
-          const response = await fetch(url, {
-            ...fetchOptions,
-            signal,
-            cache: 'no-store'
-          });
-          
-          clearTimeout(timeoutId);
-          
-          // Get response as text first for better error handling
-          const responseText = await response.text();
-          console.log(`Response from ${url} (${responseText.length} bytes)`);
-          
-          // No response body
-          if (!responseText || !responseText.trim()) {
-            throw new Error('Empty response from server');
-          }
-          
-          // Parse JSON
-          let data: unknown;
-          try {
-            data = JSON.parse(responseText);
-          } catch (jsonError) {
-            console.error('JSON parse error:', jsonError);
-            throw new Error(`Invalid JSON response from server: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
-          }
-          
-          // Handle non-OK responses
-          if (!response.ok) {
-            // Check if data has a message property
-            const message = typeof data === 'object' && data !== null && 'message' in data
-              ? String(data.message)
-              : `Server error (${response.status})`;
-              
-            const error = new Error(message) as ApiError;
-            // Add extra properties to the error
-            error.status = response.status;
-            error.statusText = response.statusText;
-            error.data = data;
-            throw error;
-          }
-          
-          return data as T;
-        } catch (error) {
-          // Create a properly typed error object
-          const typedError: ApiError = error instanceof Error 
-            ? error as ApiError 
-            : new Error(String(error));
-          
-          lastError = typedError;
-          
-          // Don't retry aborted requests (timeouts) or certain HTTP status codes
-          if (
-            typedError.name === 'AbortError' || 
-            (typedError.status !== undefined && typedError.status >= 400 && typedError.status < 500)
-          ) {
-            console.error(`Request to ${url} failed with non-retryable error:`, typedError);
-            throw typedError;
-          }
-          
-          // If we've reached max retries, throw the last error
-          if (retries >= maxRetries) {
-            console.error(`Request to ${url} failed after ${maxRetries + 1} attempts:`, typedError);
-            throw typedError;
-          }
-          
-          // Exponential backoff with jitter
-          const delay = Math.min(1000 * (2 ** retries) + Math.random() * 1000, 10000);
-          console.log(`Retrying request to ${url} in ${delay}ms... (${retries + 1}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          retries++;
-        }
+  // Common types and functions outside of useEffect
+  // Types for API response with required fields
+  interface ExperimentResponse {
+    id: string;
+    name: string;
+    description: string;
+    status: string;
+    stages: Stage[];
+    userGroups: Array<{
+      userGroupId: string;
+      name?: string;
+      condition: string;
+      maxParticipants?: number;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+    lastEditedAt: string;
+    [key: string]: unknown;
+  }
+  
+  // Type for scenario data
+  interface ScenarioResponse {
+    id: string;
+    name: string;
+    [key: string]: unknown;
+  }
+  
+  // Type for user group data
+  interface UserGroupResponse {
+    id: string;
+    name: string;
+    [key: string]: unknown;
+  }
+  
+  // Generic API response type for other endpoints
+  interface ApiResponse {
+    [key: string]: unknown;
+  }
+  
+  // Types for error tracking
+  interface ApiError extends Error {
+    status?: number;
+    statusText?: string;
+    data?: unknown;
+  }
+  
+  // Common fetchWithRetry function for all API requests
+  const fetchWithRetry = async <T = ApiResponse>(url: string, options: RequestInit = {}, maxRetries = 3, timeout = 10000): Promise<T> => {
+    // Set default headers if not provided
+    const fetchOptions = {
+      ...options,
+      headers: {
+        'Accept': 'application/json',
+        ...(options.headers || {})
       }
-      
-      // Should never get here, but TypeScript needs it
-      if (lastError) {
-        throw lastError;
-      }
-      throw new Error(`Unknown error fetching ${url}`);
     };
     
+    // Implement exponential backoff retry
+    let retries = 0;
+    let lastError: ApiError | null = null;
+    
+    while (retries <= maxRetries) {
+      try {
+        const controller = new AbortController();
+        // Add signal to options, merging with existing signal if present
+        const signal = controller.signal;
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        
+        console.log(`API Request (attempt ${retries + 1}/${maxRetries + 1}): ${url}`);
+        
+        const response = await fetch(url, {
+          ...fetchOptions,
+          signal,
+          cache: 'no-store'
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Get response as text first for better error handling
+        const responseText = await response.text();
+        console.log(`Response from ${url} (${responseText.length} bytes)`);
+        
+        // No response body
+        if (!responseText || !responseText.trim()) {
+          throw new Error('Empty response from server');
+        }
+        
+        // Parse JSON
+        let data: unknown;
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonError) {
+          console.error('JSON parse error:', jsonError);
+          throw new Error(`Invalid JSON response from server: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
+        }
+        
+        // Handle non-OK responses
+        if (!response.ok) {
+          // Check if data has a message property
+          const message = typeof data === 'object' && data !== null && 'message' in data
+            ? String(data.message)
+            : `Server error (${response.status})`;
+            
+          const error = new Error(message) as ApiError;
+          // Add extra properties to the error
+          error.status = response.status;
+          error.statusText = response.statusText;
+          error.data = data;
+          throw error;
+        }
+        
+        return data as T;
+      } catch (error) {
+        // Create a properly typed error object
+        const typedError: ApiError = error instanceof Error 
+          ? error as ApiError 
+          : new Error(String(error));
+        
+        lastError = typedError;
+        
+        // Don't retry aborted requests (timeouts) or certain HTTP status codes
+        if (
+          typedError.name === 'AbortError' || 
+          (typedError.status !== undefined && typedError.status >= 400 && typedError.status < 500)
+        ) {
+          console.error(`Request to ${url} failed with non-retryable error:`, typedError);
+          throw typedError;
+        }
+        
+        // If we've reached max retries, throw the last error
+        if (retries >= maxRetries) {
+          console.error(`Request to ${url} failed after ${maxRetries + 1} attempts:`, typedError);
+          throw typedError;
+        }
+        
+        // Exponential backoff with jitter
+        const delay = Math.min(1000 * (2 ** retries) + Math.random() * 1000, 10000);
+        console.log(`Retrying request to ${url} in ${delay}ms... (${retries + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        retries++;
+      }
+    }
+    
+    // Should never get here, but TypeScript needs it
+    if (lastError) {
+      throw lastError;
+    }
+    throw new Error(`Unknown error fetching ${url}`);
+  };
+
+  // Function to fetch a specific scenario's details
+  const fetchScenarioDetails = async (scenarioId: string) => {
+    if (!scenarioId) return null;
+    
+    try {
+      const data = await fetchWithRetry<{
+        id: string;
+        name: string;
+        description: string;
+        rounds: number;
+        roundDuration: number;
+      }>(`/api/scenarios/${scenarioId}`, {
+        method: 'GET'
+      }, 2, 8000); // 2 retries, 8 second timeout
+      
+      return data;
+    } catch (error) {
+      console.error(`Error fetching scenario details for ID ${scenarioId}:`, error);
+      toast.error('Failed to load scenario details');
+      return null;
+    }
+  };
+
+  // Fetch experiment data
+  useEffect(() => {
     const fetchExperiment = async () => {
       if (!experimentId || status !== 'authenticated') return;
       
@@ -325,30 +349,6 @@ export default function ExperimentDesignerPage() {
         console.error('Error fetching scenarios:', error);
         // Don't show toast for this secondary data
         // We can still render the page without scenarios
-        return null;
-      }
-    };
-    
-    // Function to fetch a specific scenario's details - used in handleStageFormChange
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const fetchScenarioDetails = async (scenarioId: string) => {
-      if (!scenarioId) return null;
-      
-      try {
-        const data = await fetchWithRetry<{
-          id: string;
-          name: string;
-          description: string;
-          rounds: number;
-          roundDuration: number;
-        }>(`/api/scenarios/${scenarioId}`, {
-          method: 'GET'
-        }, 2, 8000); // 2 retries, 8 second timeout
-        
-        return data;
-      } catch (error) {
-        console.error(`Error fetching scenario details for ID ${scenarioId}:`, error);
-        toast.error('Failed to load scenario details');
         return null;
       }
     };

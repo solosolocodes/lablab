@@ -6,7 +6,14 @@ import { toast } from 'react-hot-toast';
 export default function TestScenarioFetch() {
   const [scenarioId, setScenarioId] = useState('');
   const [loading, setLoading] = useState(false);
-  const [scenarioDetails, setScenarioDetails] = useState<Record<string, unknown> | null>(null);
+  const [scenarioDetails, setScenarioDetails] = useState<{
+    id: string;
+    name: string;
+    description: string;
+    rounds: number;
+    roundDuration: number;
+    [key: string]: unknown;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Function to fetch scenario details - similar to what we have in the experiment designer
