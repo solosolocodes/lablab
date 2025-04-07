@@ -191,14 +191,19 @@ export async function GET(request: NextRequest) {
           try {
             // Define the typed interface for our formatted experiment
             interface FormattedExperiment {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               id: any;
               name: string;
               description: string;
               status: string;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               createdBy: any;
               userGroups: Array<{userGroupId: string, condition: string}>;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               stages: any[];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               branches: any[];
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               startStageId: any;
               createdAt: string;
               updatedAt: string;
@@ -356,14 +361,19 @@ export async function GET(request: NextRequest) {
       
       // Define the typed interface for our formatted experiment
       interface FormattedExperiment {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         id: any;
         name: string;
         description: string;
         status: string;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         createdBy: any;
         userGroups: Array<{userGroupId: string, condition: string}>;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         stages: any[];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         branches: any[];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         startStageId: any;
         createdAt: string;
         updatedAt: string;
