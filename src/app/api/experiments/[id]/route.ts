@@ -142,15 +142,24 @@ export async function GET(request: NextRequest) {
       );
     }
     
+    // Log the experiment ID to help with debugging
+    console.log('API: Analyzing experiment ID:', {
+      experimentId, 
+      length: experimentId.length,
+      containsChars: /[a-zA-Z0-9]/.test(experimentId),
+      firstChar: experimentId.charAt(0),
+      lastChar: experimentId.charAt(experimentId.length - 1)
+    });
+    
     // Try to validate if it's a valid MongoDB ObjectId
     try {
       const mongoose = (await import('mongoose')).default;
       if (!mongoose.Types.ObjectId.isValid(experimentId)) {
         console.error('API: Invalid MongoDB ObjectId format:', experimentId);
-        return NextResponse.json(
-          { message: 'Invalid experiment ID format' },
-          { status: 400 }
-        );
+        // Instead of returning error, we'll let it continue and try to find by friendly ID
+        console.log('API: Continuing anyway to try finding experiment by non-ObjectId format');
+      } else {
+        console.log('API: Experiment ID appears to be a valid ObjectId format');
       }
     } catch (err) {
       console.error('API: Error validating ObjectId:', err);
@@ -327,22 +336,64 @@ export async function GET(request: NextRequest) {
     // Find the experiment
     let experiment;
     try {
+      // Try to find the experiment by ID first
+      console.log(`API: Attempting to find experiment by ID: ${experimentId}`);
       experiment = await Experiment.findById(experimentId)
         .populate('userGroups.userGroupId', 'name description')
         .populate('createdBy', 'name email');
       
       if (!experiment) {
-        console.log(`API: Experiment with ID ${experimentId} not found`);
+        console.log(`API: Experiment with ID ${experimentId} not found via findById, trying alternative queries`);
+        
+        // Try to find by string field if it's not a valid ObjectId
+        try {
+          console.log(`API: Trying to query experiments collection directly`);
+          // Print the first few experiments to see their structure
+          const firstFewExperiments = await Experiment.find().limit(3);
+          console.log('API: First few experiments in database:', 
+            firstFewExperiments.map(exp => ({ 
+              id: exp._id, 
+              name: exp.name,
+              hasUserGroups: Array.isArray(exp.userGroups)
+            }))
+          );
+          
+          // Try a different approach - query by name containing experimentId
+          // This is just to help diagnose the problem
+          const experimentsByName = await Experiment.find({ 
+            name: { $regex: new RegExp(experimentId.slice(0, 5), 'i') } 
+          }).limit(5);
+          
+          if (experimentsByName.length > 0) {
+            console.log(`API: Found ${experimentsByName.length} experiments with similar names:`, 
+              experimentsByName.map(exp => ({ id: exp._id, name: exp.name }))
+            );
+          } else {
+            console.log('API: No experiments found with similar name pattern');
+          }
+          
+        } catch (queryError) {
+          console.error('API: Error during alternative experiment queries:', queryError);
+        }
+        
+        // Return not found
         return NextResponse.json(
-          { message: 'Experiment not found' },
+          { 
+            message: 'Experiment not found', 
+            details: 'The experiment ID provided does not match any records in the database'
+          },
           { status: 404 }
         );
       }
     } catch (dbError) {
       console.error(`API: Error finding experiment with ID ${experimentId}:`, dbError);
       return NextResponse.json(
-        { message: 'Invalid experiment ID or database error', error: dbError instanceof Error ? dbError.message : String(dbError) },
-        { status: 400 }
+        { 
+          message: 'Database error while finding experiment', 
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+          details: 'There was an error querying the database. The experiment ID may be invalid or the database connection may have issues.'
+        },
+        { status: 500 }
       );
     }
     
