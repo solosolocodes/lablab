@@ -127,19 +127,19 @@ export async function GET(request: NextRequest) {
   try {
     console.log(`API: GET experiment request received for ${request.nextUrl.pathname}`);
     
+    // Get experiment ID
+    const experimentId = getExperimentId(request);
+    console.log(`API: Experiment ID: ${experimentId}`);
+    
     // Check if the request is for preview mode
     const isPreviewMode = request.nextUrl.searchParams.has('preview');
     console.log(`API: Preview mode: ${isPreviewMode}`);
-    
-    const experimentId = getExperimentId(request);
     
     // For preview mode, try to get real data first, fallback to mock
     if (isPreviewMode) {
       try {
         console.log('API: Connecting to database for preview mode...');
         await connectDB();
-        
-        console.log(`API: Looking up experiment with ID: ${experimentId}`);
         
         // Find the experiment
         const experiment = await Experiment.findById(experimentId)
@@ -203,6 +203,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(mockExperimentData);
     }
     
+    // Non-preview mode - regular admin access flow
     const session = await getServerSession(authOptions);
     
     // Check authentication for non-preview requests
@@ -216,9 +217,6 @@ export async function GET(request: NextRequest) {
     
     console.log('API: Connecting to database...');
     await connectDB();
-    
-    const experimentId = getExperimentId(request);
-    console.log(`API: Looking up experiment with ID: ${experimentId}`);
     
     // Find the experiment
     const experiment = await Experiment.findById(experimentId)
