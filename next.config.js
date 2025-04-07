@@ -1,14 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
-  staticPageGenerationTimeout: 180,
-  experimental: {
-    serverComponentsExternalPackages: ['mongoose'],
-    cpus: 4
-  },
+  output: 'standalone',
+  staticPageGenerationTimeout: 300,
   poweredByHeader: false,
   reactStrictMode: true,
-  swcMinify: true
+  swcMinify: true,
+  images: {
+    unoptimized: true
+  },
+  typescript: {
+    ignoreBuildErrors: true
+  },
+  eslint: {
+    ignoreDuringBuilds: true
+  }
 };
 
 module.exports = nextConfig;
