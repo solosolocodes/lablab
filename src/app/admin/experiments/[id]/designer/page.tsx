@@ -1430,14 +1430,15 @@ export default function ExperimentDesignerPage() {
                         + Add Question
                       </button>
                       
-                      <div className="mt-2 space-y-2 max-h-[300px] overflow-y-auto">
+                      <div className="mt-2 space-y-4 max-h-[400px] overflow-y-auto">
                         {((stageFormData as Partial<SurveyStage>).questions || []).map((question, index) => (
-                          <div key={question.id} className="border border-gray-200 rounded-md p-2">
+                          <div key={question.id} className="border border-gray-200 rounded-md p-3">
                             <div className="flex justify-between items-start">
                               <input
                                 type="text"
-                                className="flex-1 px-2 py-1 text-xs border rounded"
+                                className="flex-1 px-2 py-1 text-sm border rounded"
                                 value={question.text}
+                                placeholder="Enter question text"
                                 onChange={(e) => {
                                   const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
                                   questions[index].text = e.target.value;
@@ -1458,13 +1459,20 @@ export default function ExperimentDesignerPage() {
                               </button>
                             </div>
                             
-                            <div className="mt-1 flex items-center space-x-2">
+                            <div className="mt-2 flex items-center space-x-2">
                               <select
-                                className="px-2 py-1 text-xs border rounded"
+                                className="px-2 py-1 text-sm border rounded"
                                 value={question.type}
                                 onChange={(e) => {
                                   const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
-                                  questions[index].type = e.target.value as 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
+                                  const newType = e.target.value as 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
+                                  questions[index].type = newType;
+                                  
+                                  // Initialize options array if switching to multipleChoice or checkboxes
+                                  if ((newType === 'multipleChoice' || newType === 'checkboxes') && !questions[index].options) {
+                                    questions[index].options = ['Option 1', 'Option 2', 'Option 3'];
+                                  }
+                                  
                                   handleStageFormChange('questions', questions);
                                 }}
                               >
@@ -1474,7 +1482,7 @@ export default function ExperimentDesignerPage() {
                                 <option value="checkboxes">Checkboxes</option>
                               </select>
                               
-                              <label className="text-xs flex items-center">
+                              <label className="text-sm flex items-center">
                                 <input
                                   type="checkbox"
                                   className="mr-1"
@@ -1488,8 +1496,94 @@ export default function ExperimentDesignerPage() {
                                 Required
                               </label>
                             </div>
+                            
+                            {/* Options for multiple choice or checkboxes */}
+                            {(question.type === 'multipleChoice' || question.type === 'checkboxes') && (
+                              <div className="mt-3 bg-gray-50 p-2 rounded-md">
+                                <div className="text-xs font-medium text-gray-700 mb-2">
+                                  {question.type === 'multipleChoice' ? 'Multiple Choice Options' : 'Checkbox Options'}
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  {(question.options || []).map((option, optionIndex) => (
+                                    <div key={optionIndex} className="flex items-center">
+                                      {question.type === 'multipleChoice' ? (
+                                        <span className="mr-2 w-4 h-4 flex-shrink-0">○</span>
+                                      ) : (
+                                        <span className="mr-2 w-4 h-4 flex-shrink-0">☐</span>
+                                      )}
+                                      <input
+                                        type="text"
+                                        className="flex-1 px-2 py-1 text-sm border rounded"
+                                        value={option}
+                                        onChange={(e) => {
+                                          const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
+                                          const options = [...(questions[index].options || [])];
+                                          options[optionIndex] = e.target.value;
+                                          questions[index].options = options;
+                                          handleStageFormChange('questions', questions);
+                                        }}
+                                      />
+                                      <button
+                                        className="ml-1 text-red-500 hover:text-red-700"
+                                        onClick={() => {
+                                          const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
+                                          const options = [...(questions[index].options || [])];
+                                          options.splice(optionIndex, 1);
+                                          questions[index].options = options;
+                                          handleStageFormChange('questions', questions);
+                                        }}
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                          <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  ))}
+                                  
+                                  <button
+                                    className="mt-1 w-full text-xs text-blue-600 hover:text-blue-800 py-1 bg-blue-50 hover:bg-blue-100 rounded"
+                                    onClick={() => {
+                                      const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
+                                      const options = [...(questions[index].options || [])];
+                                      options.push(`Option ${options.length + 1}`);
+                                      questions[index].options = options;
+                                      handleStageFormChange('questions', questions);
+                                    }}
+                                  >
+                                    + Add Option
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Rating specific settings */}
+                            {question.type === 'rating' && (
+                              <div className="mt-3 bg-gray-50 p-2 rounded-md">
+                                <div className="text-xs font-medium text-gray-700 mb-2">
+                                  Rating Scale Preview
+                                </div>
+                                <div className="flex justify-between items-center px-2">
+                                  <span>1</span>
+                                  <span>2</span>
+                                  <span>3</span>
+                                  <span>4</span>
+                                  <span>5</span>
+                                </div>
+                                <div className="flex justify-between items-center px-2 mt-1 text-xs text-gray-500">
+                                  <span>Poor</span>
+                                  <span className="ml-auto">Excellent</span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
+                        
+                        {((stageFormData as Partial<SurveyStage>).questions || []).length === 0 && (
+                          <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-md">
+                            No questions added yet. Click the "Add Question" button to get started.
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
