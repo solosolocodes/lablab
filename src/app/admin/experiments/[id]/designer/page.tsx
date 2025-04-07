@@ -383,8 +383,7 @@ export default function ExperimentDesignerPage() {
         {
           userGroupId,
           name: userGroup?.name,
-          condition: 'control',
-          maxParticipants: 0
+          condition: 'control'
         }
       ]
     };
@@ -787,16 +786,11 @@ export default function ExperimentDesignerPage() {
                         >
                           <div className="flex justify-between items-center">
                             <div>
-                              <span className="font-medium">{userGroup?.name || 'Unknown Group'}</span>
+                              <span className="font-medium">{userGroup?.name || group.userGroupId}</span>
                               <div className="flex space-x-2 mt-1">
                                 <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">
                                   Condition: {group.condition}
                                 </span>
-                                {(group.maxParticipants !== undefined && group.maxParticipants > 0) && (
-                                  <span className="text-xs px-2 py-0.5 bg-green-50 text-green-600 rounded-full">
-                                    Max: {group.maxParticipants}
-                                  </span>
-                                )}
                               </div>
                             </div>
                             <button 
