@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 type Stage = {
   id: string;
@@ -83,7 +83,7 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Go to next stage
-  const goToNextStage = () => {
+  const goToNextStage = useCallback(() => {
     if (!experiment) return;
     
     if (currentStageIndex < experiment.stages.length - 1) {
@@ -92,7 +92,7 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       setTimeRemaining(experiment.stages[nextIndex].durationSeconds);
       setTimerActive(true);
     }
-  };
+  }, [experiment, currentStageIndex]);
 
   // Go to previous stage, returns true if successful
   const goToPreviousStage = () => {

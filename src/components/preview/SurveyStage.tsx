@@ -3,6 +3,14 @@
 import { useState } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
+interface Question {
+  id: string;
+  text: string;
+  type: 'text' | 'multipleChoice' | 'checkboxes' | 'rating';
+  required: boolean;
+  options?: string[];
+}
+
 export default function SurveyStage() {
   const { currentStage, goToNextStage } = usePreview();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,8 +34,8 @@ export default function SurveyStage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Check if all required questions are answered
-    const requiredQuestions = questions.filter(q => q.required);
-    const allRequiredAnswered = requiredQuestions.every(q => formValues[q.id]);
+    const requiredQuestions = questions.filter((q: Question) => q.required);
+    const allRequiredAnswered = requiredQuestions.every((q: Question) => formValues[q.id]);
     
     if (!allRequiredAnswered) {
       alert('Please answer all required questions before proceeding.');
@@ -40,8 +48,7 @@ export default function SurveyStage() {
     }, 1500);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const renderQuestionInput = (question: any) => {
+  const renderQuestionInput = (question: Question) => {
     switch (question.type) {
       case 'text':
         return (
@@ -135,7 +142,7 @@ export default function SurveyStage() {
         
         <form onSubmit={handleSubmit}>
           <div className="space-y-6 mb-8">
-            {questions.map((question, index) => (
+            {questions.map((question: Question, index: number) => (
               <div key={question.id} className="border-b border-gray-200 pb-4 last:border-b-0">
                 <div className="flex items-start mb-2">
                   <span className="bg-gray-200 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center mr-2">
