@@ -139,7 +139,7 @@ export default function ExperimentDesignerPage() {
     }
     
     // Common fetchWithRetry function for all API requests
-    const fetchWithRetry = async (url: string, options: RequestInit = {}, maxRetries = 3, timeout = 10000): Promise<ApiResponse> => {
+    const fetchWithRetry = async <T = ApiResponse>(url: string, options: RequestInit = {}, maxRetries = 3, timeout = 10000): Promise<T> => {
       // Set default headers if not provided
       const fetchOptions = {
         ...options,
@@ -180,9 +180,9 @@ export default function ExperimentDesignerPage() {
           }
           
           // Parse JSON
-          let data: ApiResponse;
+          let data: unknown;
           try {
-            data = JSON.parse(responseText) as ApiResponse;
+            data = JSON.parse(responseText);
           } catch (jsonError) {
             console.error('JSON parse error:', jsonError);
             throw new Error(`Invalid JSON response from server: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
@@ -199,7 +199,7 @@ export default function ExperimentDesignerPage() {
             throw error;
           }
           
-          return data;
+          return data as T;
         } catch (error) {
           // Create a properly typed error object
           const typedError: ApiError = error instanceof Error 
@@ -248,10 +248,10 @@ export default function ExperimentDesignerPage() {
         console.log(`Fetching experiment ID: ${experimentId}`);
         
         try {
-          // Fetch experiment data with retry and cast to proper type
-          const data = await fetchWithRetry(`/api/experiments/${experimentId}`, {
+          // Fetch experiment data with retry and proper typing
+          const data = await fetchWithRetry<ExperimentResponse>(`/api/experiments/${experimentId}`, {
             method: 'GET'
-          }, 3, 15000) as ExperimentResponse; // 3 retries, 15 second timeout
+          }, 3, 15000); // 3 retries, 15 second timeout
           
           // Validate minimum data requirements
           if (!data.id) {
@@ -304,9 +304,9 @@ export default function ExperimentDesignerPage() {
     
     const fetchScenarios = async () => {
       try {
-        const data = await fetchWithRetry('/api/scenarios', {
+        const data = await fetchWithRetry<ScenarioResponse[]>('/api/scenarios', {
           method: 'GET'
-        }, 2, 8000) as ScenarioResponse[]; // 2 retries, 8 second timeout
+        }, 2, 8000); // 2 retries, 8 second timeout
         
         setScenarios(data);
         return data;
@@ -320,9 +320,9 @@ export default function ExperimentDesignerPage() {
     
     const fetchUserGroups = async () => {
       try {
-        const data = await fetchWithRetry('/api/user-groups', {
+        const data = await fetchWithRetry<UserGroupResponse[]>('/api/user-groups', {
           method: 'GET'
-        }, 2, 8000) as UserGroupResponse[]; // 2 retries, 8 second timeout
+        }, 2, 8000); // 2 retries, 8 second timeout
         
         setUserGroups(data);
         return data;
