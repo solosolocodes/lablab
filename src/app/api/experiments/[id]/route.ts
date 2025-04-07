@@ -1,692 +1,438 @@
-'use client';
-
+// Improved, robust API route for experiments
 import { NextRequest, NextResponse } from 'next/server';
+import mongoose from 'mongoose';
 import connectDB from '@/lib/db';
 import Experiment from '@/models/Experiment';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 
-// Helper function to get experiment ID from URL
-function getExperimentId(request: NextRequest): string {
-  const pathParts = request.nextUrl.pathname.split('/');
-  return pathParts[pathParts.length - 1];
-}
-
-// Mock data for preview mode
-const mockExperimentData = {
-  id: "mockExperimentId",
-  name: "Financial Decision Making",
-  description: "An experiment to study financial decision making under various conditions",
-  status: "draft",
-  createdBy: {
-    id: "mockUserId",
-    name: "Test User",
-    email: "test@example.com"
-  },
-  userGroups: [],
-  stages: [
-    {
-      id: "stage1",
-      type: "instructions",
-      title: "Introduction",
-      description: "Welcome to the financial decision-making experiment",
-      durationSeconds: 60,
-      required: true,
-      order: 0,
-      content: "## Welcome to our Financial Decision-Making Study\n\nThank you for participating in this experiment. Your time and feedback are valuable to our research.\n\n### Purpose\n\nThis study aims to understand how people make financial decisions in different scenarios.\n\n### What to Expect\n\nThis experiment consists of multiple stages:\n\n1. Instructions (you are here)\n2. A market scenario simulation\n3. A decision-making exercise\n4. A feedback survey\n\nPlease read all instructions carefully and take your time with each stage.",
-      format: "markdown"
-    },
-    // Additional mock stages omitted for brevity
-  ],
-  branches: [],
-  startStageId: "stage1",
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  lastEditedAt: new Date().toISOString()
+// Enable CORS for API routes
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-// Get a specific experiment by ID
-export async function GET(request: NextRequest) {
-  try {
-    console.log(`API: GET experiment request received for ${request.nextUrl.pathname}`);
+// Standard response headers
+const STANDARD_HEADERS = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store',
+  ...corsHeaders
+};
+
+// Get experiment ID from URL and validate it's a valid ObjectId
+function getExperimentId(request: NextRequest): string | null {
+  const pathParts = request.nextUrl.pathname.split('/');
+  const experimentId = pathParts[pathParts.length - 1];
+  
+  // Validate it's a valid MongoDB ObjectId
+  if (!mongoose.isValidObjectId(experimentId)) {
+    return null;
+  }
+  
+  return experimentId;
+}
+
+// Serialize MongoDB document to safe JSON
+function serializeDocument(doc: any): any {
+  if (doc === null || typeof doc !== 'object') {
+    return doc;
+  }
+  
+  // Handle arrays
+  if (Array.isArray(doc)) {
+    return doc.map(item => serializeDocument(item));
+  }
+  
+  // Handle dates
+  if (doc instanceof Date) {
+    return doc.toISOString();
+  }
+  
+  // Handle ObjectId
+  if (doc._id && typeof doc._id.toString === 'function') {
+    doc.id = doc._id.toString();
+  }
+  
+  // Create a new object to avoid modifying the original
+  const result: any = {};
+  
+  // Process all properties
+  for (const [key, value] of Object.entries(doc)) {
+    // Skip the _id field as we've already handled it
+    if (key === '_id') continue;
     
-    // Handler for ping requests to help diagnose connectivity issues
-    if (request.nextUrl.searchParams.has('ping')) {
-      console.log('API: Ping request received, responding with pong');
-      return NextResponse.json(
-        { 
-          status: 'ok', 
-          message: 'pong', 
-          timestamp: new Date().toISOString(),
-          serverInfo: {
-            nodejsVersion: process.version,
-            platform: process.platform,
-            memoryUsage: process.memoryUsage().rss / (1024 * 1024) + 'MB'
-          }
-        },
-        { 
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-store'
-          }
-        }
-      );
+    // Skip __v internal MongoDB version field
+    if (key === '__v') continue;
+    
+    // Handle ObjectIds in the document
+    if (key.endsWith('Id') && mongoose.isValidObjectId(value)) {
+      result[key] = value.toString();
+      continue;
     }
     
-    // Get experiment ID
-    const experimentId = getExperimentId(request);
-    console.log(`API: Experiment ID: ${experimentId}`);
-    
-    // Validate the experiment ID format
-    if (!experimentId || experimentId === '[id]') {
-      console.error('API: Invalid experiment ID format:', experimentId);
-      return NextResponse.json(
-        { message: 'Invalid experiment ID' },
-        { status: 400 }
-      );
+    // Handle nested documents, arrays and other values
+    result[key] = serializeDocument(value);
+  }
+  
+  return result;
+}
+
+// Standard error response helper
+function errorResponse(message: string, status: number, details?: any) {
+  const responseData = { 
+    success: false, 
+    message,
+    details: details || undefined,
+    timestamp: new Date().toISOString() 
+  };
+  
+  // Use direct NextResponse constructor instead of json() helper
+  return new NextResponse(
+    JSON.stringify(responseData),
+    { 
+      status, 
+      headers: STANDARD_HEADERS
     }
-    
-    // Log the experiment ID to help with debugging
-    console.log('API: Analyzing experiment ID:', {
-      experimentId, 
-      length: experimentId.length,
-      containsChars: /[a-zA-Z0-9]/.test(experimentId),
-      firstChar: experimentId.charAt(0),
-      lastChar: experimentId.charAt(experimentId.length - 1)
-    });
-    
-    // Try to validate if it's a valid MongoDB ObjectId
+  );
+}
+
+// Options for CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
+// Retry a database operation with backoff
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3,
+  retryDelay = 500
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const mongoose = (await import('mongoose')).default;
-      if (!mongoose.Types.ObjectId.isValid(experimentId)) {
-        console.error('API: Invalid MongoDB ObjectId format:', experimentId);
-        // Instead of returning error, we'll let it continue and try to find by friendly ID
-        console.log('API: Continuing anyway to try finding experiment by non-ObjectId format');
-      } else {
-        console.log('API: Experiment ID appears to be a valid ObjectId format');
-      }
-    } catch (err) {
-      console.error('API: Error validating ObjectId:', err);
-      // Continue anyway, as this is just an extra validation
-    }
-    
-    // Check if the request is for preview mode
-    const isPreviewMode = request.nextUrl.searchParams.has('preview');
-    console.log(`API: Preview mode: ${isPreviewMode}`);
-    
-    // For preview mode, try to get real data first, fallback to mock
-    if (isPreviewMode) {
-      try {
-        console.log('API: Connecting to database for preview mode...');
-        await connectDB();
+      return await operation();
+    } catch (error) {
+      // Only retry for connection/timeout type errors
+      if (
+        error instanceof mongoose.Error.MongooseServerSelectionError ||
+        error instanceof mongoose.Error.DisconnectedError ||
+        error instanceof mongoose.Error.CastError ||
+        (error instanceof Error && error.name === 'MongoError' && 
+         (error.message.includes('timeout') || error.message.includes('connection')))
+      ) {
+        lastError = error;
         
-        // Find the experiment
-        let experiment;
-        try {
-          experiment = await Experiment.findById(experimentId)
-            .populate('userGroups.userGroupId', 'name description')
-            .populate('createdBy', 'name email');
-          
-          if (experiment) {
-            console.log(`API: Found real experiment: "${experiment.name}" for preview`);
-          } else {
-            console.log(`API: No experiment found with ID ${experimentId} for preview`);
-            throw new Error('Experiment not found');
-          }
-        } catch (mongoError) {
-          console.error('API: MongoDB error finding experiment:', mongoError);
-          throw mongoError;
+        // Only retry if we're not on the last attempt
+        if (attempt < maxRetries - 1) {
+          // Exponential backoff with jitter
+          const delay = retryDelay * Math.pow(2, attempt) + Math.random() * 200;
+          console.log(`API: Retrying database operation attempt ${attempt + 1}/${maxRetries} after ${delay}ms`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
         }
-        
-        if (experiment) {
-          console.log(`API: Processing found experiment for preview`);
-          
-          try {
-            // Simple direct response for preview mode
-            const directResponse = {
-              id: experiment._id.toString(),
-              name: experiment.name || 'Untitled Experiment',
-              description: experiment.description || '',
-              status: experiment.status || 'draft',
-              createdBy: experiment.createdBy ? {
-                id: experiment.createdBy._id || 'unknown',
-                name: experiment.createdBy.name || 'Unknown',
-                email: experiment.createdBy.email || 'unknown@example.com'
-              } : { id: 'unknown', name: 'Unknown', email: 'unknown@example.com' },
-              userGroups: Array.isArray(experiment.userGroups) 
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ? experiment.userGroups.map((ug: any) => {
-                    try {
-                      return {
-                        userGroupId: ug.userGroupId ? (
-                          typeof ug.userGroupId === 'object' && ug.userGroupId._id 
-                            ? ug.userGroupId._id.toString() 
-                            : ug.userGroupId.toString()
-                        ) : 'unknown',
-                        condition: ug.condition || 'default'
-                      };
-                    } catch (error) {
-                      console.error('Error processing userGroup in preview mode:', error);
-                      return { userGroupId: 'error', condition: 'error' };
-                    }
-                  })
-                : [],
-              stages: [],
-              branches: [],
-              startStageId: experiment.startStageId || null,
-              createdAt: experiment.createdAt || new Date().toISOString(),
-              updatedAt: experiment.updatedAt || new Date().toISOString(),
-              lastEditedAt: experiment.lastEditedAt || new Date().toISOString()
-            };
-            
-            return NextResponse.json(directResponse);
-          } catch (formattingError) {
-            console.error('API: Error formatting experiment for preview:', formattingError);
-            throw formattingError;
-          }
-        }
-      } catch (dbError) {
-        console.error('API: Error fetching real experiment data:', dbError);
-        console.log('API: Falling back to mock data for preview mode');
       }
       
-      // If we got here, either no experiment was found or there was an error
-      console.log('API: Returning mock data for preview mode');
-      return NextResponse.json(mockExperimentData);
+      // Non-retriable error or max retries reached
+      throw error;
+    }
+  }
+  
+  // This shouldn't be reached but TypeScript needs it
+  throw lastError;
+}
+
+// GET handler for a specific experiment
+export async function GET(request: NextRequest) {
+  const requestId = Math.random().toString(36).substring(2, 12);
+  console.log(`API [${requestId}]: GET experiment request started at ${new Date().toISOString()}`);
+  
+  try {
+    // Get ID from URL
+    const experimentId = getExperimentId(request);
+    if (!experimentId) {
+      console.log(`API [${requestId}]: Invalid experiment ID format`);
+      return errorResponse('Invalid experiment ID format', 400);
     }
     
-    // Non-preview mode - regular admin access flow
-    const session = await getServerSession(authOptions);
+    console.log(`API [${requestId}]: Valid experiment ID: ${experimentId}`);
     
-    // Check authentication for non-preview requests
-    if (!session || session.user.role !== 'admin') {
-      console.log('API: Unauthorized access attempt');
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-    
-    console.log('API: Connecting to database...');
+    // Connect to database with retry logic
+    let dbConnected = false;
     try {
       await connectDB();
-      console.log('API: Database connection successful');
-      
-      // Test database connection by running a simple query
-      const mongoose = (await import('mongoose')).default;
-      const connectionState = mongoose.connection.readyState;
-      console.log('API: MongoDB connection state:', {
-        state: connectionState,
-        // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
-        stateDesc: ['disconnected', 'connected', 'connecting', 'disconnecting'][connectionState] || 'unknown',
-        host: mongoose.connection.host,
-        name: mongoose.connection.name
-      });
-      
-      if (connectionState !== 1) {
-        throw new Error(`MongoDB connection not ready. State: ${connectionState}`);
-      }
-    } catch (dbConnectError) {
-      console.error('API: Critical database connection error:', dbConnectError);
-      return NextResponse.json(
-        { 
-          message: 'Database connection error', 
-          error: dbConnectError instanceof Error ? dbConnectError.message : String(dbConnectError),
-          details: 'Failed to establish connection to MongoDB. Please check database configuration.'
-        },
-        { status: 500 }
+      dbConnected = true;
+      console.log(`API [${requestId}]: Database connected`);
+    } catch (connError) {
+      console.error(`API [${requestId}]: Database connection error:`, connError);
+      return errorResponse(
+        'Database connection failed. Please try again.',
+        503, // Service Unavailable
+        { retryAfter: 3 } // Suggest retry after 3 seconds
       );
     }
     
-    // Find the experiment
-    let experiment;
+    // Only proceed if database is connected
+    if (!dbConnected) {
+      return errorResponse('Database unavailable', 503);
+    }
+    
+    // Create a direct, simple response without complex processing
     try {
-      // Try to find the experiment by ID first
-      console.log(`API: Attempting to find experiment by ID: ${experimentId}`);
+      // Simple find by ID with retry logic
+      const experiment = await retryOperation(
+        () => Experiment.findById(experimentId).lean(),
+        3, // Max 3 retries
+        300 // Starting delay of 300ms
+      );
       
-      // First, check if any experiments exist in the collection
-      try {
-        const totalExperiments = await Experiment.countDocuments();
-        console.log(`API: Total experiments in database: ${totalExperiments}`);
-        
-        if (totalExperiments === 0) {
-          return NextResponse.json(
-            { message: 'No experiments exist in the database' },
-            { status: 404 }
-          );
-        }
-      } catch (countError) {
-        console.error('API: Error counting experiments:', countError);
-      }
-      
-      // Fetch the experiment directly
-      experiment = await Experiment.findById(experimentId)
-        .populate('userGroups.userGroupId', 'name description')
-        .populate('createdBy', 'name email');
-      
-      // Log raw document structure to help with debugging
-      if (experiment) {
-        console.log('API: Raw experiment document structure:', {
-          id: experiment._id ? experiment._id.toString() : 'undefined',
-          hasId: Boolean(experiment._id),
-          hasUserGroups: Boolean(experiment.userGroups),
-          userGroupsIsArray: Array.isArray(experiment.userGroups),
-          rawDocument: JSON.stringify(experiment.toObject ? experiment.toObject() : experiment)
-        });
-      }
-      
+      // Not found
       if (!experiment) {
-        console.log(`API: Experiment with ID ${experimentId} not found via findById, trying alternative queries`);
-        
-        // Try to find by string field if it's not a valid ObjectId
-        try {
-          console.log(`API: Trying to query experiments collection directly`);
-          // Print the first few experiments to see their structure
-          const firstFewExperiments = await Experiment.find().limit(3);
-          if (firstFewExperiments.length > 0) {
-            console.log('API: First few experiments in database:', 
-              firstFewExperiments.map(exp => ({ 
-                id: exp._id ? exp._id.toString() : 'unknown', 
-                name: exp.name || 'unnamed',
-                hasUserGroups: Boolean(exp.userGroups) && Array.isArray(exp.userGroups)
-              }))
-            );
-          } else {
-            console.log('API: No experiments found in database');
-          }
-          
-          // Return not found
-          return NextResponse.json(
-            { 
-              message: 'Experiment not found', 
-              details: 'The experiment ID provided does not match any records in the database'
-            },
-            { status: 404 }
-          );
-        } catch (queryError) {
-          console.error('API: Error during alternative experiment queries:', queryError);
-          return NextResponse.json(
-            { 
-              message: 'Error querying experiments', 
-              error: queryError instanceof Error ? queryError.message : String(queryError)
-            },
-            { status: 500 }
-          );
-        }
+        console.log(`API [${requestId}]: Experiment not found`);
+        return errorResponse('Experiment not found', 404);
       }
-    } catch (dbError) {
-      console.error(`API: Error finding experiment with ID ${experimentId}:`, dbError);
-      return NextResponse.json(
-        { 
-          message: 'Database error while finding experiment', 
-          error: dbError instanceof Error ? dbError.message : String(dbError),
-          details: 'There was an error querying the database. The experiment ID may be invalid or the database connection may have issues.'
-        },
-        { status: 500 }
-      );
-    }
-    
-    console.log(`API: Found experiment: "${experiment.name}", stages: ${experiment.stages?.length || 0}`);
-    
-    try {
-      // Create a simplified response object based on the MongoDB document structure
+      
+      // Serialize the document for proper JSON response
+      const serialized = serializeDocument(experiment);
+      
+      // Ensure expected fields are present
       const response = {
-        id: experiment._id.toString(),
-        name: experiment.name || 'Untitled Experiment',
-        description: experiment.description || '',
-        status: experiment.status || 'draft',
-        createdBy: experiment.createdBy 
-          ? {
-              id: experiment.createdBy._id?.toString() || 'unknown',
-              name: experiment.createdBy.name || 'Unknown',
-              email: experiment.createdBy.email || 'unknown@example.com'
-            }
-          : { id: 'unknown', name: 'Unknown', email: 'unknown@example.com' },
-        userGroups: [],
-        stages: [],
-        branches: [],
-        startStageId: experiment.startStageId || null,
-        createdAt: experiment.createdAt instanceof Date ? experiment.createdAt.toISOString() : experiment.createdAt || new Date().toISOString(),
-        updatedAt: experiment.updatedAt instanceof Date ? experiment.updatedAt.toISOString() : experiment.updatedAt || new Date().toISOString(),
-        lastEditedAt: experiment.lastEditedAt instanceof Date ? experiment.lastEditedAt.toISOString() : experiment.lastEditedAt || new Date().toISOString(),
+        success: true,
+        id: serialized.id || experimentId,
+        name: serialized.name || 'Untitled',
+        description: serialized.description || '',
+        status: serialized.status || 'draft',
+        userGroups: serialized.userGroups || [],
+        stages: serialized.stages || [],
+        branches: serialized.branches || [],
+        startStageId: serialized.startStageId,
+        createdAt: serialized.createdAt || new Date().toISOString(),
+        updatedAt: serialized.updatedAt || new Date().toISOString(),
+        lastEditedAt: serialized.lastEditedAt
       };
       
-      // Process user groups safely
-      if (experiment.userGroups && Array.isArray(experiment.userGroups)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        response.userGroups = experiment.userGroups.map((ug: any) => {
-          try {
-            const userGroupId = typeof ug.userGroupId === 'object' && ug.userGroupId && ug.userGroupId._id 
-              ? ug.userGroupId._id.toString() 
-              : (ug.userGroupId ? ug.userGroupId.toString() : 'unknown');
-              
-            return {
-              userGroupId,
-              condition: ug.condition || 'default'
-            };
-          } catch (error) {
-            console.error('API: Error processing user group:', error, ug);
-            return { userGroupId: 'error', condition: 'error' };
-          }
+      // Log success
+      console.log(`API [${requestId}]: Successfully found experiment: ${response.id}, ${response.name}`);
+      
+      try {
+        // Return clean JSON response - using traditional method rather than NextResponse.json
+        // to have more control over response formatting
+        return new NextResponse(JSON.stringify(response), {
+          status: 200,
+          headers: STANDARD_HEADERS
         });
+      } catch (jsonError) {
+        console.error(`API [${requestId}]: Error stringifying response:`, jsonError);
+        // Fallback to a simpler response
+        return new NextResponse(
+          JSON.stringify({ 
+            success: true, 
+            id: experimentId,
+            name: serialized.name || 'Untitled',
+            message: 'Experiment found but could not serialize all details'
+          }),
+          {
+            status: 200,
+            headers: STANDARD_HEADERS
+          }
+        );
+      }
+    } catch (dbError) {
+      console.error(`API [${requestId}]: Database error:`, dbError);
+      
+      // Handle specific MongoDB errors
+      if (dbError instanceof mongoose.Error.CastError) {
+        return errorResponse(
+          'Invalid experiment ID format', 
+          400
+        );
       }
       
-      // Process stages safely
-      if (experiment.stages && Array.isArray(experiment.stages)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        response.stages = experiment.stages.map((stage: any) => {
-          try {
-            const baseStage = {
-              id: stage._id ? stage._id.toString() : 'unknown',
-              type: stage.type || 'unknown',
-              title: stage.title || 'Untitled Stage',
-              description: stage.description || '',
-              durationSeconds: typeof stage.durationSeconds === 'number' ? stage.durationSeconds : 0,
-              required: typeof stage.required === 'boolean' ? stage.required : true,
-              order: typeof stage.order === 'number' ? stage.order : 0,
-            };
-            
-            if (stage.type === 'instructions') {
-              return {
-                ...baseStage,
-                content: stage.content || '',
-                format: stage.format || 'text'
-              };
-            } else if (stage.type === 'scenario') {
-              return {
-                ...baseStage,
-                scenarioId: stage.scenarioId || '',
-                rounds: stage.rounds || 1,
-                roundDuration: stage.roundDuration || 60
-              };
-            } else if (stage.type === 'survey') {
-              return {
-                ...baseStage,
-                questions: Array.isArray(stage.questions) ? stage.questions : []
-              };
-            } else if (stage.type === 'break') {
-              return {
-                ...baseStage,
-                message: stage.message || 'Take a break'
-              };
-            }
-            
-            return baseStage;
-          } catch (error) {
-            console.error('API: Error processing stage:', error, stage);
-            return {
-              id: 'error',
-              type: 'unknown',
-              title: 'Error Stage',
-              description: 'Error processing this stage',
-              durationSeconds: 0,
-              required: false,
-              order: 0
-            };
-          }
-        });
-      }
-      
-      // Process branches safely
-      if (experiment.branches && Array.isArray(experiment.branches)) {
-        response.branches = experiment.branches;
-      }
-      
-      // Log the response structure before sending
-      console.log('API: Response structure check:', {
-        hasId: Boolean(response.id),
-        hasUserGroups: Boolean(response.userGroups) && Array.isArray(response.userGroups),
-        hasStages: Boolean(response.stages) && Array.isArray(response.stages),
-        userGroupsCount: Array.isArray(response.userGroups) ? response.userGroups.length : 0,
-        stagesCount: Array.isArray(response.stages) ? response.stages.length : 0
-      });
-      
-      console.log('API: Successfully formatted response, returning data');
-      return NextResponse.json(response);
-    } catch (formattingError) {
-      console.error('API: Error during response formatting:', formattingError);
-      return NextResponse.json(
-        { 
-          message: 'Error formatting experiment data', 
-          error: formattingError instanceof Error ? formattingError.message : String(formattingError)
-        },
-        { status: 500 }
+      // Generic database error
+      return errorResponse(
+        `Database error: ${dbError instanceof Error ? dbError.message : String(dbError)}`, 
+        500
       );
     }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    console.error('API: Error fetching experiment:', error);
-    console.error('API: Stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
-    
-    // For preview mode, return mock data even on error
-    if (request.nextUrl.searchParams.has('preview')) {
-      console.log('API: Error occurred but returning mock data for preview mode');
-      return NextResponse.json(mockExperimentData);
-    }
-    
-    try {
-      // Ensure we return a valid JSON response even in case of errors
-      console.log('API: Returning error response in standard JSON format');
-      
-      return NextResponse.json(
-        { 
-          message: 'Error fetching experiment', 
-          error: errorMessage,
-          timestamp: new Date().toISOString(),
-          path: request.nextUrl.pathname,
-          status: 500
-        },
-        { 
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    } catch (responseError) {
-      // Last resort fallback if even creating the error response fails
-      console.error('API: Critical error creating error response:', responseError);
-      
-      return new NextResponse(
-        JSON.stringify({ 
-          message: 'Critical error in API', 
-          error: 'Failed to process request'
-        }),
-        { 
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    }
+  } catch (error) {
+    console.error(`API [${requestId}]: Unexpected error:`, error);
+    return errorResponse(
+      'An unexpected error occurred',
+      500,
+      { error: error instanceof Error ? error.message : String(error) }
+    );
   }
 }
 
-// Update an experiment by ID
+// PUT handler for updating an experiment
 export async function PUT(request: NextRequest) {
+  const requestId = Math.random().toString(36).substring(2, 12);
+  console.log(`API [${requestId}]: PUT experiment request started at ${new Date().toISOString()}`);
+  
   try {
-    const session = await getServerSession(authOptions);
-    
-    // Check if user is authenticated and is admin
-    if (!session || session.user.role !== 'admin') {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-    
+    // Get ID from URL
     const experimentId = getExperimentId(request);
-    const { name, description, status, userGroups, stages, branches, startStageId } = await request.json();
-
-    if (!name || !description) {
-      return NextResponse.json(
-        { message: 'Name and description are required' },
-        { status: 400 }
-      );
-    }
-
-    await connectDB();
-    
-    // Check if experiment exists
-    const experiment = await Experiment.findById(experimentId);
-    if (!experiment) {
-      return NextResponse.json(
-        { message: 'Experiment not found' },
-        { status: 404 }
-      );
+    if (!experimentId) {
+      console.log(`API [${requestId}]: Invalid experiment ID format`);
+      return errorResponse('Invalid experiment ID format', 400);
     }
     
-    // Update fields
-    experiment.name = name;
-    experiment.description = description;
-    experiment.lastEditedAt = new Date();
+    console.log(`API [${requestId}]: Updating experiment ID: ${experimentId}`);
     
-    // Only update optional fields if provided
-    if (status) experiment.status = status;
-    
-    // Handle userGroups
-    if (userGroups) {
-      // Log userGroups for debugging
-      console.log('Processing userGroups:', JSON.stringify(userGroups, null, 2));
-      
-      // Process user groups - no max participants needed
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      experiment.userGroups = userGroups.map((group: any) => {
-        // Simple userGroup format with just ID and condition
-        return {
-          userGroupId: group.userGroupId,
-          condition: group.condition
-        };
-      });
-    }
-    
-    // Handle stages - need to ensure all required fields are present based on type
-    if (stages) {
-      experiment.stages = [];
-      
-      // Process each stage
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const stage of stages as any[]) {
-        // Common fields for all stage types
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const stageData: any = {
-          type: stage.type,
-          title: stage.title,
-          description: stage.description,
-          durationSeconds: Number(stage.durationSeconds),
-          required: stage.required !== undefined ? Boolean(stage.required) : true,
-          order: Number(stage.order)
-        };
-        
-        // Add type-specific fields
-        if (stage.type === 'instructions') {
-          stageData.content = stage.content || 'Enter instructions here...';
-          stageData.format = stage.format || 'markdown';
-        } 
-        else if (stage.type === 'scenario') {
-          // Handle required scenarioId
-          if (!stage.scenarioId) {
-            console.warn(`Scenario stage missing required scenarioId: ${stage.id}`);
-            stageData._validationError = true; // Mark as invalid for later filtering
-          } else {
-            stageData.scenarioId = stage.scenarioId;
-          }
-          
-          stageData.rounds = stage.rounds ? Number(stage.rounds) : 1;
-          stageData.roundDuration = stage.roundDuration ? Number(stage.roundDuration) : 60;
-        }
-        else if (stage.type === 'survey') {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          stageData.questions = (stage.questions || []).map((q: any) => ({
-            id: q.id,
-            text: q.text,
-            type: q.type,
-            options: q.options || [],
-            required: q.required !== undefined ? Boolean(q.required) : true
-          }));
-        }
-        else if (stage.type === 'break') {
-          stageData.message = stage.message;
-        }
-        
-        // Skip stages with validation errors
-        if (!stageData._validationError) {
-          // Delete the validation flag property before adding to MongoDB
-          if (stageData._validationError !== undefined) {
-            delete stageData._validationError;
-          }
-          experiment.stages.push(stageData);
-        }
-      }
-    }
-    
-    if (branches) experiment.branches = branches;
-    if (startStageId) experiment.startStageId = startStageId;
-    
+    // Get request body with error handling
+    let data;
     try {
-      // Save changes
-      await experiment.save();
-    } catch (saveError) {
-      console.error('Error saving experiment:', saveError);
-      if (saveError instanceof Error && saveError.name === 'ValidationError') {
-        throw saveError;
-      }
-      throw new Error(`Failed to save experiment: ${saveError instanceof Error ? saveError.message : String(saveError)}`);
+      data = await request.json();
+    } catch (parseError) {
+      console.error(`API [${requestId}]: Request JSON parse error:`, parseError);
+      return errorResponse('Invalid JSON in request body', 400);
     }
     
-    // Return successful response
-    return NextResponse.json({
-      message: 'Experiment updated successfully',
-      experiment: {
-        id: experiment._id,
-        name: experiment.name,
-        description: experiment.description,
-        status: experiment.status,
-        userGroups: experiment.userGroups,
-        stages: experiment.stages,
-        branches: experiment.branches,
-        startStageId: experiment.startStageId,
-        createdAt: experiment.createdAt,
-        updatedAt: experiment.updatedAt,
-        lastEditedAt: experiment.lastEditedAt,
-      }
-    });
-  } catch (error: unknown) {
-    // Detailed error logging
-    console.error('Error updating experiment:', error);
+    // Basic validation
+    if (!data.name || typeof data.name !== 'string') {
+      return errorResponse('Name is required and must be a string', 400);
+    }
     
-    // Handle MongoDB validation errors
-    if (error instanceof Error && 'name' in error && error.name === 'ValidationError') {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const validationError = error as any;
-      const errors: Record<string, string> = {};
-      
-      // Extract validation error messages and log details
-      console.log('Full validation error:', JSON.stringify(validationError, null, 2));
-      
-      if (validationError.errors) {
-        Object.keys(validationError.errors).forEach(key => {
-          console.log(`Validation error for ${key}:`, validationError.errors[key]);
-          errors[key] = validationError.errors[key].message;
-        });
-      }
-      
-      return NextResponse.json(
-        { 
-          message: 'Validation error when updating experiment', 
-          errors,
-          error: validationError.message 
-        },
-        { status: 400 }
+    if (!data.description || typeof data.description !== 'string') {
+      return errorResponse('Description is required and must be a string', 400);
+    }
+    
+    // Additional validations for complex fields
+    if (data.stages && !Array.isArray(data.stages)) {
+      return errorResponse('Stages must be an array', 400);
+    }
+    
+    if (data.userGroups && !Array.isArray(data.userGroups)) {
+      return errorResponse('User groups must be an array', 400);
+    }
+    
+    // Connect to database with retry logic
+    let dbConnected = false;
+    try {
+      await connectDB();
+      dbConnected = true;
+      console.log(`API [${requestId}]: Database connected`);
+    } catch (connError) {
+      console.error(`API [${requestId}]: Database connection error:`, connError);
+      return errorResponse(
+        'Database connection failed. Please try again.',
+        503, // Service Unavailable
+        { retryAfter: 3 } // Suggest retry after 3 seconds
       );
     }
     
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    return NextResponse.json(
-      { message: 'Error updating experiment', error: errorMessage },
-      { status: 500 }
+    // Only proceed if database is connected
+    if (!dbConnected) {
+      return errorResponse('Database unavailable', 503);
+    }
+    
+    // Find and update with retry mechanism
+    try {
+      // Create a session for potential future transaction support
+      const session = await mongoose.startSession();
+      
+      try {
+        // Check if experiment exists - with retry
+        const experiment = await retryOperation(
+          () => Experiment.findById(experimentId).session(session),
+          3, // Max 3 retries
+          300 // Starting delay of 300ms
+        );
+        
+        if (!experiment) {
+          session.endSession();
+          return errorResponse('Experiment not found', 404);
+        }
+        
+        // Update basic fields
+        experiment.name = data.name;
+        experiment.description = data.description;
+        experiment.lastEditedAt = new Date();
+        
+        // Update optional fields if provided (with type safety)
+        if (data.status && typeof data.status === 'string') {
+          experiment.status = data.status;
+        }
+        
+        if (Array.isArray(data.userGroups)) {
+          experiment.userGroups = data.userGroups;
+        }
+        
+        if (Array.isArray(data.stages)) {
+          experiment.stages = data.stages;
+        }
+        
+        if (Array.isArray(data.branches)) {
+          experiment.branches = data.branches;
+        }
+        
+        if (data.startStageId) {
+          experiment.startStageId = data.startStageId;
+        }
+        
+        // Save changes with retry
+        await retryOperation(
+          () => experiment.save({ session }),
+          3, // Max 3 retries
+          300 // Starting delay of 300ms
+        );
+        
+        session.endSession();
+        
+        // Return success response - use direct NextResponse constructor
+        const responseData = {
+          success: true,
+          message: 'Experiment updated successfully',
+          id: experiment._id.toString(),
+          timestamp: new Date().toISOString()
+        };
+        
+        return new NextResponse(
+          JSON.stringify(responseData),
+          { 
+            status: 200,
+            headers: STANDARD_HEADERS
+          }
+        );
+      } catch (sessionError) {
+        // Make sure to close the session
+        session.endSession();
+        throw sessionError;
+      }
+    } catch (dbError) {
+      console.error(`API [${requestId}]: Database error during update:`, dbError);
+      
+      // Handle specific MongoDB errors
+      if (dbError instanceof mongoose.Error.ValidationError) {
+        // Format validation errors for better client understanding
+        const validationErrors: Record<string, string> = {};
+        
+        for (const field in dbError.errors) {
+          validationErrors[field] = dbError.errors[field].message;
+        }
+        
+        return errorResponse(
+          'Validation error', 
+          400,
+          { fields: validationErrors }
+        );
+      }
+      
+      // Generic database error
+      return errorResponse(
+        'Error updating experiment',
+        500,
+        { error: dbError instanceof Error ? dbError.message : String(dbError) }
+      );
+    }
+  } catch (error) {
+    console.error(`API [${requestId}]: Unexpected error during update:`, error);
+    return errorResponse(
+      'An unexpected error occurred',
+      500,
+      { error: error instanceof Error ? error.message : String(error) }
     );
   }
 }

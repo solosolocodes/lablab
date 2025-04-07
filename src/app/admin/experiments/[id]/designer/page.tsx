@@ -93,167 +93,191 @@ export default function ExperimentDesignerPage() {
 
   // Fetch experiment data
   useEffect(() => {
+    // Common fetchWithRetry function for all API requests
+    const fetchWithRetry = async (url: string, options: RequestInit = {}, maxRetries = 3, timeout = 10000) => {
+      // Set default headers if not provided
+      const fetchOptions = {
+        ...options,
+        headers: {
+          'Accept': 'application/json',
+          ...(options.headers || {})
+        }
+      };
+      
+      // Implement exponential backoff retry
+      let retries = 0;
+      let lastError: Error | null = null;
+      
+      while (retries <= maxRetries) {
+        try {
+          const controller = new AbortController();
+          // Add signal to options, merging with existing signal if present
+          const signal = controller.signal;
+          const timeoutId = setTimeout(() => controller.abort(), timeout);
+          
+          console.log(`API Request (attempt ${retries + 1}/${maxRetries + 1}): ${url}`);
+          
+          const response = await fetch(url, {
+            ...fetchOptions,
+            signal,
+            cache: 'no-store'
+          });
+          
+          clearTimeout(timeoutId);
+          
+          // Get response as text first for better error handling
+          const responseText = await response.text();
+          console.log(`Response from ${url} (${responseText.length} bytes)`);
+          
+          // No response body
+          if (!responseText || !responseText.trim()) {
+            throw new Error('Empty response from server');
+          }
+          
+          // Parse JSON
+          let data;
+          try {
+            data = JSON.parse(responseText);
+          } catch (jsonError) {
+            console.error('JSON parse error:', jsonError);
+            throw new Error(`Invalid JSON response from server: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
+          }
+          
+          // Handle non-OK responses
+          if (!response.ok) {
+            const errorMessage = data?.message || `Server error (${response.status})`;
+            const error = new Error(errorMessage);
+            // Add extra properties to the error
+            (error as any).status = response.status;
+            (error as any).statusText = response.statusText;
+            (error as any).data = data;
+            throw error;
+          }
+          
+          return data;
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          
+          // Don't retry aborted requests (timeouts) or certain HTTP status codes
+          if (
+            lastError.name === 'AbortError' || 
+            ((error as any)?.status >= 400 && (error as any)?.status < 500)
+          ) {
+            console.error(`Request to ${url} failed with non-retryable error:`, lastError);
+            throw lastError;
+          }
+          
+          // If we've reached max retries, throw the last error
+          if (retries >= maxRetries) {
+            console.error(`Request to ${url} failed after ${maxRetries + 1} attempts:`, lastError);
+            throw lastError;
+          }
+          
+          // Exponential backoff with jitter
+          const delay = Math.min(1000 * (2 ** retries) + Math.random() * 1000, 10000);
+          console.log(`Retrying request to ${url} in ${delay}ms... (${retries + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          retries++;
+        }
+      }
+      
+      // Should never get here, but TypeScript wants us to handle this case
+      throw lastError || new Error(`Unknown error fetching ${url}`);
+    };
+    
     const fetchExperiment = async () => {
       if (!experimentId || status !== 'authenticated') return;
       
       try {
         setIsLoading(true);
+        setLoadError(null);
         
-        // Log request details
-        console.log(`Making request to: /api/experiments/${experimentId}`);
+        console.log(`Fetching experiment ID: ${experimentId}`);
         
-        // Add custom headers to help with debugging
-        const response = await fetch(`/api/experiments/${experimentId}`, {
-          headers: {
-            'Accept': 'application/json',
-            'X-Request-Time': new Date().toISOString(),
-            'X-Client-Version': '1.0'
-          }
-        });
-        
-        // Log the response headers for debugging
-        console.log('Response headers:', {
-          contentType: response.headers.get('content-type'),
-          status: response.status,
-          statusText: response.statusText,
-          headerCount: [...response.headers.entries()].length
-        });
-        
-        // Even if response is not OK, try to get the error details from JSON
-        let data;
-        let responseText = '';
         try {
-          responseText = await response.text();
-          console.log(`Raw response from server (${responseText.length} bytes):`, 
-            responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''));
+          // Fetch experiment data with retry
+          const data = await fetchWithRetry(`/api/experiments/${experimentId}`, {
+            method: 'GET'
+          }, 3, 15000); // 3 retries, 15 second timeout
           
-          // Only try to parse if we have a non-empty response
-          if (responseText && responseText.trim()) {
-            try {
-              data = JSON.parse(responseText);
-              console.log('Parsed JSON data successfully:', Object.keys(data));
-            } catch (jsonParseError) {
-              console.error('Failed to parse response as JSON:', jsonParseError);
-              data = { message: 'Invalid server response format', rawText: responseText.substring(0, 200) };
-            }
-          } else {
-            console.error('Empty response from server - this might be CORS or server issue');
-            // Try an alternative approach with direct test route
-            try {
-              console.log('Attempting to use test API to verify connectivity...');
-              const testResponse = await fetch('/api/experiments/test', {
-                method: 'GET',
-                headers: {
-                  'Accept': 'application/json',
-                  'Cache-Control': 'no-cache'
-                }
-              });
-              
-              console.log('Test API response status:', testResponse.status);
-              
-              // Try to get the response text from test API
-              try {
-                const testResponseText = await testResponse.text();
-                console.log('Test API response text:', testResponseText.substring(0, 500));
-                
-                if (testResponseText && testResponseText.trim()) {
-                  try {
-                    const testData = JSON.parse(testResponseText);
-                    console.log('Test API parsed response:', testData);
-                  } catch (testJsonError) {
-                    console.error('Unable to parse test API response:', testJsonError);
-                  }
-                } else {
-                  console.error('Test API also returned empty response');
-                }
-              } catch (testTextError) {
-                console.error('Error getting text from test API:', testTextError);
+          // Validate minimum data requirements
+          if (!data.id) {
+            throw new Error('Invalid experiment data: missing ID');
+          }
+          
+          console.log('Successfully loaded experiment:', { id: data.id, name: data.name });
+          setExperiment(data);
+          
+          // Fetch supporting data in parallel, but don't fail if these requests fail
+          await Promise.allSettled([
+            fetchScenarios(),
+            fetchUserGroups()
+          ]).then(results => {
+            // Log any failures from the parallel requests
+            results.forEach((result, index) => {
+              if (result.status === 'rejected') {
+                console.error(`Failed to fetch supporting data (${index === 0 ? 'scenarios' : 'user groups'}):`, result.reason);
               }
-            } catch (testError) {
-              console.error('Test API request failed:', testError);
+            });
+          });
+          
+          setIsLoading(false);
+        } catch (error) {
+          // Handle specific error types
+          let errorMessage = 'Unknown error occurred';
+          
+          if (error instanceof Error) {
+            if (error.name === 'AbortError') {
+              errorMessage = 'Request timed out. Please try again.';
+            } else {
+              errorMessage = error.message;
             }
-            
-            // Also try a regular ping as a fallback
-            try {
-              console.log('Attempting to ping server as fallback...');
-              const pingResponse = await fetch('/api/experiments?ping=true');
-              console.log('Ping response status:', pingResponse.status);
-              const pingText = await pingResponse.text();
-              console.log('Ping response text length:', pingText.length);
-            } catch (pingError) {
-              console.error('Ping to server also failed:', pingError);
-            }
-            
-            data = { message: 'Empty response from server' };
           }
-        } catch (e) {
-          console.error('Failed to get response text:', e);
-          data = null;
+          
+          console.error('Error fetching experiment:', error);
+          console.error('Experiment ID:', experimentId);
+          setLoadError(errorMessage);
+          toast.error('Failed to load experiment: ' + errorMessage);
+          setIsLoading(false);
         }
-        
-        if (!response.ok) {
-          // If we have detailed error data, include it in the error message
-          if (data && data.message) {
-            console.error('Server error response:', data);
-            throw new Error(`${data.message}${data.error ? ': ' + data.error : ''}`);
-          } else {
-            throw new Error(`Failed to fetch experiment (Status ${response.status})`);
-          }
-        }
-        
-        // If we reach here, the response was OK
-        if (!data) {
-          console.error('Server returned OK status but no data');
-          throw new Error(`Server returned empty response with OK status (Response text length: ${responseText.length})`);
-        }
-        
-        // Verify data has minimum required fields
-        if (!data.id || !data.name) {
-          console.error('Server returned incomplete experiment data:', data);
-          throw new Error(`Server returned incomplete experiment data: ${JSON.stringify(data).substring(0, 100)}...`);
-        }
-        
-        console.log('Successfully loaded experiment:', { id: data.id, name: data.name });
-        setExperiment(data);
-        
-        // Also fetch scenarios and user groups
-        await Promise.all([
-          fetchScenarios(),
-          fetchUserGroups()
-        ]);
-        
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error fetching experiment:', error);
-        console.error('Experiment ID:', experimentId);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        setLoadError(errorMessage);
-        toast.error('Failed to load experiment: ' + errorMessage);
+      } catch (outerError) {
+        // Handle any unexpected errors in the outer try block
+        console.error('Unexpected error in fetchExperiment:', outerError);
+        setLoadError('An unexpected error occurred. Please try refreshing the page.');
+        toast.error('An unexpected error occurred');
         setIsLoading(false);
       }
     };
     
     const fetchScenarios = async () => {
       try {
-        const response = await fetch('/api/scenarios');
-        if (response.ok) {
-          const data = await response.json();
-          setScenarios(data);
-        }
+        const data = await fetchWithRetry('/api/scenarios', {
+          method: 'GET'
+        }, 2, 8000); // 2 retries, 8 second timeout
+        
+        setScenarios(data);
+        return data;
       } catch (error) {
         console.error('Error fetching scenarios:', error);
+        // Don't show toast for this secondary data
+        // We can still render the page without scenarios
+        return null;
       }
     };
     
     const fetchUserGroups = async () => {
       try {
-        const response = await fetch('/api/user-groups');
-        if (response.ok) {
-          const data = await response.json();
-          setUserGroups(data);
-        }
+        const data = await fetchWithRetry('/api/user-groups', {
+          method: 'GET'
+        }, 2, 8000); // 2 retries, 8 second timeout
+        
+        setUserGroups(data);
+        return data;
       } catch (error) {
         console.error('Error fetching user groups:', error);
+        // Don't show toast for this secondary data
+        // We can still render the page without user groups
+        return null;
       }
     };
     
@@ -578,51 +602,127 @@ export default function ExperimentDesignerPage() {
         return;
       }
       
+      // Show saving indicator to user
+      const savingToast = toast.loading(status === 'draft' ? 'Saving experiment...' : 'Publishing experiment...');
+      
       const updatedExperiment = {
         ...experiment,
         status,
         lastEditedAt: new Date().toISOString()
       };
       
-      const response = await fetch(`/api/experiments/${experimentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updatedExperiment)
-      });
+      // Implement retry logic for save operation
+      const maxRetries = 2;
+      let currentRetry = 0;
+      let saveSuccessful = false;
       
-      if (response.ok) {
-        toast.success(status === 'draft' ? 'Experiment saved as draft' : 'Experiment published successfully!');
-        
-        if (status === 'published') {
-          // Redirect to experiments list after publishing
-          setTimeout(() => {
-            router.push('/admin/experiments');
-          }, 1500);
-        }
-      } else {
-        let errorMessage = response.statusText;
+      while (currentRetry <= maxRetries && !saveSuccessful) {
         try {
-          // Try to parse the response as JSON
-          const errorData = await response.json();
-          // Log detailed error information
-          console.log('Detailed error response:', errorData);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout for save
           
-          if (errorData.errors && Object.keys(errorData.errors).length > 0) {
-            // If there are validation errors, format them nicely
-            const errorDetails = Object.entries(errorData.errors)
-              .map(([field, message]) => `${field}: ${message}`)
-              .join(', ');
-            errorMessage = `${errorData.message} (${errorDetails})`;
-          } else {
-            errorMessage = errorData.message || response.statusText;
+          console.log(`Saving experiment (attempt ${currentRetry + 1}/${maxRetries + 1})...`);
+          
+          const response = await fetch(`/api/experiments/${experimentId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            body: JSON.stringify(updatedExperiment),
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          // Try to get response text first
+          const responseText = await response.text();
+          console.log(`Save response (${responseText.length} bytes)`);
+          
+          // Parse JSON if we have a response
+          let errorData = null;
+          if (responseText && responseText.trim()) {
+            try {
+              errorData = JSON.parse(responseText);
+            } catch (jsonError) {
+              console.error('JSON parse error on save response:', jsonError);
+            }
           }
-        } catch {
-          // If response is not JSON, use the status text
-          errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
+          
+          if (response.ok) {
+            saveSuccessful = true;
+            toast.dismiss(savingToast);
+            toast.success(status === 'draft' ? 'Experiment saved as draft' : 'Experiment published successfully!');
+            
+            if (status === 'published') {
+              // Redirect to experiments list after publishing
+              setTimeout(() => {
+                router.push('/admin/experiments');
+              }, 1500);
+            }
+            break;
+          } else {
+            let errorMessage = response.statusText;
+            
+            if (errorData) {
+              // Log detailed error information
+              console.log('Detailed error response:', errorData);
+              
+              if (errorData.errors && Object.keys(errorData.errors).length > 0) {
+                // If there are validation errors, format them nicely
+                const errorDetails = Object.entries(errorData.errors)
+                  .map(([field, message]) => `${field}: ${message}`)
+                  .join(', ');
+                errorMessage = `${errorData.message} (${errorDetails})`;
+              } else {
+                errorMessage = errorData.message || response.statusText;
+              }
+            } else {
+              // If response is not JSON, use the status text
+              errorMessage = `HTTP error: ${response.status} ${response.statusText}`;
+            }
+            
+            // For 4xx errors, don't retry
+            if (response.status >= 400 && response.status < 500) {
+              throw new Error(`Failed to save experiment: ${errorMessage}`);
+            }
+            
+            // For other errors, retry if we haven't exceeded max retries
+            if (currentRetry >= maxRetries) {
+              throw new Error(`Failed to save experiment after multiple attempts: ${errorMessage}`);
+            }
+            
+            // Exponential backoff with jitter
+            const delay = Math.min(1000 * (2 ** currentRetry) + Math.random() * 1000, 5000);
+            console.log(`Retrying save in ${delay}ms... (attempt ${currentRetry + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        } catch (fetchError) {
+          // Handle abort (timeout) errors
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            if (currentRetry >= maxRetries) {
+              toast.dismiss(savingToast);
+              throw new Error('Save operation timed out. Please try again.');
+            }
+            
+            // If we haven't reached max retries, try again
+            console.log('Save operation timed out, retrying...');
+          } else {
+            // For other errors, only retry server errors
+            if (currentRetry >= maxRetries) {
+              toast.dismiss(savingToast);
+              throw fetchError;
+            }
+          }
         }
-        throw new Error(`Failed to save experiment: ${errorMessage}`);
+        
+        currentRetry++;
+      }
+      
+      // If we get here and haven't succeeded, dismiss the loading toast
+      if (!saveSuccessful) {
+        toast.dismiss(savingToast);
+        toast.error('Failed to save experiment after multiple attempts.');
       }
     } catch (error) {
       console.error('Error saving experiment:', error);
@@ -658,25 +758,135 @@ export default function ExperimentDesignerPage() {
     return null; // Will redirect via useEffect
   }
 
+  // Custom error component for better organization and reusability
+  const ErrorDisplay = ({ 
+    title, 
+    message, 
+    details, 
+    actions = null, 
+    errorType = 'error' 
+  }: { 
+    title: string; 
+    message: string; 
+    details?: React.ReactNode; 
+    actions?: React.ReactNode;
+    errorType?: 'error' | 'warning' | 'connection' | 'validation';
+  }) => {
+    // Determine background and colors based on error type
+    const colors = {
+      error: {
+        bg: 'bg-red-50',
+        border: 'border-red-200',
+        title: 'text-red-700',
+        message: 'text-red-600'
+      },
+      warning: {
+        bg: 'bg-amber-50',
+        border: 'border-amber-200',
+        title: 'text-amber-700',
+        message: 'text-amber-600'
+      },
+      connection: {
+        bg: 'bg-blue-50',
+        border: 'border-blue-200',
+        title: 'text-blue-700',
+        message: 'text-blue-600'
+      },
+      validation: {
+        bg: 'bg-orange-50',
+        border: 'border-orange-200',
+        title: 'text-orange-700',
+        message: 'text-orange-600'
+      }
+    };
+    
+    const errorColors = colors[errorType];
+    
+    return (
+      <div className={`${errorColors.bg} border ${errorColors.border} rounded-lg p-4 mb-4`}>
+        <h3 className={`${errorColors.title} font-medium mb-2`}>{title}</h3>
+        <p className={`${errorColors.message} mb-2`}>{message}</p>
+        {details && <div className="mt-2 mb-2">{details}</div>}
+        {actions && <div className="mt-3">{actions}</div>}
+      </div>
+    );
+  };
+
   // If there was an error loading the experiment
   if (loadError) {
+    // Determine error type from the message for better categorization
+    let errorType: 'error' | 'warning' | 'connection' | 'validation' = 'error';
+    let suggestedFix = null;
+    
+    if (loadError.includes('timeout') || loadError.includes('network') || loadError.includes('connection') || loadError.includes('Database')) {
+      errorType = 'connection';
+      suggestedFix = "Please check your internet connection and try again.";
+    } else if (loadError.includes('not found') || loadError.includes('404')) {
+      errorType = 'warning';
+      suggestedFix = "This experiment may have been deleted. You can return to the experiments list to see available experiments.";
+    } else if (loadError.includes('validation') || loadError.includes('invalid')) {
+      errorType = 'validation';
+      suggestedFix = "There may be an issue with the experiment data. Try refreshing the page.";
+    }
+    
+    // Generate common error causes based on type
+    const errorCauses = {
+      'connection': [
+        "Database connection issue",
+        "Network connectivity problem",
+        "Server may be temporarily unavailable"
+      ],
+      'warning': [
+        "Experiment ID may be invalid",
+        "Experiment may have been deleted",
+        "You may not have permission to view this experiment"
+      ],
+      'validation': [
+        "Data format issue",
+        "Invalid experiment data structure",
+        "Server validation error"
+      ],
+      'error': [
+        "Invalid experiment ID",
+        "Database connection issue",
+        "Experiment was deleted",
+        "Server error"
+      ]
+    };
+    
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-6">
-        <div className="w-full max-w-md text-center">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-            <h3 className="text-red-700 font-medium mb-2">Error Loading Experiment</h3>
-            <p className="text-red-600 mb-2">{loadError}</p>
-            <p className="text-gray-600 text-sm mb-2">The experiment could not be loaded. This could be due to:</p>
-            <ul className="text-gray-600 text-sm list-disc list-inside mb-2">
-              <li>Invalid experiment ID</li>
-              <li>Database connection issue</li>
-              <li>Experiment was deleted</li>
-            </ul>
-            <p className="text-gray-600 text-sm">Experiment ID: {experimentId}</p>
-          </div>
-          <Link href="/admin/experiments" className="text-purple-600 mt-4 inline-block hover:underline">
-            Return to experiments
-          </Link>
+        <div className="w-full max-w-md">
+          <ErrorDisplay
+            title="Error Loading Experiment"
+            message={loadError}
+            errorType={errorType}
+            details={
+              <>
+                {suggestedFix && <p className="text-gray-700 font-medium mb-2">{suggestedFix}</p>}
+                <p className="text-gray-600 text-sm mb-2">The experiment could not be loaded. This could be due to:</p>
+                <ul className="text-gray-600 text-sm list-disc list-inside mb-2">
+                  {errorCauses[errorType].map((cause, index) => (
+                    <li key={index}>{cause}</li>
+                  ))}
+                </ul>
+                <p className="text-gray-600 text-sm">Experiment ID: {experimentId}</p>
+              </>
+            }
+            actions={
+              <div className="flex justify-between mt-3">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-700 text-sm"
+                >
+                  Refresh Page
+                </button>
+                <Link href="/admin/experiments" className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-white text-sm">
+                  Return to Experiments
+                </Link>
+              </div>
+            }
+          />
         </div>
       </div>
     );
