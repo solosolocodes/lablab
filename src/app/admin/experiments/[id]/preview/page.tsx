@@ -573,156 +573,201 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
               
               {/* Asset cards */}
               {!isLoadingWallet && !walletError && walletAssets.length > 0 && (
-                <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {walletAssets.map(asset => {
-                    // Find asset price data
-                    const assetPrice = scenarioData?.assetPrices?.find(p => 
-                      p.assetId === asset.id || p.symbol === asset.symbol
-                    );
+                <div className="p-3 space-y-4">
+                  {/* Portfolio Summary Card */}
+                  {(() => {
+                    // Calculate portfolio totals
+                    let totalUsdValue = 0;
+                    let previousTotalUsdValue = 0;
+                    let hasCompleteData = false;
                     
-                    // Calculate current price and change
-                    let currentPrice = 0;
-                    let priceChange = 0;
-                    let changePercent = 0;
-                    let usdValue = 0;
-                    let priceDataAvailable = false;
-                    let colors = {
-                      text: 'text-blue-600',
-                      bg: 'bg-blue-50',
-                      icon: '→',
-                      graph: []
-                    };
-                    
-                    if (assetPrice?.prices?.length) {
-                      priceDataAvailable = true;
-                      const currentRoundIndex = Math.min(currentRound - 1, assetPrice.prices.length - 1);
-                      currentPrice = assetPrice.prices[currentRoundIndex];
-                      usdValue = asset.amount * currentPrice;
+                    // Process all assets to calculate total value
+                    walletAssets.forEach(asset => {
+                      const assetPrice = scenarioData?.assetPrices?.find(p => 
+                        p.assetId === asset.id || p.symbol === asset.symbol
+                      );
                       
-                      // Calculate price trend
-                      if (currentRoundIndex > 0) {
-                        const prevPrice = assetPrice.prices[currentRoundIndex - 1];
-                        priceChange = currentPrice - prevPrice;
-                        changePercent = (priceChange / prevPrice) * 100;
+                      if (assetPrice?.prices?.length) {
+                        const currentRoundIndex = Math.min(currentRound - 1, assetPrice.prices.length - 1);
+                        const currentPrice = assetPrice.prices[currentRoundIndex];
+                        totalUsdValue += asset.amount * currentPrice;
                         
-                        // Determine colors based on price change
-                        const isPositive = priceChange > 0;
-                        const isNegative = priceChange < 0;
-                        colors = {
-                          text: isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-blue-600',
-                          bg: isPositive ? 'bg-green-50' : isNegative ? 'bg-red-50' : 'bg-blue-50',
-                          icon: isPositive ? '↑' : isNegative ? '↓' : '→',
-                          graph: []
-                        };
+                        // Calculate previous round total if possible
+                        if (currentRoundIndex > 0) {
+                          hasCompleteData = true;
+                          const prevPrice = assetPrice.prices[currentRoundIndex - 1];
+                          previousTotalUsdValue += asset.amount * prevPrice;
+                        }
                       }
-                      
-                      // Generate simple graph data (last 6 prices or all available)
-                      colors.graph = assetPrice.prices
-                        .slice(Math.max(0, currentRoundIndex - 5), currentRoundIndex + 1)
-                        .map((price, i, arr) => {
-                          // Normalize to percentage of max value for display
-                          const max = Math.max(...arr);
-                          const min = Math.min(...arr);
-                          const range = max - min || 1; // Avoid division by zero
-                          const height = ((price - min) / range) * 100;
-                          return { price, height };
-                        });
+                    });
+                    
+                    // Calculate portfolio change
+                    let portfolioChange = 0;
+                    let portfolioChangePercent = 0;
+                    if (hasCompleteData && previousTotalUsdValue > 0) {
+                      portfolioChange = totalUsdValue - previousTotalUsdValue;
+                      portfolioChangePercent = (portfolioChange / previousTotalUsdValue) * 100;
                     }
                     
-                    // Create timestamp for current round
+                    // Determine colors based on portfolio change
+                    const isPositive = portfolioChange > 0;
+                    const isNegative = portfolioChange < 0;
+                    const colors = {
+                      text: isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-blue-600',
+                      bg: isPositive ? 'bg-green-50' : isNegative ? 'bg-red-50' : 'bg-blue-50',
+                      icon: isPositive ? '↑' : isNegative ? '↓' : '→'
+                    };
+                    
+                    // Create timestamp
                     const now = new Date();
                     const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
                     
                     return (
-                      <div 
-                        key={asset.id} 
-                        className="bg-white border border-gray-200 rounded-lg p-4 shadow hover:shadow-md transition-shadow"
-                      >
-                        {/* Header with symbol and balance */}
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex flex-col">
-                            <span className="text-xl font-bold text-gray-900">
-                              {asset.symbol}
-                            </span>
-                            <span className="text-sm text-gray-600" title={asset.name}>
-                              {asset.name || asset.symbol}
-                            </span>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-md">
+                        <div className="flex justify-between items-center mb-2">
+                          <h3 className="text-lg font-bold text-blue-900">
+                            Portfolio Summary
+                          </h3>
+                          <div className="text-sm text-gray-600">
+                            Round {currentRound} • {timestamp}
                           </div>
-                          <div className="flex flex-col items-end">
-                            <span className="text-lg font-mono font-bold text-blue-900">
-                              {asset.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                            </span>
+                        </div>
+                        
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                          <div className="mb-2 sm:mb-0">
+                            <div className="text-sm text-gray-600 mb-1">Total Value</div>
+                            <div className="text-2xl font-bold text-blue-900">
+                              ${totalUsdValue.toFixed(2)}
+                            </div>
+                          </div>
+                          
+                          {hasCompleteData && (
+                            <div className={`px-4 py-2 rounded-lg ${colors.bg} flex items-center`}>
+                              <div className="mr-3">
+                                <div className="text-sm text-gray-600 mb-1">Change From Last Round</div>
+                                <div className={`text-lg font-bold ${colors.text} flex items-center`}>
+                                  {colors.icon} ${Math.abs(portfolioChange).toFixed(2)} ({Math.abs(portfolioChangePercent).toFixed(2)}%)
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* Individual Asset Cards */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {walletAssets.map(asset => {
+                      // Find asset price data
+                      const assetPrice = scenarioData?.assetPrices?.find(p => 
+                        p.assetId === asset.id || p.symbol === asset.symbol
+                      );
+                      
+                      // Calculate current price and change
+                      let currentPrice = 0;
+                      let priceChange = 0;
+                      let changePercent = 0;
+                      let usdValue = 0;
+                      let priceDataAvailable = false;
+                      let colors = {
+                        text: 'text-blue-600',
+                        bg: 'bg-blue-50',
+                        icon: '→'
+                      };
+                      
+                      if (assetPrice?.prices?.length) {
+                        priceDataAvailable = true;
+                        const currentRoundIndex = Math.min(currentRound - 1, assetPrice.prices.length - 1);
+                        currentPrice = assetPrice.prices[currentRoundIndex];
+                        usdValue = asset.amount * currentPrice;
+                        
+                        // Calculate price trend
+                        if (currentRoundIndex > 0) {
+                          const prevPrice = assetPrice.prices[currentRoundIndex - 1];
+                          priceChange = currentPrice - prevPrice;
+                          changePercent = (priceChange / prevPrice) * 100;
+                          
+                          // Determine colors based on price change
+                          const isPositive = priceChange > 0;
+                          const isNegative = priceChange < 0;
+                          colors = {
+                            text: isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-blue-600',
+                            bg: isPositive ? 'bg-green-50' : isNegative ? 'bg-red-50' : 'bg-blue-50',
+                            icon: isPositive ? '↑' : isNegative ? '↓' : '→'
+                          };
+                        }
+                      }
+                      
+                      return (
+                        <div 
+                          key={asset.id} 
+                          className="bg-white border border-gray-200 rounded-lg p-4 shadow hover:shadow-md transition-shadow"
+                        >
+                          {/* Header with symbol and name */}
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex flex-col">
+                              <span className="text-xl font-bold text-gray-900">
+                                {asset.symbol}
+                              </span>
+                              <span className="text-sm text-gray-600" title={asset.name}>
+                                {asset.name || asset.symbol}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Asset amount and value */}
+                          <div className="flex flex-col space-y-2 mb-3">
+                            <div className="flex justify-between items-center">
+                              <span className="text-sm text-gray-600">Amount:</span>
+                              <span className="text-lg font-mono font-bold text-blue-900">
+                                {asset.amount.toFixed(2)}
+                              </span>
+                            </div>
+                            
                             {priceDataAvailable && (
-                              <div className="flex items-center">
-                                <span className="text-sm font-medium text-gray-700">
-                                  ${usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                                {changePercent !== 0 && (
-                                  <span className={`text-xs ml-2 ${colors.text} flex items-center`}>
-                                    {colors.icon} {Math.abs(changePercent).toFixed(1)}%
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-gray-600">Value in USD:</span>
+                                <div className="flex items-center">
+                                  <span className="text-lg font-mono font-bold text-gray-700">
+                                    ${usdValue.toFixed(2)}
                                   </span>
-                                )}
+                                  {changePercent !== 0 && (
+                                    <span className={`text-xs ml-2 ${colors.text} flex items-center`}>
+                                      {colors.icon} {Math.abs(changePercent).toFixed(2)}%
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {priceDataAvailable && (
+                              <div className="text-xs text-right text-gray-500">
+                                Round {currentRound} price: ${currentPrice.toFixed(2)}
                               </div>
                             )}
                           </div>
-                        </div>
-                        
-                        {/* Price graph */}
-                        {priceDataAvailable && (
-                          <div className="mt-3 mb-2">
-                            <div className="flex items-end justify-between h-16 px-1 bg-gray-50 rounded">
-                              {colors.graph.length > 0 ? (
-                                colors.graph.map((point, i) => (
-                                  <div key={i} className="flex flex-col items-center">
-                                    <div 
-                                      className={`w-2 ${colors.text} transition-all duration-300`}
-                                      style={{ height: `${Math.max(5, point.height)}%` }}
-                                    >
-                                      <div className={`w-full h-full ${priceChange >= 0 ? 'bg-green-500' : 'bg-red-500'} rounded-t`}></div>
-                                    </div>
-                                    {i === colors.graph.length - 1 && (
-                                      <div className="text-xs text-gray-500 absolute -bottom-5">
-                                        now
-                                      </div>
-                                    )}
-                                  </div>
-                                ))
-                              ) : (
-                                <div className="w-full text-center text-xs text-gray-500 py-6">
-                                  No historical data
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex justify-between items-center mt-2">
-                              <div className="text-xs text-gray-500">
-                                24h change
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                Round {currentRound} price: ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • {timestamp}
-                              </div>
-                            </div>
+                          
+                          {/* Action buttons */}
+                          <div className="flex gap-2 mt-3">
+                            <button className="flex-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded transition-colors">
+                              Buy
+                            </button>
+                            <button className="flex-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 font-medium py-2 px-4 rounded transition-colors">
+                              Sell
+                            </button>
                           </div>
-                        )}
-                        
-                        {/* Action buttons */}
-                        <div className="flex gap-2 mt-3">
-                          <button className="flex-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded transition-colors">
-                            Buy
-                          </button>
-                          <button className="flex-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 font-medium py-2 px-4 rounded transition-colors">
-                            Sell
-                          </button>
+                          
+                          {/* Fall back if no price data available */}
+                          {!priceDataAvailable && (
+                            <div className="mt-3 bg-gray-50 rounded px-3 py-2 text-xs text-gray-500 text-center">
+                              No price data available
+                            </div>
+                          )}
                         </div>
-                        
-                        {/* Fall back if no price data available */}
-                        {!priceDataAvailable && (
-                          <div className="mt-3 bg-gray-50 rounded px-3 py-2 text-xs text-gray-500 text-center">
-                            No price data available
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
               
