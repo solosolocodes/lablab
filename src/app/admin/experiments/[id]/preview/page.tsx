@@ -14,6 +14,8 @@ interface Stage {
   format?: string;
   message?: string;
   scenarioId?: string;
+  rounds?: number;
+  roundDuration?: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   questions?: Array<any>;
 }
