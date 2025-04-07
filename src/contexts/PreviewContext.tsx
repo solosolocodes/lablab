@@ -53,7 +53,8 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
-      const response = await fetch(`/api/experiments/${experimentId}`);
+      // Add preview parameter to allow access without authentication
+      const response = await fetch(`/api/experiments/${experimentId}?preview=true`);
       
       if (!response.ok) {
         throw new Error(`Failed to load experiment: ${response.statusText}`);

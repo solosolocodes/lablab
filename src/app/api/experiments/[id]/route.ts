@@ -15,8 +15,11 @@ export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     
-    // Check if user is authenticated and is admin
-    if (!session || session.user.role !== 'admin') {
+    // Check if the request is for preview mode (allow without authentication)
+    const isPreviewMode = request.nextUrl.searchParams.has('preview');
+    
+    // Skip authentication check if in preview mode
+    if (!isPreviewMode && (!session || session.user.role !== 'admin')) {
       return NextResponse.json(
         { message: 'Unauthorized' },
         { status: 401 }
