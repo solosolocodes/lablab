@@ -33,6 +33,7 @@ interface PreviewContextType {
   resetTimer: () => void;
   currentStage: Stage | null;
   progress: number;
+  isStageTransitioning: boolean;
 }
 
 const PreviewContext = createContext<PreviewContextType | undefined>(undefined);
@@ -42,6 +43,7 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
+  const [isStageTransitioning, setIsStageTransitioning] = useState(false);
 
   // Simplified experiment loading
   const loadExperiment = async (experimentId: string) => {
@@ -79,28 +81,51 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Go to next stage
+  // Go to next stage with smooth transition
   const goToNextStage = useCallback(() => {
     if (!experiment) return;
     
     if (currentStageIndex < experiment.stages.length - 1) {
-      const nextIndex = currentStageIndex + 1;
-      setCurrentStageIndex(nextIndex);
-      setTimeRemaining(experiment.stages[nextIndex].durationSeconds);
-      setTimerActive(true);
+      // Start transition
+      setIsStageTransitioning(true);
+      
+      // Use setTimeout to create a smooth transition effect
+      setTimeout(() => {
+        const nextIndex = currentStageIndex + 1;
+        setCurrentStageIndex(nextIndex);
+        setTimeRemaining(experiment.stages[nextIndex].durationSeconds);
+        setTimerActive(true);
+        
+        // Complete transition after a small delay to prevent flickering
+        setTimeout(() => {
+          setIsStageTransitioning(false);
+        }, 100);
+      }, 50);
     }
   }, [experiment, currentStageIndex]);
 
-  // Go to previous stage, returns true if successful
-  const goToPreviousStage = () => {
+  // Go to previous stage with smooth transition, returns true if successful
+  const goToPreviousStage = useCallback(() => {
     if (!experiment || currentStageIndex <= 0) return false;
     
-    const prevIndex = currentStageIndex - 1;
-    setCurrentStageIndex(prevIndex);
-    setTimeRemaining(experiment.stages[prevIndex].durationSeconds);
-    setTimerActive(true);
+    // Start transition
+    setIsStageTransitioning(true);
+    
+    // Use setTimeout to create a smooth transition effect
+    setTimeout(() => {
+      const prevIndex = currentStageIndex - 1;
+      setCurrentStageIndex(prevIndex);
+      setTimeRemaining(experiment.stages[prevIndex].durationSeconds);
+      setTimerActive(true);
+      
+      // Complete transition after a small delay to prevent flickering
+      setTimeout(() => {
+        setIsStageTransitioning(false);
+      }, 100);
+    }, 50);
+    
     return true;
-  };
+  }, [experiment, currentStageIndex]);
 
   // Reset timer for current stage
   const resetTimer = () => {
@@ -165,7 +190,8 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         goToPreviousStage,
         resetTimer,
         currentStage,
-        progress
+        progress,
+        isStageTransitioning
       }}
     >
       {children}

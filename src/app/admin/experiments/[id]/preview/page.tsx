@@ -40,6 +40,7 @@ function isInstructionsStage(stage: Stage): stage is InstructionsStage {
 }
 
 function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext: () => void }) {
+  const { isStageTransitioning } = usePreview();
   // Enhanced markdown-like rendering function
   const renderContent = (content: string) => {
     if (!content) return '<p>No content available</p>';
@@ -89,7 +90,8 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
       <div className="flex justify-center">
         <button 
           onClick={onNext}
-          className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          disabled={isStageTransitioning}
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Continue
         </button>
@@ -99,6 +101,7 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
 }
 
 function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+  const { isStageTransitioning } = usePreview();
   return (
     <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
@@ -115,7 +118,8 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       <div className="flex justify-center">
         <button 
           onClick={onNext}
-          className="px-6 py-2 bg-blue-500 text-white rounded"
+          disabled={isStageTransitioning}
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Continue
         </button>
@@ -125,6 +129,7 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
 }
 
 function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+  const { isStageTransitioning } = usePreview();
   return (
     <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
@@ -155,7 +160,8 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       <div className="flex justify-center">
         <button 
           onClick={onNext}
-          className="px-6 py-2 bg-blue-500 text-white rounded"
+          disabled={isStageTransitioning}
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Continue
         </button>
@@ -165,6 +171,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 }
 
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+  const { isStageTransitioning } = usePreview();
   return (
     <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
@@ -205,7 +212,8 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       <div className="flex justify-center">
         <button 
           onClick={onNext}
-          className="px-6 py-2 bg-blue-500 text-white rounded"
+          disabled={isStageTransitioning}
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Submit
         </button>
@@ -215,6 +223,7 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
 }
 
 function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+  const { isStageTransitioning } = usePreview();
   // Render different stage types with appropriate placeholders
   if (stage.type === 'break') {
     return <BreakStage stage={stage} onNext={onNext} />;
@@ -244,7 +253,8 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
       <div className="flex justify-center">
         <button 
           onClick={onNext}
-          className="px-6 py-2 bg-blue-500 text-white rounded"
+          disabled={isStageTransitioning}
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Continue
         </button>
@@ -254,7 +264,7 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
 }
 
 function SimplePreviewContent() {
-  const { experiment, currentStage, loadExperiment, goToNextStage } = usePreview();
+  const { experiment, currentStage, loadExperiment, goToNextStage, isStageTransitioning } = usePreview();
   const [showWelcome, setShowWelcome] = useState(true);
   const [showThankYou, setShowThankYou] = useState(false);
   const [isLastStage, setIsLastStage] = useState(false);
@@ -352,17 +362,19 @@ function SimplePreviewContent() {
         </div>
       </div>
       
-      {isInstructionsStage(currentStage) ? (
-        <InstructionsView 
-          stage={currentStage} 
-          onNext={isLastStage ? handleLastStageNext : goToNextStage} 
-        />
-      ) : (
-        <PlaceholderStage 
-          stage={currentStage} 
-          onNext={isLastStage ? handleLastStageNext : goToNextStage} 
-        />
-      )}
+      <div className={`transition-opacity duration-300 ${isStageTransitioning ? 'opacity-60' : 'opacity-100'}`}>
+        {isInstructionsStage(currentStage) ? (
+          <InstructionsView 
+            stage={currentStage} 
+            onNext={isLastStage ? handleLastStageNext : goToNextStage} 
+          />
+        ) : (
+          <PlaceholderStage 
+            stage={currentStage} 
+            onNext={isLastStage ? handleLastStageNext : goToNextStage} 
+          />
+        )}
+      </div>
     </div>
   );
 }
