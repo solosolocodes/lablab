@@ -77,7 +77,7 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
   };
   
   return (
-    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+    <div className="w-full p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
         <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
         <p className="text-gray-600">{stage.description}</p>
@@ -141,7 +141,7 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   };
   
   return (
-    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+    <div className="w-full p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
         <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
         <p className="text-gray-600">{stage.description}</p>
@@ -368,7 +368,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   // Loading state
   if (isLoading) {
     return (
-      <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+      <div className="w-full p-4 bg-white rounded border">
         <div className="text-center py-4">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <h3 className="text-lg font-semibold">Loading Scenario Data...</h3>
@@ -381,7 +381,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   // Error state with fallback
   if (error) {
     return (
-      <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+      <div className="w-full p-4 bg-white rounded border">
         <div className="mb-4 pb-3 border-b border-gray-200">
           <h3 className="text-xl font-bold mb-2 text-red-600">Error Loading Scenario</h3>
           <p className="text-gray-600">{error}</p>
@@ -405,7 +405,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   }
   
   return (
-    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+    <div className="w-full p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
         <h3 className="text-xl font-bold mb-2">
           {scenarioData?.name || stage.title}
@@ -700,7 +700,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
   return (
-    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+    <div className="w-full p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
         <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
         <p className="text-gray-600">{stage.description}</p>
@@ -766,7 +766,7 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
   
   // Default placeholder for unknown stage types
   return (
-    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+    <div className="w-full p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
         <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
         <p className="text-gray-600">{stage.description}</p>
@@ -828,7 +828,7 @@ function SimplePreviewContent() {
   if (!experiment) {
     return (
       <div className="p-4">
-        <div className="max-w-2xl mx-auto p-4 bg-white rounded border text-center">
+        <div className="w-full p-4 bg-white rounded border text-center">
           <p>Loading experiment...</p>
         </div>
       </div>
@@ -839,7 +839,7 @@ function SimplePreviewContent() {
   if (viewMode === 'thankyou') {
     return (
       <div className="p-4">
-        <div className="max-w-2xl mx-auto p-4 bg-white rounded border text-center">
+        <div className="w-full p-4 bg-white rounded border text-center">
           <h3 className="text-lg font-bold mb-4">Thank You</h3>
           <p className="mb-6">You have completed all stages of this experiment.</p>
           <button 
@@ -857,7 +857,7 @@ function SimplePreviewContent() {
   if (viewMode === 'welcome') {
     return (
       <div className="p-4">
-        <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+        <div className="w-full p-4 bg-white rounded border">
           <div className="text-center mb-5">
             <h3 className="text-xl font-bold mb-2">Welcome to {experiment.name}</h3>
             <p className="text-gray-600 mb-2">{experiment.description || ''}</p>
@@ -910,7 +910,7 @@ function SimplePreviewContent() {
     
     return (
       <div className="p-4">
-        <div className="flex justify-between items-center max-w-2xl mx-auto mb-4">
+        <div className="flex justify-between items-center w-full mb-4">
           <div>
             <p className="text-sm text-gray-500">Stage {currentStageNumber + 1} of {experiment.stages.length}</p>
           </div>
@@ -919,7 +919,7 @@ function SimplePreviewContent() {
           </div>
         </div>
         
-        <div className="max-w-2xl mx-auto">
+        <div className="w-full">
           {stage.type === 'instructions' && 'content' in stage && (
             <InstructionsView 
               stage={stage as unknown as InstructionsStage} 
@@ -962,10 +962,21 @@ function SimplePreviewContent() {
   return null;
 }
 
+// Create a wrapper with wider container for all components in preview mode
+function PreviewContainer({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="max-w-4xl mx-auto">
+      {children}
+    </div>
+  );
+}
+
 export default function SimplifiedPreviewPage() {
   return (
     <PreviewProvider>
-      <SimplePreviewContent />
+      <PreviewContainer>
+        <SimplePreviewContent />
+      </PreviewContainer>
     </PreviewProvider>
   );
 }
