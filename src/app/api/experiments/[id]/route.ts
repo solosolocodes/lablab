@@ -156,7 +156,10 @@ export async function GET(request: NextRequest) {
             description: experiment.description,
             status: experiment.status,
             createdBy: experiment.createdBy,
-            userGroups: experiment.userGroups,
+            userGroups: experiment.userGroups.map((ug: any) => ({
+              userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId._id ? ug.userGroupId._id.toString() : ug.userGroupId.toString(),
+              condition: ug.condition
+            })),
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             stages: experiment.stages.map((stage: any) => ({
               id: stage._id,
@@ -240,7 +243,10 @@ export async function GET(request: NextRequest) {
       description: experiment.description,
       status: experiment.status,
       createdBy: experiment.createdBy,
-      userGroups: experiment.userGroups,
+      userGroups: experiment.userGroups.map((ug: any) => ({
+        userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId._id ? ug.userGroupId._id.toString() : ug.userGroupId.toString(),
+        condition: ug.condition
+      })),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       stages: experiment.stages.map((stage: any) => ({
         id: stage._id,
@@ -503,7 +509,10 @@ export async function PUT(request: NextRequest) {
         name: experiment.name,
         description: experiment.description,
         status: experiment.status,
-        userGroups: experiment.userGroups,
+        userGroups: experiment.userGroups.map((ug: any) => ({
+        userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId._id ? ug.userGroupId._id.toString() : ug.userGroupId.toString(),
+        condition: ug.condition
+      })),
         stages: experiment.stages,
         branches: experiment.branches,
         startStageId: experiment.startStageId,
