@@ -35,6 +35,7 @@ interface InstructionsStage extends Stage {
 }
 
 // Type guard function to check if a stage is an instructions stage
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function isInstructionsStage(stage: Stage): stage is InstructionsStage {
   return stage.type === 'instructions' && typeof stage.content === 'string';
 }
@@ -264,10 +265,9 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
 }
 
 function SimplePreviewContent() {
-  const { experiment, currentStage, loadExperiment, goToNextStage, isStageTransitioning } = usePreview();
-  const [showWelcome, setShowWelcome] = useState(true);
-  const [showThankYou, setShowThankYou] = useState(false);
-  const [isLastStage, setIsLastStage] = useState(false);
+  const { experiment, loadExperiment } = usePreview();
+  const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
+  const [currentStageNumber, setCurrentStageNumber] = useState(0);
   const params = useParams();
   const experimentId = params.id as string;
 
@@ -277,25 +277,20 @@ function SimplePreviewContent() {
     }
   }, [experimentId, loadExperiment]);
 
-  // Check if this is the last stage
-  useEffect(() => {
-    if (experiment && currentStage) {
-      // Sort stages by order
-      const sortedStages = [...experiment.stages].sort((a, b) => a.order - b.order);
-      // Check if current stage is the last one
-      const currentIndex = sortedStages.findIndex(stage => stage.id === currentStage.id);
-      setIsLastStage(currentIndex === sortedStages.length - 1);
-    }
-  }, [experiment, currentStage]);
-
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
-    setShowWelcome(false);
+    setViewMode('experiment');
   };
   
-  // Handle Next button on the last stage
-  const handleLastStageNext = () => {
-    setShowThankYou(true);
+  // Handle Next button click for stage navigation
+  const handleStageNext = () => {
+    if (!experiment) return;
+    
+    if (currentStageNumber < experiment.stages.length - 1) {
+      setCurrentStageNumber(prev => prev + 1);
+    } else {
+      setViewMode('thankyou');
+    }
   };
   
   // Handle exit button
@@ -303,8 +298,19 @@ function SimplePreviewContent() {
     window.location.href = `/admin/experiments/${experimentId}/designer`;
   };
   
-  // Show Thank You screen
-  if (showThankYou) {
+  // No experiment loaded yet
+  if (!experiment) {
+    return (
+      <div className="p-4">
+        <div className="max-w-2xl mx-auto p-4 bg-white rounded border text-center">
+          <p>Loading experiment...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Thank You screen view
+  if (viewMode === 'thankyou') {
     return (
       <div className="p-4">
         <div className="max-w-2xl mx-auto p-4 bg-white rounded border text-center">
@@ -321,22 +327,20 @@ function SimplePreviewContent() {
     );
   }
   
-  // Simple welcome screen with stages overview
-  if (showWelcome) {
+  // Welcome screen view with stages overview
+  if (viewMode === 'welcome') {
     return (
       <div className="p-4">
         <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
           <div className="text-center mb-5">
-            <h3 className="text-xl font-bold mb-2">Welcome to {experiment?.name || 'Experiment'}</h3>
-            <p className="text-gray-600 mb-2">{experiment?.description || ''}</p>
-            {experiment && (
-              <div className="text-gray-600">
-                <p>This experiment consists of {experiment.stages.length} stages.</p>
-              </div>
-            )}
+            <h3 className="text-xl font-bold mb-2">Welcome to {experiment.name}</h3>
+            <p className="text-gray-600 mb-2">{experiment.description || ''}</p>
+            <div className="text-gray-600">
+              <p>This experiment consists of {experiment.stages.length} stages.</p>
+            </div>
           </div>
 
-          {experiment && experiment.stages.length > 0 && (
+          {experiment.stages.length > 0 && (
             <div className="bg-gray-50 rounded border p-4 mb-5">
               <h4 className="font-medium mb-2">Stages Overview:</h4>
               <div className="space-y-1">
@@ -373,44 +377,63 @@ function SimplePreviewContent() {
     );
   }
   
-  // No experiment or stage yet
-  if (!experiment || !currentStage) {
+  // Experiment stage view
+  if (viewMode === 'experiment' && experiment.stages.length > 0) {
+    const stage = experiment.stages[currentStageNumber];
+    if (!stage) return null;
+    
     return (
       <div className="p-4">
-        <div className="max-w-2xl mx-auto p-4 bg-white rounded border text-center">
-          <p>Loading experiment...</p>
+        <div className="flex justify-between items-center max-w-2xl mx-auto mb-4">
+          <div>
+            <p className="text-sm text-gray-500">Stage {currentStageNumber + 1} of {experiment.stages.length}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Experiment: {experiment.name}</p>
+          </div>
+        </div>
+        
+        <div className="max-w-2xl mx-auto">
+          {stage.type === 'instructions' && 'content' in stage && (
+            <InstructionsView 
+              stage={stage as unknown as InstructionsStage} 
+              onNext={handleStageNext} 
+            />
+          )}
+          
+          {stage.type === 'break' && (
+            <BreakStage 
+              stage={stage} 
+              onNext={handleStageNext} 
+            />
+          )}
+          
+          {stage.type === 'scenario' && (
+            <ScenarioStage 
+              stage={stage} 
+              onNext={handleStageNext} 
+            />
+          )}
+          
+          {stage.type === 'survey' && (
+            <SurveyStage 
+              stage={stage} 
+              onNext={handleStageNext} 
+            />
+          )}
+          
+          {!['instructions', 'break', 'scenario', 'survey'].includes(stage.type) && (
+            <PlaceholderStage 
+              stage={stage} 
+              onNext={handleStageNext} 
+            />
+          )}
         </div>
       </div>
     );
   }
   
-  // Display appropriate stage
-  return (
-    <div className="p-4">
-      <div className="flex justify-between items-center max-w-2xl mx-auto mb-4">
-        <div>
-          <p className="text-sm text-gray-500">Stage {currentStage.order + 1} of {experiment.stages.length}</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">Experiment: {experiment.name}</p>
-        </div>
-      </div>
-      
-      <div className={`transition-opacity duration-300 ${isStageTransitioning ? 'opacity-60' : 'opacity-100'}`}>
-        {isInstructionsStage(currentStage) ? (
-          <InstructionsView 
-            stage={currentStage} 
-            onNext={isLastStage ? handleLastStageNext : goToNextStage} 
-          />
-        ) : (
-          <PlaceholderStage 
-            stage={currentStage} 
-            onNext={isLastStage ? handleLastStageNext : goToNextStage} 
-          />
-        )}
-      </div>
-    </div>
-  );
+  return null;
 }
 
 export default function SimplifiedPreviewPage() {
