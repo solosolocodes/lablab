@@ -88,7 +88,33 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
   );
 }
 
-function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+  return (
+    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+      <div className="mb-4 pb-3 border-b border-gray-200">
+        <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
+        <p className="text-gray-600">{stage.description}</p>
+      </div>
+      
+      <div className="p-5 bg-gray-50 rounded border mb-5 text-center">
+        <div className="text-gray-500 mb-3">BREAK</div>
+        <p className="font-medium mb-3 text-lg">{stage.message || "Take a short break before continuing"}</p>
+        <p className="text-gray-600">When you're ready, click Continue to proceed to the next stage.</p>
+      </div>
+      
+      <div className="flex justify-center">
+        <button 
+          onClick={onNext}
+          className="px-6 py-2 bg-blue-500 text-white rounded"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   return (
     <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
@@ -97,35 +123,118 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
       </div>
       
       <div className="p-4 bg-gray-50 rounded border mb-5">
-        <p className="font-medium">Stage type: {stage.type}</p>
-        <p className="mt-2 text-gray-600">This stage type is currently displayed as a placeholder.</p>
-        
-        {stage.type === 'survey' && stage.questions && (
-          <div className="mt-4 p-3 bg-gray-100 rounded">
-            <p className="font-medium mb-2">Survey has {stage.questions.length} questions</p>
-            <p className="text-sm text-gray-600">Survey questions will be displayed here in the final version.</p>
+        <div className="text-center py-4">
+          <p className="font-medium mb-3">Scenario Simulation</p>
+          <div className="border border-gray-300 rounded p-4 mb-4 bg-white">
+            <div className="bg-gray-200 h-20 rounded flex items-center justify-center mb-4">
+              <p className="text-gray-600">Scenario Interface Placeholder</p>
+            </div>
+            <div className="flex justify-between border-t pt-3">
+              <div>
+                <p className="text-sm text-gray-700">Scenario ID: {stage.scenarioId || 'Default'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-700">Rounds: {stage.rounds || '1'}</p>
+              </div>
+            </div>
           </div>
-        )}
+          <p className="text-sm text-gray-600">In the actual experiment, participants will interact with the scenario here.</p>
+        </div>
+      </div>
+      
+      <div className="flex justify-center">
+        <button 
+          onClick={onNext}
+          className="px-6 py-2 bg-blue-500 text-white rounded"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+  return (
+    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+      <div className="mb-4 pb-3 border-b border-gray-200">
+        <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
+        <p className="text-gray-600">{stage.description}</p>
+      </div>
+      
+      <div className="p-4 bg-gray-50 rounded border mb-5">
+        <p className="font-medium mb-3">Survey Questions</p>
         
-        {stage.type === 'break' && stage.message && (
-          <div className="mt-4 p-3 bg-gray-100 rounded">
-            <p className="font-medium mb-2">Break Message:</p>
-            <p className="text-gray-700">{stage.message}</p>
+        {stage.questions && stage.questions.length > 0 ? (
+          <div>
+            {stage.questions.map((q, i) => (
+              <div key={q.id || i} className="mb-4 p-3 bg-white rounded border">
+                <p className="font-medium">
+                  {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">Type: {q.type}</p>
+                
+                {q.type === 'multipleChoice' && q.options && (
+                  <div className="mt-2 pl-4">
+                    {q.options.map((option, idx) => (
+                      <div key={idx} className="flex items-center mt-1">
+                        <span className="w-4 h-4 border border-gray-300 rounded-full mr-2"></span>
+                        <span className="text-gray-700">{option}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        )}
-        
-        {stage.type === 'scenario' && (
-          <div className="mt-4 p-3 bg-gray-100 rounded">
-            <p className="font-medium mb-2">Scenario ID: {stage.scenarioId || 'Not specified'}</p>
-            <p className="text-sm text-gray-600">The scenario interface will be displayed here in the final version.</p>
-          </div>
+        ) : (
+          <p className="text-gray-600">No questions defined for this survey.</p>
         )}
       </div>
       
       <div className="flex justify-center">
         <button 
           onClick={onNext}
-          className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+          className="px-6 py-2 bg-blue-500 text-white rounded"
+        >
+          Submit
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+  // Render different stage types with appropriate placeholders
+  if (stage.type === 'break') {
+    return <BreakStage stage={stage} onNext={onNext} />;
+  }
+  
+  if (stage.type === 'scenario') {
+    return <ScenarioStage stage={stage} onNext={onNext} />;
+  }
+  
+  if (stage.type === 'survey') {
+    return <SurveyStage stage={stage} onNext={onNext} />;
+  }
+  
+  // Default placeholder for unknown stage types
+  return (
+    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+      <div className="mb-4 pb-3 border-b border-gray-200">
+        <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
+        <p className="text-gray-600">{stage.description}</p>
+      </div>
+      
+      <div className="p-4 bg-gray-50 rounded border mb-5">
+        <p className="font-medium">Unknown stage type: {stage.type}</p>
+        <p className="mt-2 text-gray-600">This stage type is not recognized and is displayed as a placeholder.</p>
+      </div>
+      
+      <div className="flex justify-center">
+        <button 
+          onClick={onNext}
+          className="px-6 py-2 bg-blue-500 text-white rounded"
         >
           Continue
         </button>
@@ -137,6 +246,8 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
 function SimplePreviewContent() {
   const { experiment, currentStage, loadExperiment, goToNextStage } = usePreview();
   const [showWelcome, setShowWelcome] = useState(true);
+  const [showThankYou, setShowThankYou] = useState(false);
+  const [isLastStage, setIsLastStage] = useState(false);
   const params = useParams();
   const experimentId = params.id as string;
 
@@ -146,10 +257,49 @@ function SimplePreviewContent() {
     }
   }, [experimentId, loadExperiment]);
 
+  // Check if this is the last stage
+  useEffect(() => {
+    if (experiment && currentStage) {
+      // Sort stages by order
+      const sortedStages = [...experiment.stages].sort((a, b) => a.order - b.order);
+      // Check if current stage is the last one
+      const currentIndex = sortedStages.findIndex(stage => stage.id === currentStage.id);
+      setIsLastStage(currentIndex === sortedStages.length - 1);
+    }
+  }, [experiment, currentStage]);
+
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
     setShowWelcome(false);
   };
+  
+  // Handle Next button on the last stage
+  const handleLastStageNext = () => {
+    setShowThankYou(true);
+  };
+  
+  // Handle exit button
+  const handleExit = () => {
+    window.location.href = `/admin/experiments/${experimentId}/designer`;
+  };
+  
+  // Show Thank You screen
+  if (showThankYou) {
+    return (
+      <div className="p-4">
+        <div className="max-w-2xl mx-auto p-4 bg-white rounded border text-center">
+          <h3 className="text-lg font-bold mb-4">Thank You</h3>
+          <p className="mb-6">You have completed all stages of this experiment.</p>
+          <button 
+            onClick={handleExit}
+            className="px-6 py-2 bg-blue-500 text-white rounded"
+          >
+            Exit
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   // Simple welcome screen
   if (showWelcome) {
@@ -157,7 +307,7 @@ function SimplePreviewContent() {
       <div className="p-4">
         <div className="max-w-2xl mx-auto p-4 bg-white rounded border text-center">
           <h3 className="text-lg font-bold mb-4">Welcome</h3>
-          <p className="mb-6">Thank you. Please click Next.</p>
+          <p className="mb-6">Thank you. Please click Next to begin the experiment.</p>
           <button 
             onClick={handleWelcomeNext}
             className="px-6 py-2 bg-blue-500 text-white rounded"
@@ -183,15 +333,24 @@ function SimplePreviewContent() {
   // Display appropriate stage
   return (
     <div className="p-4">
+      <div className="flex justify-between items-center max-w-2xl mx-auto mb-4">
+        <div>
+          <p className="text-sm text-gray-500">Stage {currentStage.order + 1} of {experiment.stages.length}</p>
+        </div>
+        <div>
+          <p className="text-sm text-gray-500">Experiment: {experiment.name}</p>
+        </div>
+      </div>
+      
       {isInstructionsStage(currentStage) ? (
         <InstructionsView 
           stage={currentStage} 
-          onNext={goToNextStage} 
+          onNext={isLastStage ? handleLastStageNext : goToNextStage} 
         />
       ) : (
         <PlaceholderStage 
           stage={currentStage} 
-          onNext={goToNextStage} 
+          onNext={isLastStage ? handleLastStageNext : goToNextStage} 
         />
       )}
     </div>
