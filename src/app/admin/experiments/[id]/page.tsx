@@ -486,11 +486,6 @@ export default function ExperimentDetailsPage() {
                           <div className="font-medium text-gray-800">{getUserGroupName(group.userGroupId)}</div>
                           <div className="text-sm text-gray-500">Condition: {group.condition}</div>
                         </div>
-                        {group.maxParticipants && (
-                          <div className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                            Max: {group.maxParticipants}
-                          </div>
-                        )}
                       </div>
                     </div>
                   ))}

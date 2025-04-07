@@ -342,14 +342,13 @@ export async function PUT(request: NextRequest) {
       interface UserGroupInput {
         userGroupId: string;
         condition: string;
-        maxParticipants?: number | string;
       }
       
       // Use already imported mongoose
       // Log userGroups for debugging
       console.log('Processing userGroups:', JSON.stringify(userGroups, null, 2));
       
-      // Ensure maxParticipants is a number or undefined
+      // Process user groups - no max participants needed
       experiment.userGroups = userGroups.map((group: UserGroupInput) => {
         // Convert userGroupId to ObjectId if it's a string
         let userGroupId;
@@ -361,13 +360,9 @@ export async function PUT(request: NextRequest) {
           userGroupId = group.userGroupId;
         }
         
-        // maxParticipants must be at least 1 according to validation
-        const maxParticipants = group.maxParticipants !== undefined ? Number(group.maxParticipants) : 1;
-        
         return {
           userGroupId: userGroupId,
-          condition: group.condition,
-          maxParticipants: maxParticipants < 1 ? 1 : maxParticipants // Ensure minimum is 1
+          condition: group.condition
         };
       });
     }
