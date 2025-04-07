@@ -189,8 +189,24 @@ export async function GET(request: NextRequest) {
           console.log(`API: Processing found experiment for preview`);
           
           try {
+            // Define the typed interface for our formatted experiment
+            interface FormattedExperiment {
+              id: any;
+              name: string;
+              description: string;
+              status: string;
+              createdBy: any;
+              userGroups: Array<{userGroupId: string, condition: string}>;
+              stages: any[];
+              branches: any[];
+              startStageId: any;
+              createdAt: string;
+              updatedAt: string;
+              lastEditedAt: string;
+            }
+            
             // Format response with defensive programming
-            const formattedExperiment = {
+            const formattedExperiment: FormattedExperiment = {
               id: experiment._id,
               name: experiment.name || 'Untitled Experiment',
               description: experiment.description || '',
@@ -338,13 +354,36 @@ export async function GET(request: NextRequest) {
         stagesCount: Array.isArray(experiment.stages) ? experiment.stages.length : 'not an array',
       });
       
+      // Define the typed interface for our formatted experiment
+      interface FormattedExperiment {
+        id: any;
+        name: string;
+        description: string;
+        status: string;
+        createdBy: any;
+        userGroups: Array<{userGroupId: string, condition: string}>;
+        stages: any[];
+        branches: any[];
+        startStageId: any;
+        createdAt: string;
+        updatedAt: string;
+        lastEditedAt: string;
+      }
+      
       // Format response
-      const formattedExperiment = {
+      const formattedExperiment: FormattedExperiment = {
         id: experiment._id,
-        name: experiment.name,
-        description: experiment.description,
-        status: experiment.status,
-        createdBy: experiment.createdBy,
+        name: experiment.name || 'Untitled Experiment',
+        description: experiment.description || '',
+        status: experiment.status || 'draft',
+        createdBy: experiment.createdBy || { name: 'Unknown', email: 'unknown@example.com' },
+        userGroups: [],
+        stages: [],
+        branches: [],
+        startStageId: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastEditedAt: new Date().toISOString(),
       };
       
       // Process user groups with defensive programming
