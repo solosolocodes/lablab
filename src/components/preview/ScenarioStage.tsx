@@ -4,12 +4,28 @@ import { useState, useEffect } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
 // Interface for Scenario data from MongoDB
+interface AssetPrice {
+  assetId: string;
+  symbol: string;
+  prices: number[];
+}
+
 interface ScenarioData {
   id: string;
   name: string;
   description: string;
   rounds: number;
   roundDuration: number;
+  walletId: string;
+  assetPrices?: AssetPrice[];
+  [key: string]: unknown;
+}
+
+interface WalletAsset {
+  id: string;
+  symbol: string;
+  name: string;
+  amount: number;
   [key: string]: unknown;
 }
 
@@ -19,13 +35,59 @@ export default function ScenarioStage() {
   const [roundTimeRemaining, setRoundTimeRemaining] = useState(0);
   const [scenarioComplete, setScenarioComplete] = useState(false);
   const [scenarioData, setScenarioData] = useState<ScenarioData | null>(null);
+  const [walletAssets, setWalletAssets] = useState<WalletAsset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingWallet, setIsLoadingWallet] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [walletError, setWalletError] = useState<string | null>(null);
 
   if (!currentStage || currentStage.type !== 'scenario') {
     return <div>Invalid stage type</div>;
   }
   
+  // Function to fetch wallet assets by wallet ID
+  const fetchWalletAssets = async (walletId: string) => {
+    if (!walletId) {
+      setWalletError("No wallet ID available in scenario data");
+      setIsLoadingWallet(false);
+      return;
+    }
+    
+    try {
+      setIsLoadingWallet(true);
+      console.log(`Fetching wallet assets for wallet ID: ${walletId}`);
+      
+      const response = await fetch(`/api/wallets/${walletId}/assets?preview=true`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch wallet assets: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("Wallet assets fetched:", data);
+      
+      if (Array.isArray(data)) {
+        setWalletAssets(data);
+      } else if (data.assets && Array.isArray(data.assets)) {
+        setWalletAssets(data.assets);
+      } else {
+        console.warn("Unexpected wallet data format:", data);
+        setWalletAssets([]);
+      }
+      
+      setIsLoadingWallet(false);
+    } catch (err) {
+      console.error("Error fetching wallet assets:", err);
+      setWalletError(err instanceof Error ? err.message : "Failed to load wallet assets");
+      setIsLoadingWallet(false);
+    }
+  };
+
   // Fetch scenario data from MongoDB when the component mounts
   useEffect(() => {
     async function fetchScenarioData() {
@@ -58,6 +120,11 @@ export default function ScenarioStage() {
         // Reset timer with the actual duration from MongoDB
         if (data.roundDuration) {
           setRoundTimeRemaining(data.roundDuration);
+        }
+        
+        // Fetch wallet assets if we have a wallet ID
+        if (data.walletId) {
+          fetchWalletAssets(data.walletId);
         }
         
         setIsLoading(false);
@@ -295,19 +362,103 @@ export default function ScenarioStage() {
         <div className="border-t border-gray-200 pt-4 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <h3 className="font-semibold text-gray-800 mb-3">Scenario Interface</h3>
-              <div className="bg-gray-100 rounded-lg p-6 min-h-32 flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-gray-600 mb-2">Trading Interface Placeholder</p>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold text-gray-800">Trading Interface</h3>
+                <div className="text-sm">
                   {scenarioComplete ? (
-                    <p className="text-sm text-green-600 font-medium">
-                      All rounds completed!
-                    </p>
+                    <span className="text-green-600 font-medium">
+                      ✓ Complete
+                    </span>
                   ) : (
-                    <p className="text-sm text-blue-600">
-                      Round {currentRound} of {totalRounds} in progress
-                    </p>
+                    <span className="text-blue-600">
+                      Round {currentRound}/{totalRounds}
+                    </span>
                   )}
+                </div>
+              </div>
+              
+              {/* Wallet and asset cards */}
+              <div className="rounded-lg border border-gray-200 overflow-hidden">
+                {/* Wallet header */}
+                <div className="bg-blue-50 p-3 border-b border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                      </svg>
+                      <span className="font-semibold text-blue-800">
+                        Scenario Wallet
+                      </span>
+                    </div>
+                    <span className="text-xs text-blue-600">
+                      ID: {scenarioData?.walletId ? scenarioData.walletId.slice(0, 8) + '...' : 'Unknown'}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Loading state */}
+                {isLoadingWallet && (
+                  <div className="p-4 text-center">
+                    <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent"></div>
+                    <p className="mt-2 text-sm text-gray-500">Loading assets...</p>
+                  </div>
+                )}
+                
+                {/* Error state */}
+                {walletError && (
+                  <div className="p-4 text-center">
+                    <p className="text-red-500">Error loading assets</p>
+                    <p className="text-xs text-gray-500 mt-1">{walletError}</p>
+                  </div>
+                )}
+                
+                {/* Empty state */}
+                {!isLoadingWallet && !walletError && walletAssets.length === 0 && (
+                  <div className="p-4 text-center">
+                    <p className="text-gray-500">No assets found in this wallet</p>
+                  </div>
+                )}
+                
+                {/* Asset cards */}
+                {!isLoadingWallet && !walletError && walletAssets.length > 0 && (
+                  <div className="p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {walletAssets.map(asset => (
+                      <div 
+                        key={asset.id} 
+                        className="bg-white border border-gray-200 rounded-md p-3 shadow-sm hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm font-medium text-gray-800">
+                            {asset.symbol}
+                          </span>
+                          <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600">
+                            Asset
+                          </span>
+                        </div>
+                        <div className="text-lg font-mono font-bold text-blue-900">
+                          {asset.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate mt-1" title={asset.name}>
+                          {asset.name || asset.symbol}
+                        </div>
+                        
+                        {/* Price change (if available from scenario data) */}
+                        {scenarioData?.assetPrices && scenarioData.assetPrices.find(p => p.assetId === asset.id || p.symbol === asset.symbol) && (
+                          <div className="mt-2 bg-blue-50 rounded px-2 py-1 text-xs text-blue-600">
+                            Price data available
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Round status footer */}
+                <div className="bg-gray-50 p-2 border-t border-gray-200 text-center text-xs text-gray-500">
+                  {scenarioComplete 
+                    ? "Trading completed for all rounds"
+                    : `Trading in progress for round ${currentRound} of ${totalRounds}`
+                  }
                 </div>
               </div>
             </div>
