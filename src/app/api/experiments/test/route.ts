@@ -17,8 +17,27 @@ export async function GET(request: NextRequest) {
     
     console.log(`TEST API: MongoDB connection state: ${connectionState} (${stateMap[connectionState] || 'unknown'})`);
     
-    // Create a simple test object
-    const testObject = {
+    // Create a simple test object with proper TypeScript interface
+    interface TestResponse {
+      success: boolean;
+      message: string;
+      timestamp: string;
+      connectionState: {
+        state: number;
+        description: string;
+      };
+      mongodbInfo: {
+        connectionString: string;
+        host: string;
+        name: string;
+        models: string[];
+      };
+      collections?: string[];
+      experimentCount?: number;
+      queryError?: string;
+    }
+    
+    const testObject: TestResponse = {
       success: true,
       message: 'Test route responding successfully',
       timestamp: new Date().toISOString(),
