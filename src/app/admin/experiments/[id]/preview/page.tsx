@@ -183,6 +183,59 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
 
 function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
+  const [currentRound, setCurrentRound] = useState(1);
+  const [roundTimeRemaining, setRoundTimeRemaining] = useState(stage.roundDuration || 60);
+  const [scenarioComplete, setScenarioComplete] = useState(false);
+  const totalRounds = stage.rounds || 1;
+  
+  // Handle round timer
+  useEffect(() => {
+    // Reset state if it's a new scenario
+    setCurrentRound(1);
+    setRoundTimeRemaining(stage.roundDuration || 60);
+    setScenarioComplete(false);
+    
+    // Don't start timer if no rounds or duration
+    if (!stage.rounds || !stage.roundDuration) {
+      setScenarioComplete(true);
+      return;
+    }
+    
+    // Create interval to decrement timer
+    const interval = setInterval(() => {
+      setRoundTimeRemaining(prevTime => {
+        if (prevTime <= 1) {
+          // Time for this round is up
+          if (currentRound < totalRounds) {
+            // Move to next round
+            setCurrentRound(prev => prev + 1);
+            return stage.roundDuration || 60; // Reset timer for next round
+          } else {
+            // All rounds complete
+            clearInterval(interval);
+            setScenarioComplete(true);
+            return 0;
+          }
+        }
+        return prevTime - 1;
+      });
+    }, 1000);
+    
+    // Cleanup interval on unmount
+    return () => clearInterval(interval);
+  }, [stage.rounds, stage.roundDuration, totalRounds]);
+  
+  // Format time as MM:SS
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+  };
+  
+  // Calculate progress percentage
+  const progressPercentage = ((currentRound - 1) * 100 / totalRounds) + 
+    (roundTimeRemaining === 0 ? 100 : (1 - roundTimeRemaining / (stage.roundDuration || 60)) * 100 / totalRounds);
+  
   return (
     <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
@@ -190,19 +243,57 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         <p className="text-gray-600">{stage.description}</p>
       </div>
       
+      {/* Round and Timer display */}
+      <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            <span className="font-medium text-blue-800">Round:</span>
+            <span className="ml-2 text-xl font-bold text-blue-900">{currentRound} of {totalRounds}</span>
+          </div>
+          <div>
+            <span className="font-medium text-blue-800">Time Remaining:</span>
+            <span className="ml-2 text-xl font-mono font-bold text-blue-900">{formatTime(roundTimeRemaining)}</span>
+          </div>
+        </div>
+        
+        {/* Progress bar */}
+        <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+          <div 
+            className="bg-blue-600 h-2.5 rounded-full" 
+            style={{ width: `${progressPercentage}%` }}
+          ></div>
+        </div>
+        
+        {/* Status message */}
+        <div className="mt-2 text-center text-sm">
+          {scenarioComplete ? (
+            <p className="text-green-600 font-medium">All rounds completed!</p>
+          ) : (
+            <p className="text-gray-600">
+              {`${totalRounds - currentRound} ${totalRounds - currentRound === 1 ? 'round' : 'rounds'} remaining after this one`}
+            </p>
+          )}
+        </div>
+      </div>
+      
       <div className="p-4 bg-gray-50 rounded border mb-5">
         <div className="text-center py-4">
           <p className="font-medium mb-3">Scenario Simulation</p>
           <div className="border border-gray-300 rounded p-4 mb-4 bg-white">
-            <div className="bg-gray-200 h-20 rounded flex items-center justify-center mb-4">
-              <p className="text-gray-600">Scenario Interface Placeholder</p>
+            <div className="bg-gray-200 h-32 rounded flex items-center justify-center mb-4">
+              <div className="text-center">
+                <p className="text-gray-600 mb-2">Scenario Interface Placeholder</p>
+                <p className="text-sm text-gray-500">
+                  Round {currentRound} of {totalRounds} in progress
+                </p>
+              </div>
             </div>
             <div className="flex justify-between border-t pt-3">
               <div>
                 <p className="text-sm text-gray-700">Scenario ID: {stage.scenarioId || 'Default'}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-700">Rounds: {stage.rounds || '1'}</p>
+                <p className="text-sm text-gray-700">Duration: {stage.roundDuration || 60}s per round</p>
               </div>
             </div>
           </div>
@@ -213,10 +304,10 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       <div className="flex justify-center">
         <button 
           onClick={onNext}
-          disabled={isStageTransitioning}
-          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={isStageTransitioning || !scenarioComplete}
+          className={`px-6 py-2 ${scenarioComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
-          Continue
+          {scenarioComplete ? 'Continue' : 'Please complete all rounds...'}
         </button>
       </div>
     </div>
