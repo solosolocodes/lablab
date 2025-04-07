@@ -133,6 +133,30 @@ export async function GET(request: NextRequest) {
     const experimentId = getExperimentId(request);
     console.log(`API: Experiment ID: ${experimentId}`);
     
+    // Validate the experiment ID format
+    if (!experimentId || experimentId === '[id]') {
+      console.error('API: Invalid experiment ID format:', experimentId);
+      return NextResponse.json(
+        { message: 'Invalid experiment ID' },
+        { status: 400 }
+      );
+    }
+    
+    // Try to validate if it's a valid MongoDB ObjectId
+    try {
+      const mongoose = (await import('mongoose')).default;
+      if (!mongoose.Types.ObjectId.isValid(experimentId)) {
+        console.error('API: Invalid MongoDB ObjectId format:', experimentId);
+        return NextResponse.json(
+          { message: 'Invalid experiment ID format' },
+          { status: 400 }
+        );
+      }
+    } catch (err) {
+      console.error('API: Error validating ObjectId:', err);
+      // Continue anyway, as this is just an extra validation
+    }
+    
     // Check if the request is for preview mode
     const isPreviewMode = request.nextUrl.searchParams.has('preview');
     console.log(`API: Preview mode: ${isPreviewMode}`);
@@ -144,12 +168,25 @@ export async function GET(request: NextRequest) {
         await connectDB();
         
         // Find the experiment
-        const experiment = await Experiment.findById(experimentId)
-          .populate('userGroups.userGroupId', 'name description')
-          .populate('createdBy', 'name email');
+        let experiment;
+        try {
+          experiment = await Experiment.findById(experimentId)
+            .populate('userGroups.userGroupId', 'name description')
+            .populate('createdBy', 'name email');
+          
+          if (experiment) {
+            console.log(`API: Found real experiment: "${experiment.name}" for preview`);
+          } else {
+            console.log(`API: No experiment found with ID ${experimentId} for preview`);
+            throw new Error('Experiment not found');
+          }
+        } catch (mongoError) {
+          console.error('API: MongoDB error finding experiment:', mongoError);
+          throw mongoError;
+        }
         
         if (experiment) {
-          console.log(`API: Found real experiment: "${experiment.name}" for preview`);
+          console.log(`API: Processing found experiment for preview`);
           
           // Format response
           const formattedExperiment = {
@@ -225,15 +262,24 @@ export async function GET(request: NextRequest) {
     await connectDB();
     
     // Find the experiment
-    const experiment = await Experiment.findById(experimentId)
-      .populate('userGroups.userGroupId', 'name description')
-      .populate('createdBy', 'name email');
-    
-    if (!experiment) {
-      console.log(`API: Experiment with ID ${experimentId} not found`);
+    let experiment;
+    try {
+      experiment = await Experiment.findById(experimentId)
+        .populate('userGroups.userGroupId', 'name description')
+        .populate('createdBy', 'name email');
+      
+      if (!experiment) {
+        console.log(`API: Experiment with ID ${experimentId} not found`);
+        return NextResponse.json(
+          { message: 'Experiment not found' },
+          { status: 404 }
+        );
+      }
+    } catch (dbError) {
+      console.error(`API: Error finding experiment with ID ${experimentId}:`, dbError);
       return NextResponse.json(
-        { message: 'Experiment not found' },
-        { status: 404 }
+        { message: 'Invalid experiment ID or database error', error: dbError instanceof Error ? dbError.message : String(dbError) },
+        { status: 400 }
       );
     }
     
