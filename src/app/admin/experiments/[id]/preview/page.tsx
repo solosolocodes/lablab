@@ -353,36 +353,93 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         </div>
       </div>
       
-      {/* Round and Timer display */}
+      {/* Round and Timer display with circular progress */}
       <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
-        <div className="flex justify-between items-center mb-2">
-          <div>
-            <span className="font-medium text-blue-800">Round:</span>
-            <span className="ml-2 text-xl font-bold text-blue-900">{currentRound} of {totalRounds}</span>
+        <div className="flex flex-col md:flex-row items-center justify-between">
+          <div className="mb-4 md:mb-0">
+            <div className="text-center mb-2">
+              <span className="font-medium text-blue-800">Round:</span>
+              <span className="ml-2 text-xl font-bold text-blue-900">{currentRound} of {totalRounds}</span>
+            </div>
+            
+            {/* Status message */}
+            <div className="text-center">
+              {scenarioComplete ? (
+                <p className="text-green-600 font-medium">All rounds completed!</p>
+              ) : (
+                <p className="text-gray-600 text-sm">
+                  {`${totalRounds - currentRound} ${totalRounds - currentRound === 1 ? 'round' : 'rounds'} remaining after this one`}
+                </p>
+              )}
+            </div>
           </div>
-          <div>
-            <span className="font-medium text-blue-800">Time Remaining:</span>
-            <span className="ml-2 text-xl font-mono font-bold text-blue-900">{formatTime(roundTimeRemaining)}</span>
+          
+          {/* Circular Timer */}
+          <div className="relative w-36 h-36">
+            {/* Background circle */}
+            <svg className="w-full h-full" viewBox="0 0 100 100">
+              <circle 
+                cx="50" 
+                cy="50" 
+                r="45" 
+                fill="white" 
+                stroke="#E2E8F0" 
+                strokeWidth="8"
+              />
+              
+              {/* Progress circle */}
+              {!scenarioComplete && (
+                <circle 
+                  cx="50" 
+                  cy="50" 
+                  r="45" 
+                  fill="none" 
+                  stroke="#3B82F6" 
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                  strokeDasharray={`${2 * Math.PI * 45}`}
+                  strokeDashoffset={`${2 * Math.PI * 45 * (1 - roundTimeRemaining / roundDuration)}`}
+                  transform="rotate(-90 50 50)"
+                  className="transition-all duration-1000 ease-linear"
+                />
+              )}
+              
+              {/* Completed circle */}
+              {scenarioComplete && (
+                <circle 
+                  cx="50" 
+                  cy="50" 
+                  r="45" 
+                  fill="none" 
+                  stroke="#10B981" 
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                />
+              )}
+            </svg>
+            
+            {/* Center text */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-2xl font-mono font-bold text-blue-900">
+                {formatTime(roundTimeRemaining)}
+              </span>
+              <span className="text-xs text-gray-500 mt-1">remaining</span>
+            </div>
           </div>
-        </div>
-        
-        {/* Progress bar */}
-        <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
-          <div 
-            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
-            style={{ width: `${progressPercentage}%` }}
-          ></div>
-        </div>
-        
-        {/* Status message */}
-        <div className="mt-2 text-center text-sm">
-          {scenarioComplete ? (
-            <p className="text-green-600 font-medium">All rounds completed!</p>
-          ) : (
-            <p className="text-gray-600">
-              {`${totalRounds - currentRound} ${totalRounds - currentRound === 1 ? 'round' : 'rounds'} remaining after this one`}
+          
+          {/* Overall Progress */}
+          <div className="mt-4 md:mt-0 w-full md:w-48">
+            <p className="text-center text-sm font-medium text-blue-800 mb-2">Overall Progress</p>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div 
+                className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                style={{ width: `${progressPercentage}%` }}
+              ></div>
+            </div>
+            <p className="text-center text-xs text-gray-500 mt-1">
+              {progressPercentage.toFixed(0)}% complete
             </p>
-          )}
+          </div>
         </div>
       </div>
       
