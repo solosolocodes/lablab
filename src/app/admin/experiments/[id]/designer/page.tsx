@@ -112,6 +112,20 @@ export default function ExperimentDesignerPage() {
       [key: string]: unknown;
     }
     
+    // Type for scenario data
+    interface ScenarioResponse {
+      id: string;
+      name: string;
+      [key: string]: unknown;
+    }
+    
+    // Type for user group data
+    interface UserGroupResponse {
+      id: string;
+      name: string;
+      [key: string]: unknown;
+    }
+    
     // Generic API response type for other endpoints
     interface ApiResponse {
       [key: string]: unknown;
@@ -292,7 +306,7 @@ export default function ExperimentDesignerPage() {
       try {
         const data = await fetchWithRetry('/api/scenarios', {
           method: 'GET'
-        }, 2, 8000); // 2 retries, 8 second timeout
+        }, 2, 8000) as ScenarioResponse[]; // 2 retries, 8 second timeout
         
         setScenarios(data);
         return data;
@@ -308,7 +322,7 @@ export default function ExperimentDesignerPage() {
       try {
         const data = await fetchWithRetry('/api/user-groups', {
           method: 'GET'
-        }, 2, 8000); // 2 retries, 8 second timeout
+        }, 2, 8000) as UserGroupResponse[]; // 2 retries, 8 second timeout
         
         setUserGroups(data);
         return data;
