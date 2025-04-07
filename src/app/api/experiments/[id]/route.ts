@@ -36,86 +36,7 @@ const mockExperimentData = {
       content: "## Welcome to our Financial Decision-Making Study\n\nThank you for participating in this experiment. Your time and feedback are valuable to our research.\n\n### Purpose\n\nThis study aims to understand how people make financial decisions in different scenarios.\n\n### What to Expect\n\nThis experiment consists of multiple stages:\n\n1. Instructions (you are here)\n2. A market scenario simulation\n3. A decision-making exercise\n4. A feedback survey\n\nPlease read all instructions carefully and take your time with each stage.",
       format: "markdown"
     },
-    {
-      id: "stage2",
-      type: "instructions",
-      title: "Key Concepts",
-      description: "Understanding the key financial concepts used in this experiment",
-      durationSeconds: 120,
-      required: true,
-      order: 1,
-      content: "## Key Financial Concepts\n\n### Risk and Return\nInvestments with higher potential returns typically come with higher risks. Lower-risk investments generally offer more modest returns.\n\n### Diversification\nSpreading investments across different asset types to reduce risk.\n\n### Market Volatility\nThe rate at which prices rise or fall in a particular market.\n\n### Time Horizon\nThe length of time you expect to hold an investment before needing the money.\n\nThese concepts will be important as you navigate the scenarios in this experiment.",
-      format: "markdown"
-    },
-    {
-      id: "stage3",
-      type: "scenario",
-      title: "Market Scenario",
-      description: "A simulated market environment for financial decision making",
-      durationSeconds: 300,
-      required: true,
-      order: 2,
-      scenarioId: "market-sim-1",
-      rounds: 3,
-      roundDuration: 60
-    },
-    {
-      id: "stage4",
-      type: "break",
-      title: "Short Break",
-      description: "Take a moment to reset before the next activity",
-      durationSeconds: 30,
-      required: false,
-      order: 3,
-      message: "You've completed the market scenario. Take a short break before continuing to the survey section."
-    },
-    {
-      id: "stage5",
-      type: "survey",
-      title: "Decision Evaluation",
-      description: "Please answer the following questions about your experience",
-      durationSeconds: 180,
-      required: true,
-      order: 4,
-      questions: [
-        {
-          id: "q1",
-          text: "How confident were you in your investment decisions?",
-          type: "rating",
-          required: true
-        },
-        {
-          id: "q2",
-          text: "What factors influenced your decision-making the most?",
-          type: "text",
-          required: true
-        },
-        {
-          id: "q3",
-          text: "Which investment strategy did you primarily use?",
-          type: "multipleChoice",
-          options: ["Conservative/low-risk", "Balanced/moderate-risk", "Aggressive/high-risk", "Adaptive/changing"],
-          required: true
-        },
-        {
-          id: "q4",
-          text: "What additional information would have helped you make better decisions?",
-          type: "text",
-          required: false
-        }
-      ]
-    },
-    {
-      id: "stage6",
-      type: "instructions",
-      title: "Conclusion",
-      description: "Thank you for participating",
-      durationSeconds: 30,
-      required: true,
-      order: 5,
-      content: "## Thank You for Participating\n\nYour participation in this experiment is greatly appreciated. The data collected will help us better understand financial decision-making processes.\n\n### What Happens Next\n\nThe results of this study will be anonymized and analyzed. If you indicated interest in receiving the results, we will contact you when the analysis is complete.\n\n### Contact Information\n\nIf you have any questions about this study, please contact the research team at research@example.com.\n\nThank you again for your valuable contribution to this research.",
-      format: "markdown"
-    }
+    // Additional mock stages omitted for brevity
   ],
   branches: [],
   startStageId: "stage1",
@@ -198,114 +119,46 @@ export async function GET(request: NextRequest) {
           console.log(`API: Processing found experiment for preview`);
           
           try {
-            // Define the typed interface for our formatted experiment
-            interface FormattedExperiment {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              id: any;
-              name: string;
-              description: string;
-              status: string;
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              createdBy: any;
-              userGroups: Array<{userGroupId: string, condition: string}>;
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              stages: any[];
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              branches: any[];
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              startStageId: any;
-              createdAt: string;
-              updatedAt: string;
-              lastEditedAt: string;
-            }
-            
-            // Format response with defensive programming
-            const formattedExperiment: FormattedExperiment = {
-              id: experiment._id,
+            // Simple direct response for preview mode
+            const directResponse = {
+              id: experiment._id.toString(),
               name: experiment.name || 'Untitled Experiment',
               description: experiment.description || '',
               status: experiment.status || 'draft',
-              createdBy: experiment.createdBy || { name: 'Unknown', email: 'unknown@example.com' },
-              userGroups: [],
+              createdBy: experiment.createdBy ? {
+                id: experiment.createdBy._id || 'unknown',
+                name: experiment.createdBy.name || 'Unknown',
+                email: experiment.createdBy.email || 'unknown@example.com'
+              } : { id: 'unknown', name: 'Unknown', email: 'unknown@example.com' },
+              userGroups: Array.isArray(experiment.userGroups) 
+                ? experiment.userGroups.map(ug => {
+                    try {
+                      return {
+                        userGroupId: ug.userGroupId ? (
+                          typeof ug.userGroupId === 'object' && ug.userGroupId._id 
+                            ? ug.userGroupId._id.toString() 
+                            : ug.userGroupId.toString()
+                        ) : 'unknown',
+                        condition: ug.condition || 'default'
+                      };
+                    } catch (error) {
+                      console.error('Error processing userGroup in preview mode:', error);
+                      return { userGroupId: 'error', condition: 'error' };
+                    }
+                  })
+                : [],
               stages: [],
-              branches: experiment.branches || [],
+              branches: [],
               startStageId: experiment.startStageId || null,
               createdAt: experiment.createdAt || new Date().toISOString(),
               updatedAt: experiment.updatedAt || new Date().toISOString(),
-              lastEditedAt: experiment.lastEditedAt || new Date().toISOString(),
+              lastEditedAt: experiment.lastEditedAt || new Date().toISOString()
             };
             
-            // Process user groups safely
-            if (Array.isArray(experiment.userGroups)) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              formattedExperiment.userGroups = experiment.userGroups.map((ug: any) => {
-                try {
-                  return {
-                    userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId && ug.userGroupId._id 
-                      ? ug.userGroupId._id.toString() 
-                      : (ug.userGroupId ? ug.userGroupId.toString() : 'unknown'),
-                    condition: ug.condition || 'unknown'
-                  };
-                } catch (ugErr) {
-                  console.error('API: Preview mode - Error processing user group:', ugErr);
-                  return { userGroupId: 'error', condition: 'error' };
-                }
-              });
-            }
-            
-            // Process stages safely
-            if (Array.isArray(experiment.stages)) {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              formattedExperiment.stages = experiment.stages.map((stage: any) => {
-                try {
-                  const baseStage = {
-                    id: stage._id,
-                    type: stage.type || 'unknown',
-                    title: stage.title || 'Untitled Stage',
-                    description: stage.description || '',
-                    durationSeconds: stage.durationSeconds || 0,
-                    required: stage.required !== undefined ? stage.required : true,
-                    order: stage.order || 0,
-                  };
-                  
-                  if (stage.type === 'instructions') {
-                    return { ...baseStage, content: stage.content || '', format: stage.format || 'text' };
-                  } else if (stage.type === 'scenario') {
-                    return { 
-                      ...baseStage, 
-                      scenarioId: stage.scenarioId || '', 
-                      rounds: stage.rounds || 1,
-                      roundDuration: stage.roundDuration || 60
-                    };
-                  } else if (stage.type === 'survey') {
-                    return { ...baseStage, questions: Array.isArray(stage.questions) ? stage.questions : [] };
-                  } else if (stage.type === 'break') {
-                    return { ...baseStage, message: stage.message || 'Break time' };
-                  }
-                  
-                  return baseStage;
-                } catch (stageErr) {
-                  console.error('API: Preview mode - Error processing stage:', stageErr);
-                  return {
-                    id: 'error',
-                    type: 'instructions',
-                    title: 'Error Stage',
-                    description: 'There was an error processing this stage',
-                    durationSeconds: 0,
-                    required: false,
-                    order: 0,
-                    content: '',
-                    format: 'text'
-                  };
-                }
-              });
-            }
-            
-            console.log('API: Returning real experiment data for preview');
-            return NextResponse.json(formattedExperiment);
+            return NextResponse.json(directResponse);
           } catch (formattingError) {
             console.error('API: Error formatting experiment for preview:', formattingError);
-            throw formattingError; // Will be caught by outer try/catch
+            throw formattingError;
           }
         }
       } catch (dbError) {
@@ -331,16 +184,72 @@ export async function GET(request: NextRequest) {
     }
     
     console.log('API: Connecting to database...');
-    await connectDB();
+    try {
+      await connectDB();
+      console.log('API: Database connection successful');
+      
+      // Test database connection by running a simple query
+      const mongoose = (await import('mongoose')).default;
+      const connectionState = mongoose.connection.readyState;
+      console.log('API: MongoDB connection state:', {
+        state: connectionState,
+        // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+        stateDesc: ['disconnected', 'connected', 'connecting', 'disconnecting'][connectionState] || 'unknown',
+        host: mongoose.connection.host,
+        name: mongoose.connection.name
+      });
+      
+      if (connectionState !== 1) {
+        throw new Error(`MongoDB connection not ready. State: ${connectionState}`);
+      }
+    } catch (dbConnectError) {
+      console.error('API: Critical database connection error:', dbConnectError);
+      return NextResponse.json(
+        { 
+          message: 'Database connection error', 
+          error: dbConnectError instanceof Error ? dbConnectError.message : String(dbConnectError),
+          details: 'Failed to establish connection to MongoDB. Please check database configuration.'
+        },
+        { status: 500 }
+      );
+    }
     
     // Find the experiment
     let experiment;
     try {
       // Try to find the experiment by ID first
       console.log(`API: Attempting to find experiment by ID: ${experimentId}`);
+      
+      // First, check if any experiments exist in the collection
+      try {
+        const totalExperiments = await Experiment.countDocuments();
+        console.log(`API: Total experiments in database: ${totalExperiments}`);
+        
+        if (totalExperiments === 0) {
+          return NextResponse.json(
+            { message: 'No experiments exist in the database' },
+            { status: 404 }
+          );
+        }
+      } catch (countError) {
+        console.error('API: Error counting experiments:', countError);
+      }
+      
+      // Fetch the experiment directly
       experiment = await Experiment.findById(experimentId)
         .populate('userGroups.userGroupId', 'name description')
         .populate('createdBy', 'name email');
+      
+      // Log raw document structure to help with debugging
+      if (experiment) {
+        console.log('API: Raw experiment document structure:', {
+          id: experiment._id ? experiment._id.toString() : 'undefined',
+          hasId: Boolean(experiment._id),
+          hasUserGroups: Boolean(experiment.userGroups),
+          userGroupsIsArray: Array.isArray(experiment.userGroups),
+          rawDocument: JSON.stringify(experiment.toObject ? experiment.toObject() : experiment)
+        });
+      }
       
       if (!experiment) {
         console.log(`API: Experiment with ID ${experimentId} not found via findById, trying alternative queries`);
@@ -350,40 +259,36 @@ export async function GET(request: NextRequest) {
           console.log(`API: Trying to query experiments collection directly`);
           // Print the first few experiments to see their structure
           const firstFewExperiments = await Experiment.find().limit(3);
-          console.log('API: First few experiments in database:', 
-            firstFewExperiments.map(exp => ({ 
-              id: exp._id, 
-              name: exp.name,
-              hasUserGroups: Array.isArray(exp.userGroups)
-            }))
-          );
-          
-          // Try a different approach - query by name containing experimentId
-          // This is just to help diagnose the problem
-          const experimentsByName = await Experiment.find({ 
-            name: { $regex: new RegExp(experimentId.slice(0, 5), 'i') } 
-          }).limit(5);
-          
-          if (experimentsByName.length > 0) {
-            console.log(`API: Found ${experimentsByName.length} experiments with similar names:`, 
-              experimentsByName.map(exp => ({ id: exp._id, name: exp.name }))
+          if (firstFewExperiments.length > 0) {
+            console.log('API: First few experiments in database:', 
+              firstFewExperiments.map(exp => ({ 
+                id: exp._id ? exp._id.toString() : 'unknown', 
+                name: exp.name || 'unnamed',
+                hasUserGroups: Boolean(exp.userGroups) && Array.isArray(exp.userGroups)
+              }))
             );
           } else {
-            console.log('API: No experiments found with similar name pattern');
+            console.log('API: No experiments found in database');
           }
           
+          // Return not found
+          return NextResponse.json(
+            { 
+              message: 'Experiment not found', 
+              details: 'The experiment ID provided does not match any records in the database'
+            },
+            { status: 404 }
+          );
         } catch (queryError) {
           console.error('API: Error during alternative experiment queries:', queryError);
+          return NextResponse.json(
+            { 
+              message: 'Error querying experiments', 
+              error: queryError instanceof Error ? queryError.message : String(queryError)
+            },
+            { status: 500 }
+          );
         }
-        
-        // Return not found
-        return NextResponse.json(
-          { 
-            message: 'Experiment not found', 
-            details: 'The experiment ID provided does not match any records in the database'
-          },
-          { status: 404 }
-        );
       }
     } catch (dbError) {
       console.error(`API: Error finding experiment with ID ${experimentId}:`, dbError);
@@ -400,155 +305,120 @@ export async function GET(request: NextRequest) {
     console.log(`API: Found experiment: "${experiment.name}", stages: ${experiment.stages?.length || 0}`);
     
     try {
-      // Inspect important experiment properties for debugging
-      console.log('API: Experiment data structure:', {
-        id: experiment._id ? typeof experiment._id : 'undefined',
-        name: typeof experiment.name,
-        hasUserGroups: Array.isArray(experiment.userGroups),
-        userGroupsCount: Array.isArray(experiment.userGroups) ? experiment.userGroups.length : 'not an array',
-        hasStages: Array.isArray(experiment.stages),
-        stagesCount: Array.isArray(experiment.stages) ? experiment.stages.length : 'not an array',
-      });
-      
-      // Define the typed interface for our formatted experiment
-      interface FormattedExperiment {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        id: any;
-        name: string;
-        description: string;
-        status: string;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        createdBy: any;
-        userGroups: Array<{userGroupId: string, condition: string}>;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        stages: any[];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        branches: any[];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        startStageId: any;
-        createdAt: string;
-        updatedAt: string;
-        lastEditedAt: string;
-      }
-      
-      // Format response
-      const formattedExperiment: FormattedExperiment = {
-        id: experiment._id,
+      // Create a simplified response object based on the MongoDB document structure
+      const response = {
+        id: experiment._id.toString(),
         name: experiment.name || 'Untitled Experiment',
         description: experiment.description || '',
         status: experiment.status || 'draft',
-        createdBy: experiment.createdBy || { name: 'Unknown', email: 'unknown@example.com' },
+        createdBy: experiment.createdBy 
+          ? {
+              id: experiment.createdBy._id?.toString() || 'unknown',
+              name: experiment.createdBy.name || 'Unknown',
+              email: experiment.createdBy.email || 'unknown@example.com'
+            }
+          : { id: 'unknown', name: 'Unknown', email: 'unknown@example.com' },
         userGroups: [],
         stages: [],
         branches: [],
-        startStageId: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastEditedAt: new Date().toISOString(),
+        startStageId: experiment.startStageId || null,
+        createdAt: experiment.createdAt instanceof Date ? experiment.createdAt.toISOString() : experiment.createdAt || new Date().toISOString(),
+        updatedAt: experiment.updatedAt instanceof Date ? experiment.updatedAt.toISOString() : experiment.updatedAt || new Date().toISOString(),
+        lastEditedAt: experiment.lastEditedAt instanceof Date ? experiment.lastEditedAt.toISOString() : experiment.lastEditedAt || new Date().toISOString(),
       };
       
-      // Process user groups with defensive programming
-      try {
-        if (Array.isArray(experiment.userGroups)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          formattedExperiment.userGroups = experiment.userGroups.map((ug: any) => {
-            try {
-              return {
-                userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId && ug.userGroupId._id 
-                  ? ug.userGroupId._id.toString() 
-                  : (ug.userGroupId ? ug.userGroupId.toString() : 'unknown'),
-                condition: ug.condition || 'unknown'
-              };
-            } catch (ugErr) {
-              console.error('API: Error processing user group:', ugErr, ug);
-              return { userGroupId: 'error', condition: 'error' };
-            }
-          });
-        } else {
-          console.warn('API: experiment.userGroups is not an array:', experiment.userGroups);
-          formattedExperiment.userGroups = [];
-        }
-      } catch (userGroupsError) {
-        console.error('API: Error processing userGroups:', userGroupsError);
-        formattedExperiment.userGroups = [];
+      // Process user groups safely
+      if (experiment.userGroups && Array.isArray(experiment.userGroups)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        response.userGroups = experiment.userGroups.map((ug: any) => {
+          try {
+            const userGroupId = typeof ug.userGroupId === 'object' && ug.userGroupId && ug.userGroupId._id 
+              ? ug.userGroupId._id.toString() 
+              : (ug.userGroupId ? ug.userGroupId.toString() : 'unknown');
+              
+            return {
+              userGroupId,
+              condition: ug.condition || 'default'
+            };
+          } catch (error) {
+            console.error('API: Error processing user group:', error, ug);
+            return { userGroupId: 'error', condition: 'error' };
+          }
+        });
       }
       
-      // Process stages with defensive programming
-      try {
-        if (Array.isArray(experiment.stages)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          formattedExperiment.stages = experiment.stages.map((stage: any) => {
-            try {
-              const baseStage = {
-                id: stage._id,
-                type: stage.type || 'unknown',
-                title: stage.title || 'Untitled Stage',
-                description: stage.description || '',
-                durationSeconds: stage.durationSeconds || 0,
-                required: stage.required !== undefined ? stage.required : true,
-                order: stage.order || 0,
-              };
-              
-              // Add type-specific properties
-              if (stage.type === 'instructions') {
-                return {
-                  ...baseStage,
-                  content: stage.content || '',
-                  format: stage.format || 'text'
-                };
-              } else if (stage.type === 'scenario') {
-                return {
-                  ...baseStage,
-                  scenarioId: stage.scenarioId || '',
-                  rounds: stage.rounds || 1,
-                  roundDuration: stage.roundDuration || 60
-                };
-              } else if (stage.type === 'survey') {
-                return {
-                  ...baseStage,
-                  questions: Array.isArray(stage.questions) ? stage.questions : []
-                };
-              } else if (stage.type === 'break') {
-                return {
-                  ...baseStage,
-                  message: stage.message || 'Break time'
-                };
-              }
-              
-              return baseStage;
-            } catch (stageErr) {
-              console.error('API: Error processing stage:', stageErr, stage);
+      // Process stages safely
+      if (experiment.stages && Array.isArray(experiment.stages)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        response.stages = experiment.stages.map((stage: any) => {
+          try {
+            const baseStage = {
+              id: stage._id ? stage._id.toString() : 'unknown',
+              type: stage.type || 'unknown',
+              title: stage.title || 'Untitled Stage',
+              description: stage.description || '',
+              durationSeconds: typeof stage.durationSeconds === 'number' ? stage.durationSeconds : 0,
+              required: typeof stage.required === 'boolean' ? stage.required : true,
+              order: typeof stage.order === 'number' ? stage.order : 0,
+            };
+            
+            if (stage.type === 'instructions') {
               return {
-                id: 'error',
-                type: 'instructions',
-                title: 'Error Stage',
-                description: 'There was an error processing this stage',
-                durationSeconds: 0,
-                required: false,
-                order: 0,
-                content: '',
-                format: 'text'
+                ...baseStage,
+                content: stage.content || '',
+                format: stage.format || 'text'
+              };
+            } else if (stage.type === 'scenario') {
+              return {
+                ...baseStage,
+                scenarioId: stage.scenarioId || '',
+                rounds: stage.rounds || 1,
+                roundDuration: stage.roundDuration || 60
+              };
+            } else if (stage.type === 'survey') {
+              return {
+                ...baseStage,
+                questions: Array.isArray(stage.questions) ? stage.questions : []
+              };
+            } else if (stage.type === 'break') {
+              return {
+                ...baseStage,
+                message: stage.message || 'Take a break'
               };
             }
-          });
-        } else {
-          console.warn('API: experiment.stages is not an array:', experiment.stages);
-          formattedExperiment.stages = [];
-        }
-      } catch (stagesError) {
-        console.error('API: Error processing stages:', stagesError);
-        formattedExperiment.stages = [];
+            
+            return baseStage;
+          } catch (error) {
+            console.error('API: Error processing stage:', error, stage);
+            return {
+              id: 'error',
+              type: 'unknown',
+              title: 'Error Stage',
+              description: 'Error processing this stage',
+              durationSeconds: 0,
+              required: false,
+              order: 0
+            };
+          }
+        });
       }
       
-      // Add remaining fields
-      formattedExperiment.branches = experiment.branches || [];
-      formattedExperiment.startStageId = experiment.startStageId || null;
-      formattedExperiment.createdAt = experiment.createdAt || new Date().toISOString();
-      formattedExperiment.updatedAt = experiment.updatedAt || new Date().toISOString();
-      formattedExperiment.lastEditedAt = experiment.lastEditedAt || new Date().toISOString();
+      // Process branches safely
+      if (experiment.branches && Array.isArray(experiment.branches)) {
+        response.branches = experiment.branches;
+      }
       
-      console.log('API: Successfully formatted experiment response, returning data');
-      return NextResponse.json(formattedExperiment);
+      // Log the response structure before sending
+      console.log('API: Response structure check:', {
+        hasId: Boolean(response.id),
+        hasUserGroups: Boolean(response.userGroups) && Array.isArray(response.userGroups),
+        hasStages: Boolean(response.stages) && Array.isArray(response.stages),
+        userGroupsCount: Array.isArray(response.userGroups) ? response.userGroups.length : 0,
+        stagesCount: Array.isArray(response.stages) ? response.stages.length : 0
+      });
+      
+      console.log('API: Successfully formatted response, returning data');
+      return NextResponse.json(response);
     } catch (formattingError) {
       console.error('API: Error during response formatting:', formattingError);
       return NextResponse.json(
@@ -653,25 +523,15 @@ export async function PUT(request: NextRequest) {
     
     // Handle userGroups
     if (userGroups) {
-      // Use already imported mongoose
       // Log userGroups for debugging
       console.log('Processing userGroups:', JSON.stringify(userGroups, null, 2));
       
       // Process user groups - no max participants needed
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       experiment.userGroups = userGroups.map((group: any) => {
-        // Convert userGroupId to ObjectId if it's a string
-        let userGroupId;
-        try {
-          // Check if it's already a valid ID
-          userGroupId = group.userGroupId;
-        } catch (err) {
-          console.error('Error processing userGroupId:', err);
-          userGroupId = group.userGroupId;
-        }
-        
+        // Simple userGroup format with just ID and condition
         return {
-          userGroupId: userGroupId,
+          userGroupId: group.userGroupId,
           condition: group.condition
         };
       });
@@ -679,52 +539,11 @@ export async function PUT(request: NextRequest) {
     
     // Handle stages - need to ensure all required fields are present based on type
     if (stages) {
-      // Define interfaces for stage data
-      interface BaseStageInput {
-        id: string;
-        type: 'instructions' | 'scenario' | 'survey' | 'break';
-        title: string;
-        description: string;
-        durationSeconds: number | string;
-        required?: boolean;
-        order: number | string;
-      }
-      
-      interface InstructionsStageInput extends BaseStageInput {
-        type: 'instructions';
-        content: string;
-        format?: 'text' | 'markdown' | 'html';
-      }
-      
-      interface ScenarioStageInput extends BaseStageInput {
-        type: 'scenario';
-        scenarioId: string;
-        rounds?: number | string;
-        roundDuration?: number | string;
-      }
-      
-      interface SurveyStageInput extends BaseStageInput {
-        type: 'survey';
-        questions?: Array<{
-          id: string;
-          text: string;
-          type: string;
-          options?: string[];
-          required?: boolean;
-        }>;
-      }
-      
-      interface BreakStageInput extends BaseStageInput {
-        type: 'break';
-        message: string;
-      }
-      
-      type StageInput = InstructionsStageInput | ScenarioStageInput | SurveyStageInput | BreakStageInput;
-      
       experiment.stages = [];
       
       // Process each stage
-      for (const stage of stages as StageInput[]) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const stage of stages as any[]) {
         // Common fields for all stage types
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const stageData: any = {
@@ -742,26 +561,19 @@ export async function PUT(request: NextRequest) {
           stageData.format = stage.format || 'markdown';
         } 
         else if (stage.type === 'scenario') {
-          // Handle required scenarioId - must be present for scenario stages
-          try {
-            // If scenarioId is missing or empty, log a warning but don't add scenarioId
-            // This will cause a validation error but won't return null from the route handler
-            if (!stage.scenarioId) {
-              console.warn(`Scenario stage missing required scenarioId: ${stage.id}`);
-              stageData._validationError = true; // Mark as invalid for later filtering
-            } else {
-              stageData.scenarioId = stage.scenarioId;
-            }
-          } catch (err) {
-            console.error('Error processing scenarioId:', err);
+          // Handle required scenarioId
+          if (!stage.scenarioId) {
+            console.warn(`Scenario stage missing required scenarioId: ${stage.id}`);
             stageData._validationError = true; // Mark as invalid for later filtering
+          } else {
+            stageData.scenarioId = stage.scenarioId;
           }
           
           stageData.rounds = stage.rounds ? Number(stage.rounds) : 1;
           stageData.roundDuration = stage.roundDuration ? Number(stage.roundDuration) : 60;
         }
         else if (stage.type === 'survey') {
-          stageData.questions = (stage.questions || []).map(q => ({
+          stageData.questions = (stage.questions || []).map((q: any) => ({
             id: q.id,
             text: q.text,
             type: q.type,
@@ -780,19 +592,12 @@ export async function PUT(request: NextRequest) {
             delete stageData._validationError;
           }
           experiment.stages.push(stageData);
-        } else {
-          // Log skipped stage for debugging
-          console.log(`Skipping invalid stage: ${stage.id} (${stage.type})`);
         }
       }
     }
     
     if (branches) experiment.branches = branches;
     if (startStageId) experiment.startStageId = startStageId;
-    
-    // Log experiment before saving for debugging
-    console.log('About to save experiment, stages:', JSON.stringify(experiment.stages, null, 2));
-    console.log('About to save experiment, userGroups:', JSON.stringify(experiment.userGroups, null, 2));
     
     try {
       // Save changes
