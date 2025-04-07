@@ -573,6 +573,7 @@ export async function PUT(request: NextRequest) {
           stageData.roundDuration = stage.roundDuration ? Number(stage.roundDuration) : 60;
         }
         else if (stage.type === 'survey') {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           stageData.questions = (stage.questions || []).map((q: any) => ({
             id: q.id,
             text: q.text,
