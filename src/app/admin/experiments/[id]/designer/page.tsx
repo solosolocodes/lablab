@@ -329,7 +329,8 @@ export default function ExperimentDesignerPage() {
       }
     };
     
-    // Function to fetch a specific scenario's details
+    // Function to fetch a specific scenario's details - used in handleStageFormChange
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const fetchScenarioDetails = async (scenarioId: string) => {
       if (!scenarioId) return null;
       

@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 export default function TestScenarioFetch() {
   const [scenarioId, setScenarioId] = useState('');
   const [loading, setLoading] = useState(false);
-  const [scenarioDetails, setScenarioDetails] = useState<any>(null);
+  const [scenarioDetails, setScenarioDetails] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Function to fetch scenario details - similar to what we have in the experiment designer
@@ -32,7 +32,7 @@ export default function TestScenarioFetch() {
         try {
           const errorData = JSON.parse(errorText);
           errorMessage = errorData.message || errorMessage;
-        } catch (e) {
+        } catch {
           // If we can't parse the JSON, just use the raw error text
           errorMessage = errorText || errorMessage;
         }
