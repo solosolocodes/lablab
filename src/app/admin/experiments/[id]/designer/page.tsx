@@ -1327,38 +1327,34 @@ export default function ExperimentDesignerPage() {
               {/* Stage Properties Form */}
               {selectedStage && stageFormData && (
                 <div className="space-y-4">
-                  {/* Common fields for all stage types */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Title {stageFormData.type === 'scenario' && (stageFormData as Partial<ScenarioStage>).scenarioId && '(from scenario)'}
-                    </label>
-                    <input
-                      type="text"
-                      className={`w-full px-3 py-2 border rounded-md text-sm ${
-                        stageFormData.type === 'scenario' && (stageFormData as Partial<ScenarioStage>).scenarioId 
-                          ? 'bg-gray-50' : ''
-                      }`}
-                      value={stageFormData.title || ''}
-                      onChange={(e) => handleStageFormChange('title', e.target.value)}
-                      disabled={stageFormData.type === 'scenario' && !!(stageFormData as Partial<ScenarioStage>).scenarioId}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Description {stageFormData.type === 'scenario' && (stageFormData as Partial<ScenarioStage>).scenarioId && '(from scenario)'}
-                    </label>
-                    <textarea
-                      className={`w-full px-3 py-2 border rounded-md text-sm ${
-                        stageFormData.type === 'scenario' && (stageFormData as Partial<ScenarioStage>).scenarioId 
-                          ? 'bg-gray-50' : ''
-                      }`}
-                      rows={2}
-                      value={stageFormData.description || ''}
-                      onChange={(e) => handleStageFormChange('description', e.target.value)}
-                      disabled={stageFormData.type === 'scenario' && !!(stageFormData as Partial<ScenarioStage>).scenarioId}
-                    />
-                  </div>
+                  {/* Common fields for all stage types - hide for scenarios */}
+                  {stageFormData.type !== 'scenario' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Title
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full px-3 py-2 border rounded-md text-sm"
+                          value={stageFormData.title || ''}
+                          onChange={(e) => handleStageFormChange('title', e.target.value)}
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Description
+                        </label>
+                        <textarea
+                          className="w-full px-3 py-2 border rounded-md text-sm"
+                          rows={2}
+                          value={stageFormData.description || ''}
+                          onChange={(e) => handleStageFormChange('description', e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
                   
                   {/* Type-specific fields */}
                   {selectedStage.type === 'instructions' && (
@@ -1379,7 +1375,7 @@ export default function ExperimentDesignerPage() {
                     <>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Scenario
+                          Select Scenario
                         </label>
                         <select
                           className="w-full px-3 py-2 border rounded-md text-sm"
@@ -1395,121 +1391,18 @@ export default function ExperimentDesignerPage() {
                         </select>
                         {(stageFormData as Partial<ScenarioStage>).scenarioId && (
                           <p className="text-xs text-blue-600 mt-1">
-                            ℹ️ The title, description, rounds, and duration are managed by the scenario.
+                            ℹ️ The title, description, rounds, and duration are automatically set from the selected scenario.
                           </p>
                         )}
                       </div>
                       
-                      {/* Show scenario details once selected - read only */}
-                      {(stageFormData as Partial<ScenarioStage>).scenarioId && (
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                          <h4 className="font-medium text-sm text-blue-700 mb-2">Scenario Details</h4>
-                          
-                          <div className="mb-2">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Title (from scenario)
-                            </label>
-                            <input
-                              type="text"
-                              className="w-full px-3 py-2 border rounded-md text-sm bg-gray-50"
-                              value={stageFormData.title}
-                              disabled
-                            />
-                          </div>
-                          
-                          <div className="mb-3">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Description (from scenario)
-                            </label>
-                            <textarea
-                              className="w-full px-3 py-2 border rounded-md text-sm bg-gray-50"
-                              rows={2}
-                              value={stageFormData.description}
-                              disabled
-                            />
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-3 mb-2">
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Number of Rounds
-                              </label>
-                              <input
-                                type="number"
-                                className="w-full px-3 py-2 border rounded-md text-sm bg-gray-50"
-                                value={(stageFormData as Partial<ScenarioStage>).rounds || 1}
-                                disabled
-                              />
-                            </div>
-                            
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Round Duration (seconds)
-                              </label>
-                              <input
-                                type="number"
-                                className="w-full px-3 py-2 border rounded-md text-sm bg-gray-50"
-                                value={(stageFormData as Partial<ScenarioStage>).roundDuration || 60}
-                                disabled
-                              />
-                            </div>
-                          </div>
-                          
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="font-medium text-gray-700">Total Duration:</span>
-                            <span className="text-gray-900">
-                              {((stageFormData as Partial<ScenarioStage>).rounds || 1) * 
-                                ((stageFormData as Partial<ScenarioStage>).roundDuration || 60)} seconds
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Show fields for editing if no scenario selected */}
+                      {/* Hidden fields will still store scenario data but not show UI elements */}
                       {!(stageFormData as Partial<ScenarioStage>).scenarioId && (
-                        <>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Number of Rounds
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                className="w-full px-3 py-2 border rounded-md text-sm"
-                                value={(stageFormData as Partial<ScenarioStage>).rounds || 1}
-                                onChange={(e) => handleStageFormChange('rounds', parseInt(e.target.value) || 1)}
-                              />
-                            </div>
-                            
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Round Duration (seconds)
-                              </label>
-                              <input
-                                type="number"
-                                min="10"
-                                className="w-full px-3 py-2 border rounded-md text-sm"
-                                value={(stageFormData as Partial<ScenarioStage>).roundDuration || 60}
-                                onChange={(e) => handleStageFormChange('roundDuration', parseInt(e.target.value) || 60)}
-                              />
-                            </div>
-                          </div>
-                          
-                          <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm font-medium text-gray-700">Total Duration:</span>
-                              <span className="text-sm text-gray-900">
-                                {((stageFormData as Partial<ScenarioStage>).rounds || 1) * 
-                                  ((stageFormData as Partial<ScenarioStage>).roundDuration || 60)} seconds
-                              </span>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Calculated as {(stageFormData as Partial<ScenarioStage>).rounds || 1} rounds × 
-                              {(stageFormData as Partial<ScenarioStage>).roundDuration || 60} seconds per round
-                            </p>
-                          </div>
-                        </>
+                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md mt-3">
+                          <p className="text-sm text-yellow-700">
+                            Please select a scenario from the dropdown above.
+                          </p>
+                        </div>
                       )}
                     </>
                   )}
