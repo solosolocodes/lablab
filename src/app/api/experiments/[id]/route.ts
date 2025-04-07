@@ -131,9 +131,75 @@ export async function GET(request: NextRequest) {
     const isPreviewMode = request.nextUrl.searchParams.has('preview');
     console.log(`API: Preview mode: ${isPreviewMode}`);
     
+    const experimentId = getExperimentId(request);
+    
+    // For preview mode, try to get real data first, fallback to mock
     if (isPreviewMode) {
+      try {
+        console.log('API: Connecting to database for preview mode...');
+        await connectDB();
+        
+        console.log(`API: Looking up experiment with ID: ${experimentId}`);
+        
+        // Find the experiment
+        const experiment = await Experiment.findById(experimentId)
+          .populate('userGroups.userGroupId', 'name description')
+          .populate('createdBy', 'name email');
+        
+        if (experiment) {
+          console.log(`API: Found real experiment: "${experiment.name}" for preview`);
+          
+          // Format response
+          const formattedExperiment = {
+            id: experiment._id,
+            name: experiment.name,
+            description: experiment.description,
+            status: experiment.status,
+            createdBy: experiment.createdBy,
+            userGroups: experiment.userGroups,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            stages: experiment.stages.map((stage: any) => ({
+              id: stage._id,
+              type: stage.type,
+              title: stage.title,
+              description: stage.description,
+              durationSeconds: stage.durationSeconds,
+              required: stage.required,
+              order: stage.order,
+              // Additional fields based on stage type
+              ...(stage.type === 'instructions' && {
+                content: stage.content,
+                format: stage.format
+              }),
+              ...(stage.type === 'scenario' && {
+                scenarioId: stage.scenarioId,
+                rounds: stage.rounds,
+                roundDuration: stage.roundDuration
+              }),
+              ...(stage.type === 'survey' && {
+                questions: stage.questions
+              }),
+              ...(stage.type === 'break' && {
+                message: stage.message
+              })
+            })),
+            branches: experiment.branches,
+            startStageId: experiment.startStageId,
+            createdAt: experiment.createdAt,
+            updatedAt: experiment.updatedAt,
+            lastEditedAt: experiment.lastEditedAt,
+          };
+          
+          console.log('API: Returning real experiment data for preview');
+          return NextResponse.json(formattedExperiment);
+        }
+      } catch (dbError) {
+        console.error('API: Error fetching real experiment data:', dbError);
+        console.log('API: Falling back to mock data for preview mode');
+      }
+      
+      // If we got here, either no experiment was found or there was an error
       console.log('API: Returning mock data for preview mode');
-      // Return mock data for preview mode to bypass database issues
       return NextResponse.json(mockExperimentData);
     }
     
