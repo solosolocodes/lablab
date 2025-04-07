@@ -57,6 +57,7 @@ export default function ExperimentDesignerPage() {
   
   // State for the experiment data
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [scenarios, setScenarios] = useState<Array<{ id: string; name: string }>>([]);
   const [userGroups, setUserGroups] = useState<Array<{ id: string; name: string }>>([]);
   const [experiment, setExperiment] = useState<{
@@ -99,11 +100,23 @@ export default function ExperimentDesignerPage() {
         setIsLoading(true);
         const response = await fetch(`/api/experiments/${experimentId}`);
         
+        // Even if response is not OK, try to get the error details from JSON
+        const data = await response.json().catch(e => {
+          console.error('Failed to parse error response as JSON:', e);
+          return null;
+        });
+        
         if (!response.ok) {
-          throw new Error('Failed to fetch experiment');
+          // If we have detailed error data, include it in the error message
+          if (data && data.message) {
+            console.error('Server error response:', data);
+            throw new Error(`${data.message}${data.error ? ': ' + data.error : ''}`);
+          } else {
+            throw new Error(`Failed to fetch experiment (Status ${response.status})`);
+          }
         }
         
-        const data = await response.json();
+        // If we reach here, the response was OK
         setExperiment(data);
         
         // Also fetch scenarios and user groups
@@ -115,7 +128,10 @@ export default function ExperimentDesignerPage() {
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching experiment:', error);
-        toast.error('Failed to load experiment: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        console.error('Experiment ID:', experimentId);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setLoadError(errorMessage);
+        toast.error('Failed to load experiment: ' + errorMessage);
         setIsLoading(false);
       }
     };
@@ -543,6 +559,30 @@ export default function ExperimentDesignerPage() {
   // Check if user is authenticated and is admin
   if (!session || session.user.role !== 'admin') {
     return null; // Will redirect via useEffect
+  }
+
+  // If there was an error loading the experiment
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md text-center">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <h3 className="text-red-700 font-medium mb-2">Error Loading Experiment</h3>
+            <p className="text-red-600 mb-2">{loadError}</p>
+            <p className="text-gray-600 text-sm mb-2">The experiment could not be loaded. This could be due to:</p>
+            <ul className="text-gray-600 text-sm list-disc list-inside mb-2">
+              <li>Invalid experiment ID</li>
+              <li>Database connection issue</li>
+              <li>Experiment was deleted</li>
+            </ul>
+            <p className="text-gray-600 text-sm">Experiment ID: {experimentId}</p>
+          </div>
+          <Link href="/admin/experiments" className="text-purple-600 mt-4 inline-block hover:underline">
+            Return to experiments
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   // If no experiment data
