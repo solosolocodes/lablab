@@ -103,6 +103,43 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
 
 function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
+  const [timeRemaining, setTimeRemaining] = useState(stage.durationSeconds || 0);
+  const [timerComplete, setTimerComplete] = useState(false);
+  
+  // Handle countdown timer
+  useEffect(() => {
+    // Don't start timer if there's no duration
+    if (!stage.durationSeconds || stage.durationSeconds <= 0) {
+      setTimerComplete(true);
+      return;
+    }
+    
+    // Set initial time
+    setTimeRemaining(stage.durationSeconds);
+    
+    // Create interval to decrement timer
+    const interval = setInterval(() => {
+      setTimeRemaining(prevTime => {
+        if (prevTime <= 1) {
+          clearInterval(interval);
+          setTimerComplete(true);
+          return 0;
+        }
+        return prevTime - 1;
+      });
+    }, 1000);
+    
+    // Cleanup interval on unmount
+    return () => clearInterval(interval);
+  }, [stage.durationSeconds]);
+  
+  // Format time as MM:SS
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+  };
+  
   return (
     <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
@@ -113,16 +150,31 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       <div className="p-5 bg-gray-50 rounded border mb-5 text-center">
         <div className="text-gray-500 mb-3">BREAK</div>
         <p className="font-medium mb-3 text-lg">{stage.message || "Take a short break before continuing"}</p>
-        <p className="text-gray-600">When you&apos;re ready, click Continue to proceed to the next stage.</p>
+        
+        {/* Timer section */}
+        <div className="my-6">
+          <div className="bg-white py-4 px-6 rounded-lg shadow-sm inline-block">
+            <div className="text-sm text-gray-600 mb-1">Time remaining:</div>
+            <div className="text-3xl font-mono font-bold text-purple-700">
+              {formatTime(timeRemaining)}
+            </div>
+          </div>
+        </div>
+        
+        {timerComplete ? (
+          <p className="text-green-600 font-medium">Break time complete! You can now continue.</p>
+        ) : (
+          <p className="text-gray-600">Please wait until the timer reaches zero to continue.</p>
+        )}
       </div>
       
       <div className="flex justify-center">
         <button 
           onClick={onNext}
-          disabled={isStageTransitioning}
-          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={isStageTransitioning || !timerComplete}
+          className={`px-6 py-2 ${timerComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
-          Continue
+          {timerComplete ? 'Continue' : 'Please wait...'}
         </button>
       </div>
     </div>
