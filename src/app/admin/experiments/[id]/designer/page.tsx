@@ -93,7 +93,26 @@ export default function ExperimentDesignerPage() {
 
   // Fetch experiment data
   useEffect(() => {
-    // Types for API response
+    // Types for API response with required fields
+    interface ExperimentResponse {
+      id: string;
+      name: string;
+      description: string;
+      status: string;
+      stages: Stage[];
+      userGroups: Array<{
+        userGroupId: string;
+        name?: string;
+        condition: string;
+        maxParticipants?: number;
+      }>;
+      createdAt: string;
+      updatedAt: string;
+      lastEditedAt: string;
+      [key: string]: unknown;
+    }
+    
+    // Generic API response type for other endpoints
     interface ApiResponse {
       [key: string]: unknown;
     }
@@ -215,10 +234,10 @@ export default function ExperimentDesignerPage() {
         console.log(`Fetching experiment ID: ${experimentId}`);
         
         try {
-          // Fetch experiment data with retry
+          // Fetch experiment data with retry and cast to proper type
           const data = await fetchWithRetry(`/api/experiments/${experimentId}`, {
             method: 'GET'
-          }, 3, 15000); // 3 retries, 15 second timeout
+          }, 3, 15000) as ExperimentResponse; // 3 retries, 15 second timeout
           
           // Validate minimum data requirements
           if (!data.id) {
