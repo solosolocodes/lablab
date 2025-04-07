@@ -5,8 +5,70 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
 
+// Type definitions for stages
+interface BaseStage {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  durationSeconds: number;
+  required: boolean;
+  order: number;
+}
+
+interface InstructionsStage extends BaseStage {
+  type: 'instructions';
+  content: string;
+  format?: string;
+}
+
+interface SurveyStage extends BaseStage {
+  type: 'survey';
+  questions: {
+    id: string;
+    text: string;
+    type: string;
+    required?: boolean;
+    options?: string[];
+  }[];
+}
+
+interface BreakStage extends BaseStage {
+  type: 'break';
+  message: string;
+}
+
+interface ScenarioStage extends BaseStage {
+  type: 'scenario';
+  scenarioId?: string;
+  rounds?: number;
+  roundDuration?: number;
+}
+
+type Stage = InstructionsStage | SurveyStage | BreakStage | ScenarioStage;
+
+// Experiment interface
+interface Experiment {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  stages: Stage[];
+  createdBy?: {
+    id?: string;
+    name?: string;
+    email?: string;
+  };
+  userGroups?: Array<any>;
+  branches?: Array<any>;
+  startStageId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  lastEditedAt?: string;
+}
+
 // Simplified stage components
-function SimpleInstructionsStage({ stage, onNext }) {
+function SimpleInstructionsStage({ stage, onNext }: { stage: InstructionsStage; onNext: () => void }) {
   return (
     <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
       <h3 className="text-lg font-bold mb-2">{stage.title}</h3>
@@ -24,10 +86,10 @@ function SimpleInstructionsStage({ stage, onNext }) {
   );
 }
 
-function SimpleSurveyStage({ stage, onNext }) {
-  const [answered, setAnswered] = useState({});
+function SimpleSurveyStage({ stage, onNext }: { stage: SurveyStage; onNext: () => void }) {
+  const [answered, setAnswered] = useState<Record<string, boolean>>({});
   
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onNext();
   };
@@ -38,7 +100,7 @@ function SimpleSurveyStage({ stage, onNext }) {
       <p className="mb-4">{stage.description}</p>
       
       <form onSubmit={handleSubmit}>
-        {stage.questions && stage.questions.map((q, i) => (
+        {stage.questions && stage.questions.map((q, i: number) => (
           <div key={q.id || i} className="mb-4 p-3 bg-gray-50 rounded border">
             <p className="font-medium">{q.text} {q.required && <span className="text-red-500">*</span>}</p>
             
@@ -53,7 +115,7 @@ function SimpleSurveyStage({ stage, onNext }) {
             
             {q.type === 'multipleChoice' && q.options && (
               <div className="mt-2">
-                {q.options.map((option, idx) => (
+                {q.options.map((option: string, idx: number) => (
                   <div key={idx} className="flex items-center mt-1">
                     <input 
                       type="radio" 
@@ -70,7 +132,7 @@ function SimpleSurveyStage({ stage, onNext }) {
             
             {q.type === 'rating' && (
               <div className="flex space-x-2 mt-2">
-                {[1, 2, 3, 4, 5].map(rating => (
+                {[1, 2, 3, 4, 5].map((rating: number) => (
                   <button
                     key={rating}
                     type="button"
@@ -96,7 +158,7 @@ function SimpleSurveyStage({ stage, onNext }) {
   );
 }
 
-function SimpleBreakStage({ stage, onNext }) {
+function SimpleBreakStage({ stage, onNext }: { stage: BreakStage; onNext: () => void }) {
   return (
     <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
       <h3 className="text-lg font-bold mb-2">{stage.title}</h3>
@@ -125,7 +187,7 @@ function SimplePreviewContent() {
     progress
   } = usePreview();
   
-  const [timeoutOccurred, setTimeoutOccurred] = useState(false);
+  const [timeoutOccurred, setTimeoutOccurred] = useState<boolean>(false);
   const params = useParams();
   const experimentId = params.id as string;
 
