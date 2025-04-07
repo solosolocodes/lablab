@@ -1,3 +1,5 @@
+'use client';
+
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Experiment from '@/models/Experiment';
@@ -122,6 +124,31 @@ const mockExperimentData = {
   lastEditedAt: new Date().toISOString()
 };
 
+// Define user group interface
+interface UserGroupData {
+  userGroupId: string;
+  condition: string;
+}
+
+// Define stage data interface
+interface StageData {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  durationSeconds: number;
+  required: boolean;
+  order: number;
+  content?: string;
+  format?: string;
+  scenarioId?: string;
+  rounds?: number;
+  roundDuration?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  questions?: Array<any>;
+  message?: string;
+}
+
 // Get a specific experiment by ID
 export async function GET(request: NextRequest) {
   try {
@@ -156,6 +183,7 @@ export async function GET(request: NextRequest) {
             description: experiment.description,
             status: experiment.status,
             createdBy: experiment.createdBy,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             userGroups: experiment.userGroups.map((ug: any) => ({
               userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId._id ? ug.userGroupId._id.toString() : ug.userGroupId.toString(),
               condition: ug.condition
@@ -243,6 +271,7 @@ export async function GET(request: NextRequest) {
       description: experiment.description,
       status: experiment.status,
       createdBy: experiment.createdBy,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       userGroups: experiment.userGroups.map((ug: any) => ({
         userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId._id ? ug.userGroupId._id.toString() : ug.userGroupId.toString(),
         condition: ug.condition
@@ -355,7 +384,8 @@ export async function PUT(request: NextRequest) {
       console.log('Processing userGroups:', JSON.stringify(userGroups, null, 2));
       
       // Process user groups - no max participants needed
-      experiment.userGroups = userGroups.map((group: UserGroupInput) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      experiment.userGroups = userGroups.map((group: any) => {
         // Convert userGroupId to ObjectId if it's a string
         let userGroupId;
         try {
@@ -509,10 +539,7 @@ export async function PUT(request: NextRequest) {
         name: experiment.name,
         description: experiment.description,
         status: experiment.status,
-        userGroups: experiment.userGroups.map((ug: any) => ({
-        userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId._id ? ug.userGroupId._id.toString() : ug.userGroupId.toString(),
-        condition: ug.condition
-      })),
+        userGroups: experiment.userGroups,
         stages: experiment.stages,
         branches: experiment.branches,
         startStageId: experiment.startStageId,
