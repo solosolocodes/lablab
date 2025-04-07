@@ -138,11 +138,48 @@ export default function ExperimentDesignerPage() {
             }
           } else {
             console.error('Empty response from server - this might be CORS or server issue');
-            // Try an alternative approach with a ping
+            // Try an alternative approach with direct test route
             try {
-              console.log('Attempting to ping server to verify connectivity...');
+              console.log('Attempting to use test API to verify connectivity...');
+              const testResponse = await fetch('/api/experiments/test', {
+                method: 'GET',
+                headers: {
+                  'Accept': 'application/json',
+                  'Cache-Control': 'no-cache'
+                }
+              });
+              
+              console.log('Test API response status:', testResponse.status);
+              
+              // Try to get the response text from test API
+              try {
+                const testResponseText = await testResponse.text();
+                console.log('Test API response text:', testResponseText.substring(0, 500));
+                
+                if (testResponseText && testResponseText.trim()) {
+                  try {
+                    const testData = JSON.parse(testResponseText);
+                    console.log('Test API parsed response:', testData);
+                  } catch (testJsonError) {
+                    console.error('Unable to parse test API response:', testJsonError);
+                  }
+                } else {
+                  console.error('Test API also returned empty response');
+                }
+              } catch (testTextError) {
+                console.error('Error getting text from test API:', testTextError);
+              }
+            } catch (testError) {
+              console.error('Test API request failed:', testError);
+            }
+            
+            // Also try a regular ping as a fallback
+            try {
+              console.log('Attempting to ping server as fallback...');
               const pingResponse = await fetch('/api/experiments?ping=true');
               console.log('Ping response status:', pingResponse.status);
+              const pingText = await pingResponse.text();
+              console.log('Ping response text length:', pingText.length);
             } catch (pingError) {
               console.error('Ping to server also failed:', pingError);
             }
