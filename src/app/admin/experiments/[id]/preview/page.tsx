@@ -99,7 +99,7 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       <div className="p-5 bg-gray-50 rounded border mb-5 text-center">
         <div className="text-gray-500 mb-3">BREAK</div>
         <p className="font-medium mb-3 text-lg">{stage.message || "Take a short break before continuing"}</p>
-        <p className="text-gray-600">When you're ready, click Continue to proceed to the next stage.</p>
+        <p className="text-gray-600">When you&apos;re ready, click Continue to proceed to the next stage.</p>
       </div>
       
       <div className="flex justify-center">
