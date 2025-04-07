@@ -44,7 +44,6 @@ type SerializedDocument = {
 };
 
 // Serialize MongoDB document to safe JSON
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function serializeDocument(doc: unknown): unknown {
   if (doc === null || typeof doc !== 'object') {
     return doc;
@@ -117,8 +116,8 @@ function errorResponse(message: string, status: number, details?: ErrorDetails) 
 }
 
 // Options for CORS preflight requests
-export async function OPTIONS(_request: NextRequest) {
-  // Using underscore prefix to indicate unused parameter
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function OPTIONS(_: NextRequest) {
   return new NextResponse(null, {
     status: 204,
     headers: corsHeaders,
