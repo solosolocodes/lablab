@@ -101,10 +101,27 @@ export default function ExperimentDesignerPage() {
         const response = await fetch(`/api/experiments/${experimentId}`);
         
         // Even if response is not OK, try to get the error details from JSON
-        const data = await response.json().catch(e => {
-          console.error('Failed to parse error response as JSON:', e);
-          return null;
-        });
+        let data;
+        try {
+          const responseText = await response.text();
+          console.log('Raw response from server:', responseText);
+          
+          // Only try to parse if we have a non-empty response
+          if (responseText && responseText.trim()) {
+            try {
+              data = JSON.parse(responseText);
+            } catch (jsonParseError) {
+              console.error('Failed to parse response as JSON:', jsonParseError);
+              data = { message: 'Invalid server response format' };
+            }
+          } else {
+            console.error('Empty response from server');
+            data = { message: 'Empty response from server' };
+          }
+        } catch (e) {
+          console.error('Failed to get response text:', e);
+          data = null;
+        }
         
         if (!response.ok) {
           // If we have detailed error data, include it in the error message
@@ -117,6 +134,17 @@ export default function ExperimentDesignerPage() {
         }
         
         // If we reach here, the response was OK
+        if (!data) {
+          console.error('Server returned OK status but no data');
+          throw new Error('Server returned empty response with OK status');
+        }
+        
+        // Verify data has minimum required fields
+        if (!data.id || !data.name) {
+          console.error('Server returned incomplete experiment data:', data);
+          throw new Error('Server returned incomplete experiment data');
+        }
+        
         setExperiment(data);
         
         // Also fetch scenarios and user groups

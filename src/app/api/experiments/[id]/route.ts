@@ -570,10 +570,42 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(mockExperimentData);
     }
     
-    return NextResponse.json(
-      { message: 'Error fetching experiment', error: errorMessage },
-      { status: 500 }
-    );
+    try {
+      // Ensure we return a valid JSON response even in case of errors
+      console.log('API: Returning error response in standard JSON format');
+      
+      return NextResponse.json(
+        { 
+          message: 'Error fetching experiment', 
+          error: errorMessage,
+          timestamp: new Date().toISOString(),
+          path: request.nextUrl.pathname,
+          status: 500
+        },
+        { 
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    } catch (responseError) {
+      // Last resort fallback if even creating the error response fails
+      console.error('API: Critical error creating error response:', responseError);
+      
+      return new NextResponse(
+        JSON.stringify({ 
+          message: 'Critical error in API', 
+          error: 'Failed to process request'
+        }),
+        { 
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    }
   }
 }
 
