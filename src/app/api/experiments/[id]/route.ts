@@ -188,53 +188,95 @@ export async function GET(request: NextRequest) {
         if (experiment) {
           console.log(`API: Processing found experiment for preview`);
           
-          // Format response
-          const formattedExperiment = {
-            id: experiment._id,
-            name: experiment.name,
-            description: experiment.description,
-            status: experiment.status,
-            createdBy: experiment.createdBy,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            userGroups: experiment.userGroups.map((ug: any) => ({
-              userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId._id ? ug.userGroupId._id.toString() : ug.userGroupId.toString(),
-              condition: ug.condition
-            })),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            stages: experiment.stages.map((stage: any) => ({
-              id: stage._id,
-              type: stage.type,
-              title: stage.title,
-              description: stage.description,
-              durationSeconds: stage.durationSeconds,
-              required: stage.required,
-              order: stage.order,
-              // Additional fields based on stage type
-              ...(stage.type === 'instructions' && {
-                content: stage.content,
-                format: stage.format
-              }),
-              ...(stage.type === 'scenario' && {
-                scenarioId: stage.scenarioId,
-                rounds: stage.rounds,
-                roundDuration: stage.roundDuration
-              }),
-              ...(stage.type === 'survey' && {
-                questions: stage.questions
-              }),
-              ...(stage.type === 'break' && {
-                message: stage.message
-              })
-            })),
-            branches: experiment.branches,
-            startStageId: experiment.startStageId,
-            createdAt: experiment.createdAt,
-            updatedAt: experiment.updatedAt,
-            lastEditedAt: experiment.lastEditedAt,
-          };
-          
-          console.log('API: Returning real experiment data for preview');
-          return NextResponse.json(formattedExperiment);
+          try {
+            // Format response with defensive programming
+            const formattedExperiment = {
+              id: experiment._id,
+              name: experiment.name || 'Untitled Experiment',
+              description: experiment.description || '',
+              status: experiment.status || 'draft',
+              createdBy: experiment.createdBy || { name: 'Unknown', email: 'unknown@example.com' },
+              userGroups: [],
+              stages: [],
+              branches: experiment.branches || [],
+              startStageId: experiment.startStageId || null,
+              createdAt: experiment.createdAt || new Date().toISOString(),
+              updatedAt: experiment.updatedAt || new Date().toISOString(),
+              lastEditedAt: experiment.lastEditedAt || new Date().toISOString(),
+            };
+            
+            // Process user groups safely
+            if (Array.isArray(experiment.userGroups)) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              formattedExperiment.userGroups = experiment.userGroups.map((ug: any) => {
+                try {
+                  return {
+                    userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId && ug.userGroupId._id 
+                      ? ug.userGroupId._id.toString() 
+                      : (ug.userGroupId ? ug.userGroupId.toString() : 'unknown'),
+                    condition: ug.condition || 'unknown'
+                  };
+                } catch (ugErr) {
+                  console.error('API: Preview mode - Error processing user group:', ugErr);
+                  return { userGroupId: 'error', condition: 'error' };
+                }
+              });
+            }
+            
+            // Process stages safely
+            if (Array.isArray(experiment.stages)) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              formattedExperiment.stages = experiment.stages.map((stage: any) => {
+                try {
+                  const baseStage = {
+                    id: stage._id,
+                    type: stage.type || 'unknown',
+                    title: stage.title || 'Untitled Stage',
+                    description: stage.description || '',
+                    durationSeconds: stage.durationSeconds || 0,
+                    required: stage.required !== undefined ? stage.required : true,
+                    order: stage.order || 0,
+                  };
+                  
+                  if (stage.type === 'instructions') {
+                    return { ...baseStage, content: stage.content || '', format: stage.format || 'text' };
+                  } else if (stage.type === 'scenario') {
+                    return { 
+                      ...baseStage, 
+                      scenarioId: stage.scenarioId || '', 
+                      rounds: stage.rounds || 1,
+                      roundDuration: stage.roundDuration || 60
+                    };
+                  } else if (stage.type === 'survey') {
+                    return { ...baseStage, questions: Array.isArray(stage.questions) ? stage.questions : [] };
+                  } else if (stage.type === 'break') {
+                    return { ...baseStage, message: stage.message || 'Break time' };
+                  }
+                  
+                  return baseStage;
+                } catch (stageErr) {
+                  console.error('API: Preview mode - Error processing stage:', stageErr);
+                  return {
+                    id: 'error',
+                    type: 'instructions',
+                    title: 'Error Stage',
+                    description: 'There was an error processing this stage',
+                    durationSeconds: 0,
+                    required: false,
+                    order: 0,
+                    content: '',
+                    format: 'text'
+                  };
+                }
+              });
+            }
+            
+            console.log('API: Returning real experiment data for preview');
+            return NextResponse.json(formattedExperiment);
+          } catch (formattingError) {
+            console.error('API: Error formatting experiment for preview:', formattingError);
+            throw formattingError; // Will be caught by outer try/catch
+          }
         }
       } catch (dbError) {
         console.error('API: Error fetching real experiment data:', dbError);
@@ -285,53 +327,138 @@ export async function GET(request: NextRequest) {
     
     console.log(`API: Found experiment: "${experiment.name}", stages: ${experiment.stages?.length || 0}`);
     
-    // Format response
-    const formattedExperiment = {
-      id: experiment._id,
-      name: experiment.name,
-      description: experiment.description,
-      status: experiment.status,
-      createdBy: experiment.createdBy,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      userGroups: experiment.userGroups.map((ug: any) => ({
-        userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId._id ? ug.userGroupId._id.toString() : ug.userGroupId.toString(),
-        condition: ug.condition
-      })),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      stages: experiment.stages.map((stage: any) => ({
-        id: stage._id,
-        type: stage.type,
-        title: stage.title,
-        description: stage.description,
-        durationSeconds: stage.durationSeconds,
-        required: stage.required,
-        order: stage.order,
-        // Additional fields based on stage type
-        ...(stage.type === 'instructions' && {
-          content: stage.content,
-          format: stage.format
-        }),
-        ...(stage.type === 'scenario' && {
-          scenarioId: stage.scenarioId,
-          rounds: stage.rounds,
-          roundDuration: stage.roundDuration
-        }),
-        ...(stage.type === 'survey' && {
-          questions: stage.questions
-        }),
-        ...(stage.type === 'break' && {
-          message: stage.message
-        })
-      })),
-      branches: experiment.branches,
-      startStageId: experiment.startStageId,
-      createdAt: experiment.createdAt,
-      updatedAt: experiment.updatedAt,
-      lastEditedAt: experiment.lastEditedAt,
-    };
-    
-    console.log('API: Successfully formatted experiment response, returning data');
-    return NextResponse.json(formattedExperiment);
+    try {
+      // Inspect important experiment properties for debugging
+      console.log('API: Experiment data structure:', {
+        id: experiment._id ? typeof experiment._id : 'undefined',
+        name: typeof experiment.name,
+        hasUserGroups: Array.isArray(experiment.userGroups),
+        userGroupsCount: Array.isArray(experiment.userGroups) ? experiment.userGroups.length : 'not an array',
+        hasStages: Array.isArray(experiment.stages),
+        stagesCount: Array.isArray(experiment.stages) ? experiment.stages.length : 'not an array',
+      });
+      
+      // Format response
+      const formattedExperiment = {
+        id: experiment._id,
+        name: experiment.name,
+        description: experiment.description,
+        status: experiment.status,
+        createdBy: experiment.createdBy,
+      };
+      
+      // Process user groups with defensive programming
+      try {
+        if (Array.isArray(experiment.userGroups)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formattedExperiment.userGroups = experiment.userGroups.map((ug: any) => {
+            try {
+              return {
+                userGroupId: typeof ug.userGroupId === 'object' && ug.userGroupId && ug.userGroupId._id 
+                  ? ug.userGroupId._id.toString() 
+                  : (ug.userGroupId ? ug.userGroupId.toString() : 'unknown'),
+                condition: ug.condition || 'unknown'
+              };
+            } catch (ugErr) {
+              console.error('API: Error processing user group:', ugErr, ug);
+              return { userGroupId: 'error', condition: 'error' };
+            }
+          });
+        } else {
+          console.warn('API: experiment.userGroups is not an array:', experiment.userGroups);
+          formattedExperiment.userGroups = [];
+        }
+      } catch (userGroupsError) {
+        console.error('API: Error processing userGroups:', userGroupsError);
+        formattedExperiment.userGroups = [];
+      }
+      
+      // Process stages with defensive programming
+      try {
+        if (Array.isArray(experiment.stages)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          formattedExperiment.stages = experiment.stages.map((stage: any) => {
+            try {
+              const baseStage = {
+                id: stage._id,
+                type: stage.type || 'unknown',
+                title: stage.title || 'Untitled Stage',
+                description: stage.description || '',
+                durationSeconds: stage.durationSeconds || 0,
+                required: stage.required !== undefined ? stage.required : true,
+                order: stage.order || 0,
+              };
+              
+              // Add type-specific properties
+              if (stage.type === 'instructions') {
+                return {
+                  ...baseStage,
+                  content: stage.content || '',
+                  format: stage.format || 'text'
+                };
+              } else if (stage.type === 'scenario') {
+                return {
+                  ...baseStage,
+                  scenarioId: stage.scenarioId || '',
+                  rounds: stage.rounds || 1,
+                  roundDuration: stage.roundDuration || 60
+                };
+              } else if (stage.type === 'survey') {
+                return {
+                  ...baseStage,
+                  questions: Array.isArray(stage.questions) ? stage.questions : []
+                };
+              } else if (stage.type === 'break') {
+                return {
+                  ...baseStage,
+                  message: stage.message || 'Break time'
+                };
+              }
+              
+              return baseStage;
+            } catch (stageErr) {
+              console.error('API: Error processing stage:', stageErr, stage);
+              return {
+                id: 'error',
+                type: 'instructions',
+                title: 'Error Stage',
+                description: 'There was an error processing this stage',
+                durationSeconds: 0,
+                required: false,
+                order: 0,
+                content: '',
+                format: 'text'
+              };
+            }
+          });
+        } else {
+          console.warn('API: experiment.stages is not an array:', experiment.stages);
+          formattedExperiment.stages = [];
+        }
+      } catch (stagesError) {
+        console.error('API: Error processing stages:', stagesError);
+        formattedExperiment.stages = [];
+      }
+      
+      // Add remaining fields
+      formattedExperiment.branches = experiment.branches || [];
+      formattedExperiment.startStageId = experiment.startStageId || null;
+      formattedExperiment.createdAt = experiment.createdAt || new Date().toISOString();
+      formattedExperiment.updatedAt = experiment.updatedAt || new Date().toISOString();
+      formattedExperiment.lastEditedAt = experiment.lastEditedAt || new Date().toISOString();
+      
+      console.log('API: Successfully formatted experiment response, returning data');
+      return NextResponse.json(formattedExperiment);
+    } catch (formattingError) {
+      console.error('API: Error during response formatting:', formattingError);
+      return NextResponse.json(
+        { 
+          message: 'Error formatting experiment data', 
+          error: formattingError instanceof Error ? formattingError.message : String(formattingError)
+        },
+        { status: 500 }
+      );
+    }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     console.error('API: Error fetching experiment:', error);
