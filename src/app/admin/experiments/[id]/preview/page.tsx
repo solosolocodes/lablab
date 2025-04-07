@@ -5,6 +5,15 @@ import { useParams } from 'next/navigation';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
 
 // Define basic interfaces for stage types
+// Question interface to replace any type
+interface Question {
+  id: string;
+  text: string;
+  type: string;
+  required?: boolean;
+  options?: string[];
+}
+
 interface Stage {
   id: string;
   type: string;
@@ -16,8 +25,7 @@ interface Stage {
   scenarioId?: string;
   rounds?: number;
   roundDuration?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  questions?: Array<any>;
+  questions?: Question[];
 }
 
 interface InstructionsStage extends Stage {
@@ -169,7 +177,7 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
         
         {stage.questions && stage.questions.length > 0 ? (
           <div>
-            {stage.questions.map((q, i) => (
+            {stage.questions.map((q: Question, i: number) => (
               <div key={q.id || i} className="mb-4 p-3 bg-white rounded border">
                 <p className="font-medium">
                   {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
@@ -178,7 +186,7 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
                 
                 {q.type === 'multipleChoice' && q.options && (
                   <div className="mt-2 pl-4">
-                    {q.options.map((option, idx) => (
+                    {q.options.map((option: string, idx: number) => (
                       <div key={idx} className="flex items-center mt-1">
                         <span className="w-4 h-4 border border-gray-300 rounded-full mr-2"></span>
                         <span className="text-gray-700">{option}</span>
