@@ -47,7 +47,32 @@ interface ScenarioStage extends BaseStage {
 
 type Stage = InstructionsStage | SurveyStage | BreakStage | ScenarioStage;
 
+// Types for userGroups and branches
+interface UserGroup {
+  userGroupId: string;
+  condition: string;
+  maxParticipants?: number;
+}
+
+interface BranchCondition {
+  type: string;
+  sourceStageId?: string;
+  targetStageId: string;
+  questionId?: string;
+  expectedResponse?: string;
+  operator?: string;
+  threshold?: number;
+  probability?: number;
+}
+
+interface Branch {
+  fromStageId: string;
+  conditions: BranchCondition[];
+  defaultTargetStageId: string;
+}
+
 // Experiment interface
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface Experiment {
   id: string;
   name: string;
@@ -59,8 +84,8 @@ interface Experiment {
     name?: string;
     email?: string;
   };
-  userGroups?: Array<any>;
-  branches?: Array<any>;
+  userGroups?: UserGroup[];
+  branches?: Branch[];
   startStageId?: string;
   createdAt?: string;
   updatedAt?: string;
