@@ -233,22 +233,22 @@ export async function GET(request: NextRequest) {
       }
       
       // Serialize the document for proper JSON response
-      const serialized = serializeDocument(experiment);
+      const serialized = serializeDocument(experiment) as Record<string, unknown>;
       
       // Ensure expected fields are present
       const response = {
         success: true,
-        id: serialized.id || experimentId,
-        name: serialized.name || 'Untitled',
-        description: serialized.description || '',
-        status: serialized.status || 'draft',
-        userGroups: serialized.userGroups || [],
-        stages: serialized.stages || [],
-        branches: serialized.branches || [],
-        startStageId: serialized.startStageId,
-        createdAt: serialized.createdAt || new Date().toISOString(),
-        updatedAt: serialized.updatedAt || new Date().toISOString(),
-        lastEditedAt: serialized.lastEditedAt
+        id: (serialized.id as string) || experimentId,
+        name: (serialized.name as string) || 'Untitled',
+        description: (serialized.description as string) || '',
+        status: (serialized.status as string) || 'draft',
+        userGroups: (serialized.userGroups as unknown[]) || [],
+        stages: (serialized.stages as unknown[]) || [],
+        branches: (serialized.branches as unknown[]) || [],
+        startStageId: serialized.startStageId as string | undefined,
+        createdAt: (serialized.createdAt as string) || new Date().toISOString(),
+        updatedAt: (serialized.updatedAt as string) || new Date().toISOString(),
+        lastEditedAt: serialized.lastEditedAt as string | undefined
       };
       
       // Log success
