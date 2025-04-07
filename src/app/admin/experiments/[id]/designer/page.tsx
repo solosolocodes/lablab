@@ -1148,18 +1148,6 @@ export default function ExperimentDesignerPage() {
                           </select>
                         </div>
                         
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Max Participants (0 = unlimited)
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            className="w-full px-3 py-2 border rounded-md text-sm"
-                            value={group.maxParticipants !== undefined ? group.maxParticipants : 0}
-                            onChange={(e) => updateUserGroup(selectedUserGroup, 'maxParticipants', parseInt(e.target.value) || 0)}
-                          />
-                        </div>
                         
                         <div className="mt-4">
                           <button

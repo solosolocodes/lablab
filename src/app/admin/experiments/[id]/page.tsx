@@ -161,7 +161,7 @@ export default function ExperimentDetailsPage() {
   // Get user group name by ID
   const getUserGroupName = (userGroupId: string) => {
     const userGroup = userGroups.find(group => group.id === userGroupId);
-    return userGroup ? userGroup.name : 'Unknown Group';
+    return userGroup ? userGroup.name : userGroupId;
   };
 
   // Format date
