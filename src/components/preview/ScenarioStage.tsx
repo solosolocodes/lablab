@@ -3,22 +3,87 @@
 import { useState, useEffect } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
+// Interface for Scenario data from MongoDB
+interface ScenarioData {
+  id: string;
+  name: string;
+  description: string;
+  rounds: number;
+  roundDuration: number;
+  [key: string]: unknown;
+}
+
 export default function ScenarioStage() {
   const { currentStage, goToNextStage } = usePreview();
   const [currentRound, setCurrentRound] = useState(1);
   const [roundTimeRemaining, setRoundTimeRemaining] = useState(0);
   const [scenarioComplete, setScenarioComplete] = useState(false);
+  const [scenarioData, setScenarioData] = useState<ScenarioData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   if (!currentStage || currentStage.type !== 'scenario') {
     return <div>Invalid stage type</div>;
   }
-
-  const totalRounds = currentStage.rounds || 1;
-  const roundDuration = currentStage.roundDuration || 60;
   
-  // Handle round timer
+  // Fetch scenario data from MongoDB when the component mounts
   useEffect(() => {
-    // Initialize on first load
+    async function fetchScenarioData() {
+      if (!currentStage.scenarioId) {
+        setError("No scenario ID provided");
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        setIsLoading(true);
+        console.log(`Fetching scenario data for ID: ${currentStage.scenarioId}`);
+        
+        const response = await fetch(`/api/scenarios/${currentStage.scenarioId}?preview=true`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch scenario: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("Scenario data fetched:", data);
+        setScenarioData(data);
+        setCurrentRound(1); // Reset to first round when scenario loads
+        
+        // Reset timer with the actual duration from MongoDB
+        if (data.roundDuration) {
+          setRoundTimeRemaining(data.roundDuration);
+        }
+        
+        setIsLoading(false);
+      } catch (err) {
+        console.error("Error fetching scenario data:", err);
+        setError(err instanceof Error ? err.message : "Failed to load scenario data");
+        setIsLoading(false);
+      }
+    }
+    
+    fetchScenarioData();
+  }, [currentStage.scenarioId]);
+  
+  // Use the data from MongoDB, or fall back to the stage data if not available yet
+  const totalRounds = scenarioData?.rounds || currentStage.rounds || 1;
+  const roundDuration = scenarioData?.roundDuration || currentStage.roundDuration || 60;
+  
+  // Handle round timer - only start once we have the scenario data
+  useEffect(() => {
+    // Only initialize timer if we have scenario data and we're not in an error state
+    if (isLoading || error || !scenarioData) {
+      return;
+    }
+    
+    console.log(`Starting timer with ${totalRounds} rounds and ${roundDuration} seconds per round`);
+    // Initialize once scenarioData is loaded
     setCurrentRound(1);
     setRoundTimeRemaining(roundDuration);
     setScenarioComplete(false);
@@ -45,7 +110,7 @@ export default function ScenarioStage() {
     
     // Cleanup interval on unmount
     return () => clearInterval(interval);
-  }, [currentStage.id, roundDuration, totalRounds]); // Add currentStage.id to reset when stage changes
+  }, [currentStage.id, roundDuration, totalRounds, isLoading, error, scenarioData]); // Add dependencies
   
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
@@ -69,11 +134,56 @@ export default function ScenarioStage() {
     }
   }, [scenarioComplete, goToNextStage]);
 
+  // Handle loading state
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-4xl">
+        <div className="bg-white rounded-lg shadow-lg p-6 text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Loading Scenario...</h2>
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+          <p className="text-gray-600 mt-4">Fetching scenario data from database</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Handle error state
+  if (error) {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-4xl">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-2xl font-bold text-red-600 mb-2">Error Loading Scenario</h2>
+          <p className="text-gray-700 mb-4">{error}</p>
+          <div className="p-4 bg-red-50 rounded-lg border border-red-200 mb-4">
+            <p className="text-red-700">
+              Could not fetch scenario data from MongoDB. 
+              This may be due to a connection issue or missing scenario in the database.
+            </p>
+          </div>
+          <div className="text-center">
+            <button
+              onClick={goToNextStage}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium shadow-md transition-all"
+            >
+              Skip to Next Stage
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">{currentStage.title}</h2>
-        <p className="text-gray-600 mb-6">{currentStage.description}</p>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+          {scenarioData?.name || currentStage.title}
+        </h2>
+        <p className="text-gray-600 mb-6">
+          {scenarioData?.description || currentStage.description}
+        </p>
         
         {/* Round and Timer display */}
         <div className="mb-6 bg-blue-50 p-5 rounded-lg border border-blue-100">
@@ -131,11 +241,15 @@ export default function ScenarioStage() {
             </div>
             
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-              <h3 className="font-semibold text-blue-800">Scenario Details</h3>
+              <h3 className="font-semibold text-blue-800">Scenario Details from MongoDB</h3>
               <div className="mt-2 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Scenario ID:</span>
                   <span className="font-medium">{currentStage.scenarioId || 'Default'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Scenario Name:</span>
+                  <span className="font-medium">{scenarioData?.name || 'Unknown'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Rounds:</span>
@@ -147,7 +261,7 @@ export default function ScenarioStage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total Duration:</span>
-                  <span className="font-medium">{currentStage.durationSeconds} seconds</span>
+                  <span className="font-medium">{totalRounds * roundDuration} seconds</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Current Status:</span>

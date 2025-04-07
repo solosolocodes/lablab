@@ -181,22 +181,86 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   );
 }
 
+// Interface for Scenario data from MongoDB
+interface ScenarioData {
+  id: string;
+  name: string;
+  description: string;
+  rounds: number;
+  roundDuration: number;
+  [key: string]: unknown;
+}
+
 function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
   const [currentRound, setCurrentRound] = useState(1);
-  const [roundTimeRemaining, setRoundTimeRemaining] = useState(stage.roundDuration || 60);
+  const [roundTimeRemaining, setRoundTimeRemaining] = useState(0);
   const [scenarioComplete, setScenarioComplete] = useState(false);
-  const totalRounds = stage.rounds || 1;
+  const [scenarioData, setScenarioData] = useState<ScenarioData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  // Handle round timer
+  // Fetch scenario data from MongoDB when the component mounts
   useEffect(() => {
-    // Reset state if it's a new scenario
-    setCurrentRound(1);
-    setRoundTimeRemaining(stage.roundDuration || 60);
-    setScenarioComplete(false);
+    async function fetchScenarioData() {
+      if (!stage.scenarioId) {
+        setError("No scenario ID provided");
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        setIsLoading(true);
+        console.log(`Fetching scenario data for ID: ${stage.scenarioId}`);
+        
+        const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch scenario: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("Scenario data fetched:", data);
+        setScenarioData(data);
+        
+        // Initialize with the data from MongoDB
+        setCurrentRound(1);
+        setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
+        setScenarioComplete(false);
+        
+        setIsLoading(false);
+      } catch (err) {
+        console.error("Error fetching scenario data:", err);
+        setError(err instanceof Error ? err.message : "Failed to load scenario data");
+        setIsLoading(false);
+        
+        // If we can't get data from MongoDB, use the stage data as fallback
+        setCurrentRound(1);
+        setRoundTimeRemaining(stage.roundDuration || 60);
+      }
+    }
+    
+    fetchScenarioData();
+  }, [stage.scenarioId, stage.roundDuration]);
+  
+  // Use the data from MongoDB, or fall back to the stage data
+  const totalRounds = scenarioData?.rounds || stage.rounds || 1;
+  const roundDuration = scenarioData?.roundDuration || stage.roundDuration || 60;
+  
+  // Handle round timer - only start if we have data (from MongoDB or stage)
+  useEffect(() => {
+    // Don't start timer if we're still loading data
+    if (isLoading) {
+      return;
+    }
     
     // Don't start timer if no rounds or duration
-    if (!stage.rounds || !stage.roundDuration) {
+    if (!totalRounds || !roundDuration) {
       setScenarioComplete(true);
       return;
     }
@@ -209,7 +273,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
           if (currentRound < totalRounds) {
             // Move to next round
             setCurrentRound(prev => prev + 1);
-            return stage.roundDuration || 60; // Reset timer for next round
+            return roundDuration; // Reset timer for next round
           } else {
             // All rounds complete
             clearInterval(interval);
@@ -223,7 +287,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     
     // Cleanup interval on unmount
     return () => clearInterval(interval);
-  }, [stage.rounds, stage.roundDuration, totalRounds]);
+  }, [totalRounds, roundDuration, currentRound, isLoading]);
   
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
@@ -234,13 +298,59 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   
   // Calculate progress percentage
   const progressPercentage = ((currentRound - 1) * 100 / totalRounds) + 
-    (roundTimeRemaining === 0 ? 100 : (1 - roundTimeRemaining / (stage.roundDuration || 60)) * 100 / totalRounds);
+    (roundTimeRemaining === 0 ? 100 : (1 - roundTimeRemaining / roundDuration) * 100 / totalRounds);
+  
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+        <div className="text-center py-4">
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <h3 className="text-lg font-semibold">Loading Scenario Data...</h3>
+          <p className="text-gray-600 mt-2">Fetching scenario details from MongoDB</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Error state with fallback
+  if (error) {
+    return (
+      <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+        <div className="mb-4 pb-3 border-b border-gray-200">
+          <h3 className="text-xl font-bold mb-2 text-red-600">Error Loading Scenario</h3>
+          <p className="text-gray-600">{error}</p>
+        </div>
+        
+        <div className="p-4 bg-red-50 rounded border mb-5">
+          <p className="text-red-700 mb-2">Could not fetch scenario data from MongoDB.</p>
+          <p className="text-gray-700">Using fallback data from experiment configuration.</p>
+        </div>
+        
+        <div className="flex justify-center">
+          <button 
+            onClick={onNext}
+            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Skip to Next Stage
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
-        <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
-        <p className="text-gray-600">{stage.description}</p>
+        <h3 className="text-xl font-bold mb-2">
+          {scenarioData?.name || stage.title}
+        </h3>
+        <p className="text-gray-600">
+          {scenarioData?.description || stage.description}
+        </p>
+        <div className="text-xs text-blue-600 mt-1">
+          Data loaded from MongoDB
+        </div>
       </div>
       
       {/* Round and Timer display */}
@@ -259,7 +369,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         {/* Progress bar */}
         <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
           <div 
-            className="bg-blue-600 h-2.5 rounded-full" 
+            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
             style={{ width: `${progressPercentage}%` }}
           ></div>
         </div>
@@ -283,21 +393,35 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
             <div className="bg-gray-200 h-32 rounded flex items-center justify-center mb-4">
               <div className="text-center">
                 <p className="text-gray-600 mb-2">Scenario Interface Placeholder</p>
-                <p className="text-sm text-gray-500">
-                  Round {currentRound} of {totalRounds} in progress
-                </p>
+                {scenarioComplete ? (
+                  <p className="text-sm text-green-600 font-medium">
+                    All rounds completed!
+                  </p>
+                ) : (
+                  <p className="text-sm text-blue-600">
+                    Round {currentRound} of {totalRounds} in progress
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex justify-between border-t pt-3">
               <div>
-                <p className="text-sm text-gray-700">Scenario ID: {stage.scenarioId || 'Default'}</p>
+                <p className="text-sm text-gray-700">MongoDB ID: {stage.scenarioId || 'Default'}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-700">Duration: {stage.roundDuration || 60}s per round</p>
+                <p className="text-sm text-gray-700">MongoDB Duration: {roundDuration}s per round</p>
               </div>
             </div>
           </div>
-          <p className="text-sm text-gray-600">In the actual experiment, participants will interact with the scenario here.</p>
+          <div className="bg-blue-50 p-3 rounded border border-blue-100 text-sm text-blue-700">
+            <div className="font-semibold mb-1">Scenario Data from MongoDB:</div>
+            <div className="grid grid-cols-2 gap-2 text-left">
+              <div>Rounds: {totalRounds}</div>
+              <div>Round Duration: {roundDuration}s</div>
+              <div>Total Time: {totalRounds * roundDuration}s</div>
+              <div>Scenario Name: {scenarioData?.name || 'Unknown'}</div>
+            </div>
+          </div>
         </div>
       </div>
       
