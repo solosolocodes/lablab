@@ -219,90 +219,18 @@ function SimplePreviewContent() {
     }
   }, [experimentId, loadExperiment]);
 
-  // Simple default content when no experiment/stage is available yet
-  if (!experiment || !currentStage) {
-    return (
-      <div className="p-4">
-        <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
-          <h3 className="text-lg font-bold mb-2">Sample Preview</h3>
-          <p className="mb-4">This is a preview of how experiments will appear to participants.</p>
-          <Link 
-            href={`/admin/experiments/${experimentId}/designer`}
-            className="px-4 py-2 bg-blue-500 text-white rounded inline-block"
-          >
-            Back to Designer
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // Main content with experiment stages
+  // Always show the welcome screen regardless of experiment state
   return (
-    <div className="min-h-screen p-4">
-      {/* Simple header */}
-      <div className="mb-6 bg-white p-3 rounded border">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-lg font-bold">{experiment.name}</h1>
-            <p className="text-sm text-gray-500">Preview Mode</p>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            {/* Simple progress bar */}
-            <div className="w-32 bg-gray-200 h-2 rounded-full">
-              <div 
-                className="bg-blue-500 h-2 rounded-full" 
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-            
-            <Link
-              href={`/admin/experiments/${experimentId}/designer`}
-              className="px-3 py-1 bg-gray-200 rounded text-sm"
-            >
-              Exit
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Stage content */}
-      <div className="py-4">
-        {currentStage.type === 'instructions' && (
-          <SimpleInstructionsStage 
-            stage={currentStage as InstructionsStage} 
-            onNext={goToNextStage} 
-          />
-        )}
-        
-        {currentStage.type === 'survey' && (
-          <SimpleSurveyStage 
-            stage={currentStage as SurveyStage} 
-            onNext={goToNextStage} 
-          />
-        )}
-        
-        {currentStage.type === 'break' && (
-          <SimpleBreakStage 
-            stage={currentStage as BreakStage} 
-            onNext={goToNextStage} 
-          />
-        )}
-        
-        {currentStage.type === 'scenario' && (
-          <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
-            <h3 className="text-lg font-bold mb-2">{currentStage.title}</h3>
-            <p className="mb-4">{currentStage.description}</p>
-            <p className="mb-4">Scenario content would appear here</p>
-            <button 
-              onClick={goToNextStage}
-              className="px-4 py-2 bg-blue-500 text-white rounded"
-            >
-              Next
-            </button>
-          </div>
-        )}
+    <div className="p-4">
+      <div className="max-w-2xl mx-auto p-4 bg-white rounded border text-center">
+        <h3 className="text-lg font-bold mb-4">Welcome</h3>
+        <p className="mb-6">Thank you. Please click Next.</p>
+        <button 
+          onClick={goToNextStage}
+          className="px-6 py-2 bg-blue-500 text-white rounded"
+        >
+          Next
+        </button>
       </div>
     </div>
   );
