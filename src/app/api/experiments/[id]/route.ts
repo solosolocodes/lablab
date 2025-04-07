@@ -13,8 +13,8 @@ function getExperimentId(request: NextRequest): string {
 // Mock data for preview mode
 const mockExperimentData = {
   id: "mockExperimentId",
-  name: "Test Experiment",
-  description: "This is a test experiment for preview mode",
+  name: "Financial Decision Making",
+  description: "An experiment to study financial decision making under various conditions",
   status: "draft",
   createdBy: {
     id: "mockUserId",
@@ -26,53 +26,93 @@ const mockExperimentData = {
     {
       id: "stage1",
       type: "instructions",
-      title: "Welcome to the Experiment",
-      description: "Please read the instructions carefully",
+      title: "Introduction",
+      description: "Welcome to the financial decision-making experiment",
       durationSeconds: 60,
       required: true,
       order: 0,
-      content: "# Welcome to our research experiment\n\nThank you for participating in this study. Your time and input are valuable to our research.\n\n## What to expect\n\nThis experiment will consist of a few different stages:\n\n1. Instructions (you are here)\n2. A short scenario to interact with\n3. A brief survey about your experience\n\nYou can proceed to the next stage when you're ready.",
+      content: "## Welcome to our Financial Decision-Making Study\n\nThank you for participating in this experiment. Your time and feedback are valuable to our research.\n\n### Purpose\n\nThis study aims to understand how people make financial decisions in different scenarios.\n\n### What to Expect\n\nThis experiment consists of multiple stages:\n\n1. Instructions (you are here)\n2. A market scenario simulation\n3. A decision-making exercise\n4. A feedback survey\n\nPlease read all instructions carefully and take your time with each stage.",
       format: "markdown"
     },
     {
       id: "stage2",
-      type: "survey",
-      title: "Feedback Survey",
-      description: "Please answer the following questions",
+      type: "instructions",
+      title: "Key Concepts",
+      description: "Understanding the key financial concepts used in this experiment",
       durationSeconds: 120,
       required: true,
       order: 1,
+      content: "## Key Financial Concepts\n\n### Risk and Return\nInvestments with higher potential returns typically come with higher risks. Lower-risk investments generally offer more modest returns.\n\n### Diversification\nSpreading investments across different asset types to reduce risk.\n\n### Market Volatility\nThe rate at which prices rise or fall in a particular market.\n\n### Time Horizon\nThe length of time you expect to hold an investment before needing the money.\n\nThese concepts will be important as you navigate the scenarios in this experiment.",
+      format: "markdown"
+    },
+    {
+      id: "stage3",
+      type: "scenario",
+      title: "Market Scenario",
+      description: "A simulated market environment for financial decision making",
+      durationSeconds: 300,
+      required: true,
+      order: 2,
+      scenarioId: "market-sim-1",
+      rounds: 3,
+      roundDuration: 60
+    },
+    {
+      id: "stage4",
+      type: "break",
+      title: "Short Break",
+      description: "Take a moment to reset before the next activity",
+      durationSeconds: 30,
+      required: false,
+      order: 3,
+      message: "You've completed the market scenario. Take a short break before continuing to the survey section."
+    },
+    {
+      id: "stage5",
+      type: "survey",
+      title: "Decision Evaluation",
+      description: "Please answer the following questions about your experience",
+      durationSeconds: 180,
+      required: true,
+      order: 4,
       questions: [
         {
           id: "q1",
-          text: "How would you rate your experience?",
+          text: "How confident were you in your investment decisions?",
           type: "rating",
           required: true
         },
         {
           id: "q2",
-          text: "What did you find most interesting?",
+          text: "What factors influenced your decision-making the most?",
           type: "text",
           required: true
         },
         {
           id: "q3",
-          text: "Which features would you like to see?",
+          text: "Which investment strategy did you primarily use?",
           type: "multipleChoice",
-          options: ["More scenarios", "Collaborative features", "Detailed feedback", "Other"],
+          options: ["Conservative/low-risk", "Balanced/moderate-risk", "Aggressive/high-risk", "Adaptive/changing"],
+          required: true
+        },
+        {
+          id: "q4",
+          text: "What additional information would have helped you make better decisions?",
+          type: "text",
           required: false
         }
       ]
     },
     {
-      id: "stage3",
-      type: "break",
-      title: "Take a Break",
-      description: "A short break before continuing",
+      id: "stage6",
+      type: "instructions",
+      title: "Conclusion",
+      description: "Thank you for participating",
       durationSeconds: 30,
-      required: false,
-      order: 2,
-      message: "You've completed the main activities. Feel free to take a short break before continuing."
+      required: true,
+      order: 5,
+      content: "## Thank You for Participating\n\nYour participation in this experiment is greatly appreciated. The data collected will help us better understand financial decision-making processes.\n\n### What Happens Next\n\nThe results of this study will be anonymized and analyzed. If you indicated interest in receiving the results, we will contact you when the analysis is complete.\n\n### Contact Information\n\nIf you have any questions about this study, please contact the research team at research@example.com.\n\nThank you again for your valuable contribution to this research.",
+      format: "markdown"
     }
   ],
   branches: [],
