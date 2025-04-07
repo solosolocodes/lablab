@@ -573,84 +573,156 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
               
               {/* Asset cards */}
               {!isLoadingWallet && !walletError && walletAssets.length > 0 && (
-                <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {walletAssets.map(asset => (
-                    <div 
-                      key={asset.id} 
-                      className="bg-white border border-gray-200 rounded-md p-3 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-gray-800">
-                          {asset.symbol}
-                        </span>
-                        <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600">
-                          Asset
-                        </span>
-                      </div>
-                      <div className="text-lg font-mono font-bold text-blue-900">
-                        {asset.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                      </div>
-                      <div className="text-xs text-gray-500 truncate mt-1" title={asset.name}>
-                        {asset.name || asset.symbol}
-                      </div>
+                <div className="p-3 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {walletAssets.map(asset => {
+                    // Find asset price data
+                    const assetPrice = scenarioData?.assetPrices?.find(p => 
+                      p.assetId === asset.id || p.symbol === asset.symbol
+                    );
+                    
+                    // Calculate current price and change
+                    let currentPrice = 0;
+                    let priceChange = 0;
+                    let changePercent = 0;
+                    let usdValue = 0;
+                    let priceDataAvailable = false;
+                    let colors = {
+                      text: 'text-blue-600',
+                      bg: 'bg-blue-50',
+                      icon: '→',
+                      graph: []
+                    };
+                    
+                    if (assetPrice?.prices?.length) {
+                      priceDataAvailable = true;
+                      const currentRoundIndex = Math.min(currentRound - 1, assetPrice.prices.length - 1);
+                      currentPrice = assetPrice.prices[currentRoundIndex];
+                      usdValue = asset.amount * currentPrice;
                       
-                      {/* Price change display based on current round */}
-                      {scenarioData?.assetPrices && (() => {
-                        const assetPrice = scenarioData.assetPrices.find(p => 
-                          p.assetId === asset.id || p.symbol === asset.symbol
-                        );
+                      // Calculate price trend
+                      if (currentRoundIndex > 0) {
+                        const prevPrice = assetPrice.prices[currentRoundIndex - 1];
+                        priceChange = currentPrice - prevPrice;
+                        changePercent = (priceChange / prevPrice) * 100;
                         
-                        if (!assetPrice || !assetPrice.prices || !assetPrice.prices.length) {
-                          return (
-                            <div className="mt-2 bg-gray-50 rounded px-2 py-1 text-xs text-gray-500">
-                              No price data
-                            </div>
-                          );
-                        }
-                        
-                        // Get current round price (index starts at 0, rounds start at 1)
-                        const currentRoundIndex = Math.min(currentRound - 1, assetPrice.prices.length - 1);
-                        const currentPrice = assetPrice.prices[currentRoundIndex];
-                        
-                        // Calculate price change from previous round
-                        let priceChange = 0;
-                        let changePercent = 0;
-                        
-                        if (currentRoundIndex > 0) {
-                          const prevPrice = assetPrice.prices[currentRoundIndex - 1];
-                          priceChange = currentPrice - prevPrice;
-                          changePercent = (priceChange / prevPrice) * 100;
-                        }
-                        
-                        // Determine color based on price change
+                        // Determine colors based on price change
                         const isPositive = priceChange > 0;
                         const isNegative = priceChange < 0;
-                        const colors = {
-                          bg: isPositive ? 'bg-green-50' : isNegative ? 'bg-red-50' : 'bg-blue-50',
+                        colors = {
                           text: isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-blue-600',
-                          icon: isPositive ? '↑' : isNegative ? '↓' : '→'
+                          bg: isPositive ? 'bg-green-50' : isNegative ? 'bg-red-50' : 'bg-blue-50',
+                          icon: isPositive ? '↑' : isNegative ? '↓' : '→',
+                          graph: []
                         };
-                        
-                        return (
-                          <div className={`mt-2 ${colors.bg} rounded px-2 py-1`}>
-                            <div className="flex justify-between items-center">
-                              <span className={`text-xs font-medium ${colors.text}`}>
-                                ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                              {currentRoundIndex > 0 && (
-                                <span className={`text-xs ${colors.text} flex items-center`}>
-                                  {colors.icon} {Math.abs(changePercent).toFixed(1)}%
+                      }
+                      
+                      // Generate simple graph data (last 6 prices or all available)
+                      colors.graph = assetPrice.prices
+                        .slice(Math.max(0, currentRoundIndex - 5), currentRoundIndex + 1)
+                        .map((price, i, arr) => {
+                          // Normalize to percentage of max value for display
+                          const max = Math.max(...arr);
+                          const min = Math.min(...arr);
+                          const range = max - min || 1; // Avoid division by zero
+                          const height = ((price - min) / range) * 100;
+                          return { price, height };
+                        });
+                    }
+                    
+                    // Create timestamp for current round
+                    const now = new Date();
+                    const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                    
+                    return (
+                      <div 
+                        key={asset.id} 
+                        className="bg-white border border-gray-200 rounded-lg p-4 shadow hover:shadow-md transition-shadow"
+                      >
+                        {/* Header with symbol and balance */}
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex flex-col">
+                            <span className="text-xl font-bold text-gray-900">
+                              {asset.symbol}
+                            </span>
+                            <span className="text-sm text-gray-600" title={asset.name}>
+                              {asset.name || asset.symbol}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-end">
+                            <span className="text-lg font-mono font-bold text-blue-900">
+                              {asset.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                            </span>
+                            {priceDataAvailable && (
+                              <div className="flex items-center">
+                                <span className="text-sm font-medium text-gray-700">
+                                  ${usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
+                                {changePercent !== 0 && (
+                                  <span className={`text-xs ml-2 ${colors.text} flex items-center`}>
+                                    {colors.icon} {Math.abs(changePercent).toFixed(1)}%
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Price graph */}
+                        {priceDataAvailable && (
+                          <div className="mt-3 mb-2">
+                            <div className="flex items-end justify-between h-16 px-1 bg-gray-50 rounded">
+                              {colors.graph.length > 0 ? (
+                                colors.graph.map((point, i) => (
+                                  <div key={i} className="flex flex-col items-center">
+                                    <div 
+                                      className={`w-2 ${colors.text} transition-all duration-300`}
+                                      style={{ height: `${Math.max(5, point.height)}%` }}
+                                    >
+                                      <div className={`w-full h-full ${priceChange >= 0 ? 'bg-green-500' : 'bg-red-500'} rounded-t`}></div>
+                                    </div>
+                                    {i === colors.graph.length - 1 && (
+                                      <div className="text-xs text-gray-500 absolute -bottom-5">
+                                        now
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="w-full text-center text-xs text-gray-500 py-6">
+                                  No historical data
+                                </div>
                               )}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              Round {currentRound} price
+                            <div className="flex justify-between items-center mt-2">
+                              <div className="text-xs text-gray-500">
+                                24h change
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                Round {currentRound} price: ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} • {timestamp}
+                              </div>
                             </div>
                           </div>
-                        );
-                      })()}
-                    </div>
-                  ))}
+                        )}
+                        
+                        {/* Action buttons */}
+                        <div className="flex gap-2 mt-3">
+                          <button className="flex-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded transition-colors">
+                            Buy
+                          </button>
+                          <button className="flex-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 font-medium py-2 px-4 rounded transition-colors">
+                            Sell
+                          </button>
+                        </div>
+                        
+                        {/* Fall back if no price data available */}
+                        {!priceDataAvailable && (
+                          <div className="mt-3 bg-gray-50 rounded px-3 py-2 text-xs text-gray-500 text-center">
+                            No price data available
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
               
