@@ -49,21 +49,51 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch experiment data
   const loadExperiment = async (experimentId: string) => {
+    console.log(`Loading experiment with ID: ${experimentId}`);
     setIsLoading(true);
     setError(null);
 
     try {
       // Add preview parameter to allow access without authentication
+      console.log(`Fetching from: /api/experiments/${experimentId}?preview=true`);
       const response = await fetch(`/api/experiments/${experimentId}?preview=true`);
       
       if (!response.ok) {
+        console.error(`API response not OK: ${response.status} - ${response.statusText}`);
         throw new Error(`Failed to load experiment: ${response.statusText}`);
       }
       
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+        console.log('Experiment data loaded:', data);
+      } catch (jsonError) {
+        console.error('Failed to parse JSON response:', jsonError);
+        throw new Error('Failed to parse experiment data from server');
+      }
+      
+      if (!data) {
+        console.error('Experiment data is null or undefined');
+        throw new Error('No experiment data received from server');
+      }
+      
+      if (!data.stages) {
+        console.error('Experiment data has no stages:', data);
+        data.stages = []; // Set default empty array for stages
+      }
+      
+      if (!Array.isArray(data.stages)) {
+        console.error('Experiment stages is not an array:', data.stages);
+        data.stages = []; // Set default empty array for stages
+      }
       
       // Sort stages by order
-      const sortedStages = [...data.stages].sort((a, b) => a.order - b.order);
+      const sortedStages = [...data.stages].sort((a, b) => {
+        const orderA = typeof a.order === 'number' ? a.order : 0;
+        const orderB = typeof b.order === 'number' ? b.order : 0;
+        return orderA - orderB;
+      });
+      console.log('Sorted stages:', sortedStages);
       setExperiment({ ...data, stages: sortedStages });
       
       // Reset to first stage
@@ -75,10 +105,12 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         setTimerActive(true);
       }
       
+      console.log('Loading completed successfully');
     } catch (err) {
       console.error('Error loading experiment:', err);
       setError(err instanceof Error ? err.message : 'Failed to load experiment');
     } finally {
+      console.log('Setting isLoading to false');
       setIsLoading(false);
     }
   };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
@@ -20,16 +20,39 @@ function ExperimentPreviewContent() {
     progress
   } = usePreview();
   
+  // Add force timeout for loading state to prevent UI from getting stuck
+  const [forceTimeout, setForceTimeout] = useState(false);
+  
   const params = useParams();
   const experimentId = params.id as string;
 
   useEffect(() => {
     if (experimentId) {
+      console.log(`Preview page: Loading experiment: ${experimentId}`);
       loadExperiment(experimentId);
+      
+      // Set a timeout to force-exit loading state after 10 seconds
+      const timeoutId = setTimeout(() => {
+        console.log('Preview page: Force timeout triggered');
+        setForceTimeout(true);
+      }, 10000);
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [experimentId, loadExperiment]);
 
-  if (isLoading) {
+  // Debug logging
+  useEffect(() => {
+    console.log('Preview page state:', {
+      isLoading,
+      hasError: !!error,
+      hasExperiment: !!experiment,
+      hasCurrentStage: !!currentStage
+    });
+  }, [isLoading, error, experiment, currentStage]);
+
+  if (isLoading && !forceTimeout) {
+    console.log('Rendering loading state...');
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -55,6 +78,36 @@ function ExperimentPreviewContent() {
         </div>
       </div>
     );
+  }
+
+  // Forced show content even if loading is stuck
+  if (forceTimeout && !error) {
+    console.log('Force timeout triggered - showing content anyway');
+    
+    if (!experiment || !currentStage) {
+      return (
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-center max-w-md mx-auto p-6 bg-yellow-50 rounded-lg border border-yellow-200">
+            <h2 className="text-xl font-semibold text-yellow-600 mb-2">Loading Timeout</h2>
+            <p className="text-gray-700 mb-4">The experiment is taking too long to load. Please try refreshing the page or check your connection.</p>
+            <div className="flex space-x-4 justify-center">
+              <button 
+                onClick={() => window.location.reload()}
+                className="inline-block px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+              >
+                Refresh Page
+              </button>
+              <Link 
+                href={`/admin/experiments/${experimentId}/designer`}
+                className="inline-block px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Go to Designer
+              </Link>
+            </div>
+          </div>
+        </div>
+      );
+    }
   }
 
   if (!experiment || !currentStage) {

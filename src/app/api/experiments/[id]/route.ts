@@ -13,22 +13,27 @@ function getExperimentId(request: NextRequest): string {
 // Get a specific experiment by ID
 export async function GET(request: NextRequest) {
   try {
+    console.log(`API: GET experiment request received for ${request.nextUrl.pathname}`);
     const session = await getServerSession(authOptions);
     
     // Check if the request is for preview mode (allow without authentication)
     const isPreviewMode = request.nextUrl.searchParams.has('preview');
+    console.log(`API: Preview mode: ${isPreviewMode}, Session exists: ${!!session}`);
     
     // Skip authentication check if in preview mode
     if (!isPreviewMode && (!session || session.user.role !== 'admin')) {
+      console.log('API: Unauthorized access attempt');
       return NextResponse.json(
         { message: 'Unauthorized' },
         { status: 401 }
       );
     }
     
+    console.log('API: Connecting to database...');
     await connectDB();
     
     const experimentId = getExperimentId(request);
+    console.log(`API: Looking up experiment with ID: ${experimentId}`);
     
     // Find the experiment
     const experiment = await Experiment.findById(experimentId)
@@ -36,11 +41,15 @@ export async function GET(request: NextRequest) {
       .populate('createdBy', 'name email');
     
     if (!experiment) {
+      console.log(`API: Experiment with ID ${experimentId} not found`);
       return NextResponse.json(
         { message: 'Experiment not found' },
         { status: 404 }
       );
     }
+    
+    console.log(`API: Found experiment: "${experiment.name}", stages: ${experiment.stages?.length || 0}`);
+    
     
     // Format response
     const formattedExperiment = {
@@ -83,10 +92,12 @@ export async function GET(request: NextRequest) {
       lastEditedAt: experiment.lastEditedAt,
     };
     
+    console.log('API: Successfully formatted experiment response, returning data');
     return NextResponse.json(formattedExperiment);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    console.error('Error fetching experiment:', error);
+    console.error('API: Error fetching experiment:', error);
+    console.error('API: Stack trace:', error instanceof Error ? error.stack : 'No stack trace available');
     return NextResponse.json(
       { message: 'Error fetching experiment', error: errorMessage },
       { status: 500 }
