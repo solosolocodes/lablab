@@ -5,6 +5,7 @@ import { usePreview } from '@/contexts/PreviewContext';
 
 export default function SurveyStage() {
   const { currentStage, goToNextStage } = usePreview();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [formValues, setFormValues] = useState<Record<string, any>>({});
   const [submitted, setSubmitted] = useState(false);
 
@@ -14,6 +15,7 @@ export default function SurveyStage() {
 
   const questions = currentStage.questions || [];
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleInputChange = (questionId: string, value: any) => {
     setFormValues(prev => ({
       ...prev,
@@ -38,6 +40,7 @@ export default function SurveyStage() {
     }, 1500);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderQuestionInput = (question: any) => {
     switch (question.type) {
       case 'text':

@@ -62,7 +62,7 @@ function ExperimentPreviewContent() {
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center max-w-md mx-auto p-6 bg-yellow-50 rounded-lg border border-yellow-200">
           <h2 className="text-xl font-semibold text-yellow-600 mb-2">No Stages Found</h2>
-          <p className="text-gray-700 mb-4">This experiment doesn't have any stages to preview. Please add stages in the experiment designer.</p>
+          <p className="text-gray-700 mb-4">This experiment doesn&apos;t have any stages to preview. Please add stages in the experiment designer.</p>
           <Link 
             href={`/admin/experiments/${experimentId}/designer`}
             className="inline-block px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"

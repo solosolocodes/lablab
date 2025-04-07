@@ -10,6 +10,7 @@ type Stage = {
   durationSeconds: number;
   required: boolean;
   order: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // For additional type-specific properties
 };
 
@@ -18,6 +19,7 @@ type ExperimentData = {
   name: string;
   description: string;
   stages: Stage[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any; // For any additional properties
 };
 
@@ -143,7 +145,7 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       
       return () => clearTimeout(timeout);
     }
-  }, [timeRemaining, experiment, currentStageIndex]);
+  }, [timeRemaining, experiment, currentStageIndex, goToNextStage]);
 
   // Calculate current progress percentage
   const progress = experiment && experiment.stages.length > 0
