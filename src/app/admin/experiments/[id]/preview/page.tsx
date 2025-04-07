@@ -316,21 +316,21 @@ function SimplePreviewContent() {
       <div className="py-4">
         {currentStage.type === 'instructions' && (
           <SimpleInstructionsStage 
-            stage={currentStage} 
+            stage={currentStage as InstructionsStage} 
             onNext={goToNextStage} 
           />
         )}
         
         {currentStage.type === 'survey' && (
           <SimpleSurveyStage 
-            stage={currentStage} 
+            stage={currentStage as SurveyStage} 
             onNext={goToNextStage} 
           />
         )}
         
         {currentStage.type === 'break' && (
           <SimpleBreakStage 
-            stage={currentStage} 
+            stage={currentStage as BreakStage} 
             onNext={goToNextStage} 
           />
         )}
