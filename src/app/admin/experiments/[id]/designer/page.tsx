@@ -190,8 +190,12 @@ export default function ExperimentDesignerPage() {
           
           // Handle non-OK responses
           if (!response.ok) {
-            const errorMessage = (data?.message as string) || `Server error (${response.status})`;
-            const error = new Error(errorMessage) as ApiError;
+            // Check if data has a message property
+            const message = typeof data === 'object' && data !== null && 'message' in data
+              ? String(data.message)
+              : `Server error (${response.status})`;
+              
+            const error = new Error(message) as ApiError;
             // Add extra properties to the error
             error.status = response.status;
             error.statusText = response.statusText;
