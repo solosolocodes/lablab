@@ -1197,6 +1197,14 @@ export default function ExperimentDesignerPage() {
               </span>
             </div>
             <div className="flex space-x-4">
+              <Link
+                href={`/admin/experiments/${experimentId}/preview`}
+                className="px-4 py-2 border border-green-500 text-green-700 rounded-md hover:bg-green-50"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Preview Experiment
+              </Link>
               <button 
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                 onClick={() => saveExperiment('draft')}

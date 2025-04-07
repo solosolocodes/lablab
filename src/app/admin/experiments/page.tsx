@@ -469,6 +469,15 @@ export default function ExperimentsPage() {
                     >
                       View
                     </Link>
+                    <Link
+                      href={`/admin/experiments/${experiment.id}/preview`}
+                      className="text-green-600 hover:text-green-900 mr-3"
+                      title="Preview Experiment"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Preview
+                    </Link>
                     <button 
                       onClick={() => deleteExperiment(experiment.id)}
                       className="text-red-600 hover:text-red-900"
