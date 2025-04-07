@@ -10,12 +10,23 @@ interface Stage {
   type: string;
   title: string;
   description: string;
+  content?: string;
+  format?: string;
+  message?: string;
+  scenarioId?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  questions?: Array<any>;
 }
 
 interface InstructionsStage extends Stage {
   type: 'instructions';
   content: string;
   format?: string;
+}
+
+// Type guard function to check if a stage is an instructions stage
+function isInstructionsStage(stage: Stage): stage is InstructionsStage {
+  return stage.type === 'instructions' && typeof stage.content === 'string';
 }
 
 function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext: () => void }) {
@@ -124,9 +135,9 @@ function SimplePreviewContent() {
   // Display appropriate stage
   return (
     <div className="p-4">
-      {currentStage.type === 'instructions' ? (
+      {isInstructionsStage(currentStage) ? (
         <InstructionsView 
-          stage={currentStage as InstructionsStage} 
+          stage={currentStage} 
           onNext={goToNextStage} 
         />
       ) : (
