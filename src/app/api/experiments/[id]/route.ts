@@ -131,7 +131,8 @@ export async function GET(request: NextRequest) {
                 email: experiment.createdBy.email || 'unknown@example.com'
               } : { id: 'unknown', name: 'Unknown', email: 'unknown@example.com' },
               userGroups: Array.isArray(experiment.userGroups) 
-                ? experiment.userGroups.map(ug => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ? experiment.userGroups.map((ug: any) => {
                     try {
                       return {
                         userGroupId: ug.userGroupId ? (
