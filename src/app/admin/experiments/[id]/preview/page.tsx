@@ -623,30 +623,30 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                     const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
                     
                     return (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-md">
-                        <div className="flex justify-between items-center mb-2">
-                          <h3 className="text-lg font-bold text-blue-900">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-5 shadow-md">
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-base font-bold text-blue-900">
                             Portfolio Summary
                           </h3>
-                          <div className="text-sm text-gray-600">
+                          <div className="text-base text-gray-600">
                             Round {currentRound} • {timestamp}
                           </div>
                         </div>
                         
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
-                          <div className="mb-2 sm:mb-0">
-                            <div className="text-sm text-gray-600 mb-1">Total Value</div>
-                            <div className="text-2xl font-bold text-blue-900">
-                              ${totalUsdValue.toFixed(2)}
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+                          <div className="flex-1">
+                            <div className="text-base text-gray-600 mb-2">Total Value</div>
+                            <div className="text-2xl font-mono font-bold text-blue-900">
+                              ${Math.round(totalUsdValue).toLocaleString()}
                             </div>
                           </div>
                           
                           {hasCompleteData && (
-                            <div className={`px-4 py-2 rounded-lg ${colors.bg} flex items-center`}>
-                              <div className="mr-3">
-                                <div className="text-sm text-gray-600 mb-1">Change From Last Round</div>
-                                <div className={`text-lg font-bold ${colors.text} flex items-center`}>
-                                  {colors.icon} ${Math.abs(portfolioChange).toFixed(2)} ({Math.abs(portfolioChangePercent).toFixed(2)}%)
+                            <div className={`flex-1 px-5 py-3 rounded-lg ${colors.bg} flex items-center justify-center`}>
+                              <div>
+                                <div className="text-base text-gray-600 mb-2 text-center">Change From Last Round</div>
+                                <div className={`text-2xl font-mono font-bold ${colors.text} flex items-center justify-center`}>
+                                  {colors.icon} ${Math.round(Math.abs(portfolioChange)).toLocaleString()} ({Math.abs(portfolioChangePercent).toFixed(1)}%)
                                 </div>
                               </div>
                             </div>
@@ -702,65 +702,65 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                       return (
                         <div 
                           key={asset.id} 
-                          className="bg-white border border-gray-200 rounded-lg p-4 shadow hover:shadow-md transition-shadow"
+                          className="bg-white border border-gray-200 rounded-lg p-5 shadow hover:shadow-md transition-shadow"
                         >
                           {/* Header with symbol and name */}
-                          <div className="flex justify-between items-start mb-3">
+                          <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
                             <div className="flex flex-col">
                               <span className="text-xl font-bold text-gray-900">
                                 {asset.symbol}
                               </span>
-                              <span className="text-sm text-gray-600" title={asset.name}>
+                              <span className="text-base text-gray-600" title={asset.name}>
                                 {asset.name || asset.symbol}
                               </span>
                             </div>
+                            {priceDataAvailable && (
+                              <div className={`px-3 py-1.5 rounded-lg ${colors.bg}`}>
+                                <span className={`text-base font-medium ${colors.text} flex items-center`}>
+                                  {colors.icon} {Math.abs(changePercent).toFixed(1)}%
+                                </span>
+                              </div>
+                            )}
                           </div>
                           
                           {/* Asset amount and value */}
-                          <div className="flex flex-col space-y-2 mb-3">
+                          <div className="flex flex-col space-y-4 mb-4">
                             <div className="flex justify-between items-center">
-                              <span className="text-sm text-gray-600">Amount:</span>
-                              <span className="text-lg font-mono font-bold text-blue-900">
+                              <span className="text-base text-gray-600">Amount:</span>
+                              <span className="text-base font-mono font-bold text-blue-900">
                                 {asset.amount.toFixed(2)}
                               </span>
                             </div>
                             
                             {priceDataAvailable && (
                               <div className="flex justify-between items-center">
-                                <span className="text-sm text-gray-600">Value in USD:</span>
-                                <div className="flex items-center">
-                                  <span className="text-lg font-mono font-bold text-gray-700">
-                                    ${usdValue.toFixed(2)}
-                                  </span>
-                                  {changePercent !== 0 && (
-                                    <span className={`text-xs ml-2 ${colors.text} flex items-center`}>
-                                      {colors.icon} {Math.abs(changePercent).toFixed(2)}%
-                                    </span>
-                                  )}
-                                </div>
+                                <span className="text-base text-gray-600">Value in USD:</span>
+                                <span className="text-base font-mono font-bold text-gray-900">
+                                  ${Math.round(usdValue).toLocaleString()}
+                                </span>
                               </div>
                             )}
                             
                             {priceDataAvailable && (
-                              <div className="text-xs text-right text-gray-500">
-                                Round {currentRound} price: ${currentPrice.toFixed(2)}
+                              <div className="text-base text-gray-600 border-t border-gray-100 pt-2 text-center">
+                                Current price: ${currentPrice.toFixed(2)}
                               </div>
                             )}
                           </div>
                           
                           {/* Action buttons */}
-                          <div className="flex gap-2 mt-3">
-                            <button className="flex-1 text-sm bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded transition-colors">
+                          <div className="flex gap-4 mt-4">
+                            <button className="flex-1 text-base bg-green-100 hover:bg-green-200 text-green-700 font-medium py-3 px-4 rounded-md transition-colors">
                               Buy
                             </button>
-                            <button className="flex-1 text-sm bg-red-100 hover:bg-red-200 text-red-700 font-medium py-2 px-4 rounded transition-colors">
+                            <button className="flex-1 text-base bg-red-100 hover:bg-red-200 text-red-700 font-medium py-3 px-4 rounded-md transition-colors">
                               Sell
                             </button>
                           </div>
                           
                           {/* Fall back if no price data available */}
                           {!priceDataAvailable && (
-                            <div className="mt-3 bg-gray-50 rounded px-3 py-2 text-xs text-gray-500 text-center">
+                            <div className="mt-4 bg-gray-50 rounded px-4 py-3 text-base text-gray-500 text-center">
                               No price data available
                             </div>
                           )}
