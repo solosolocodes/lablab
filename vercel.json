@@ -1,11 +1,4 @@
 {
-  "buildCommand": "next build",
-  "env": {
-    "MONGODB_URI": "mongodb+srv://vis203077:lablab@lablab.bw2sxxm.mongodb.net/?retryWrites=true&w=majority&appName=lablab",
-    "NEXTAUTH_SECRET": "your-secret-key-for-jwt-tokens",
-    "NEXTAUTH_URL": "https://lablab-victors-projects-58e43768.vercel.app"
-  },
-  "framework": "nextjs",
   "headers": [
     {
       "source": "/api/(.*)",
@@ -16,12 +9,5 @@
         { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
       ]
     }
-  ],
-  "build": {
-    "env": {
-      "MONGODB_URI": "mongodb+srv://vis203077:lablab@lablab.bw2sxxm.mongodb.net/?retryWrites=true&w=majority&appName=lablab",
-      "NEXTAUTH_SECRET": "your-secret-key-for-jwt-tokens",
-      "NEXTAUTH_URL": "https://lablab-victors-projects-58e43768.vercel.app"
-    }
-  }
+  ]
 }
