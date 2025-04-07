@@ -591,12 +591,61 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                         {asset.name || asset.symbol}
                       </div>
                       
-                      {/* Price change (if available from scenario data) */}
-                      {scenarioData?.assetPrices && scenarioData.assetPrices.find(p => p.assetId === asset.id || p.symbol === asset.symbol) && (
-                        <div className="mt-2 bg-blue-50 rounded px-2 py-1 text-xs text-blue-600">
-                          Price data available
-                        </div>
-                      )}
+                      {/* Price change display based on current round */}
+                      {scenarioData?.assetPrices && (() => {
+                        const assetPrice = scenarioData.assetPrices.find(p => 
+                          p.assetId === asset.id || p.symbol === asset.symbol
+                        );
+                        
+                        if (!assetPrice || !assetPrice.prices || !assetPrice.prices.length) {
+                          return (
+                            <div className="mt-2 bg-gray-50 rounded px-2 py-1 text-xs text-gray-500">
+                              No price data
+                            </div>
+                          );
+                        }
+                        
+                        // Get current round price (index starts at 0, rounds start at 1)
+                        const currentRoundIndex = Math.min(currentRound - 1, assetPrice.prices.length - 1);
+                        const currentPrice = assetPrice.prices[currentRoundIndex];
+                        
+                        // Calculate price change from previous round
+                        let priceChange = 0;
+                        let changePercent = 0;
+                        
+                        if (currentRoundIndex > 0) {
+                          const prevPrice = assetPrice.prices[currentRoundIndex - 1];
+                          priceChange = currentPrice - prevPrice;
+                          changePercent = (priceChange / prevPrice) * 100;
+                        }
+                        
+                        // Determine color based on price change
+                        const isPositive = priceChange > 0;
+                        const isNegative = priceChange < 0;
+                        const colors = {
+                          bg: isPositive ? 'bg-green-50' : isNegative ? 'bg-red-50' : 'bg-blue-50',
+                          text: isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-blue-600',
+                          icon: isPositive ? '↑' : isNegative ? '↓' : '→'
+                        };
+                        
+                        return (
+                          <div className={`mt-2 ${colors.bg} rounded px-2 py-1`}>
+                            <div className="flex justify-between items-center">
+                              <span className={`text-xs font-medium ${colors.text}`}>
+                                ${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              {currentRoundIndex > 0 && (
+                                <span className={`text-xs ${colors.text} flex items-center`}>
+                                  {colors.icon} {Math.abs(changePercent).toFixed(1)}%
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Round {currentRound} price
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
