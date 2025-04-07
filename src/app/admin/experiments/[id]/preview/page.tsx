@@ -207,70 +207,25 @@ function SimplePreviewContent() {
     currentStage, 
     goToNextStage, 
     loadExperiment, 
-    isLoading, 
-    error,
     progress
   } = usePreview();
   
-  const [timeoutOccurred, setTimeoutOccurred] = useState<boolean>(false);
   const params = useParams();
   const experimentId = params.id as string;
 
   useEffect(() => {
     if (experimentId) {
-      console.log(`Loading experiment: ${experimentId}`);
       loadExperiment(experimentId);
-      
-      // Set a timeout to handle long loading times
-      const timeoutId = setTimeout(() => {
-        setTimeoutOccurred(true);
-      }, 5000); // 5 seconds timeout
-      
-      return () => clearTimeout(timeoutId);
     }
   }, [experimentId, loadExperiment]);
 
-  // Simple loading indicator
-  if (isLoading && !timeoutOccurred) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center p-4">
-          <p className="mb-2">Loading Experiment...</p>
-          <div className="w-8 h-8 border-t-2 border-blue-500 rounded-full animate-spin mx-auto"></div>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="max-w-md p-4 bg-white rounded border text-center">
-          <h2 className="text-lg font-bold text-red-500 mb-2">Error</h2>
-          <p className="mb-4">{error}</p>
-          <Link 
-            href={`/admin/experiments/${experimentId}/designer`}
-            className="px-4 py-2 bg-blue-500 text-white rounded inline-block"
-          >
-            Back to Designer
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // No experiment or stage found
+  // Simple default content when no experiment/stage is available yet
   if (!experiment || !currentStage) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="max-w-md p-4 bg-white rounded border text-center">
-          <h2 className="text-lg font-bold mb-2">No Content Available</h2>
-          <p className="mb-4">
-            {timeoutOccurred 
-              ? "Loading took too long. There might be a connection issue." 
-              : "This experiment doesn't have any stages to preview."}
-          </p>
+      <div className="p-4">
+        <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+          <h3 className="text-lg font-bold mb-2">Sample Preview</h3>
+          <p className="mb-4">This is a preview of how experiments will appear to participants.</p>
           <Link 
             href={`/admin/experiments/${experimentId}/designer`}
             className="px-4 py-2 bg-blue-500 text-white rounded inline-block"
