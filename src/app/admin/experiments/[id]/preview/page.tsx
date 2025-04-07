@@ -427,18 +427,15 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
             </div>
           </div>
           
-          {/* Overall Progress */}
+          {/* Overall Progress - Text only indicator */}
           <div className="mt-4 md:mt-0 w-full md:w-48">
-            <p className="text-center text-sm font-medium text-blue-800 mb-2">Overall Progress</p>
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div 
-                className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
-                style={{ width: `${progressPercentage}%` }}
-              ></div>
+            <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm text-center">
+              <p className="font-medium text-gray-700 mb-1">Progress</p>
+              <p className="font-bold text-xl text-blue-700">{progressPercentage.toFixed(0)}%</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Round {currentRound}/{totalRounds}
+              </p>
             </div>
-            <p className="text-center text-xs text-gray-500 mt-1">
-              {progressPercentage.toFixed(0)}% complete
-            </p>
           </div>
         </div>
       </div>

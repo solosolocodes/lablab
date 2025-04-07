@@ -265,18 +265,15 @@ export default function ScenarioStage() {
                 </div>
               </div>
               
-              {/* Overall Progress */}
-              <div className="w-full">
-                <div className="flex justify-between items-center mb-1">
-                  <p className="text-sm font-medium text-blue-800">Overall Progress</p>
-                  <p className="text-sm font-medium text-blue-900">{progressPercentage.toFixed(0)}%</p>
+              {/* Overall Progress - Text only indicator */}
+              <div className="w-full bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+                <div className="flex justify-between items-center">
+                  <p className="font-medium text-gray-700">Overall Progress</p>
+                  <p className="font-bold text-blue-700">{progressPercentage.toFixed(0)}%</p>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div 
-                    className="bg-blue-600 h-3 rounded-full transition-all duration-300" 
-                    style={{ width: `${progressPercentage}%` }}
-                  ></div>
-                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Round {currentRound} of {totalRounds} • {totalRounds - currentRound} {totalRounds - currentRound === 1 ? 'round' : 'rounds'} remaining
+                </p>
               </div>
               
               {/* Status message */}
