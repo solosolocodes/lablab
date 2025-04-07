@@ -4,187 +4,272 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
-import InstructionsStage from '@/components/preview/InstructionsStage';
-import ScenarioStage from '@/components/preview/ScenarioStage';
-import SurveyStage from '@/components/preview/SurveyStage';
-import BreakStage from '@/components/preview/BreakStage';
 
-function ExperimentPreviewContent() {
+// Simplified stage components
+function SimpleInstructionsStage({ stage, onNext }) {
+  return (
+    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+      <h3 className="text-lg font-bold mb-2">{stage.title}</h3>
+      <p className="mb-4">{stage.description}</p>
+      <div className="p-3 bg-gray-50 rounded border mb-4">
+        {stage.content}
+      </div>
+      <button 
+        onClick={onNext}
+        className="px-4 py-2 bg-blue-500 text-white rounded"
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
+function SimpleSurveyStage({ stage, onNext }) {
+  const [answered, setAnswered] = useState({});
+  
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onNext();
+  };
+  
+  return (
+    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+      <h3 className="text-lg font-bold mb-2">{stage.title}</h3>
+      <p className="mb-4">{stage.description}</p>
+      
+      <form onSubmit={handleSubmit}>
+        {stage.questions && stage.questions.map((q, i) => (
+          <div key={q.id || i} className="mb-4 p-3 bg-gray-50 rounded border">
+            <p className="font-medium">{q.text} {q.required && <span className="text-red-500">*</span>}</p>
+            
+            {q.type === 'text' && (
+              <input 
+                type="text" 
+                className="w-full mt-2 p-2 border rounded"
+                onChange={() => setAnswered({...answered, [q.id]: true})}
+                required={q.required}
+              />
+            )}
+            
+            {q.type === 'multipleChoice' && q.options && (
+              <div className="mt-2">
+                {q.options.map((option, idx) => (
+                  <div key={idx} className="flex items-center mt-1">
+                    <input 
+                      type="radio" 
+                      id={`${q.id}-${idx}`} 
+                      name={q.id}
+                      onChange={() => setAnswered({...answered, [q.id]: true})}
+                      required={q.required}
+                    />
+                    <label htmlFor={`${q.id}-${idx}`} className="ml-2">{option}</label>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {q.type === 'rating' && (
+              <div className="flex space-x-2 mt-2">
+                {[1, 2, 3, 4, 5].map(rating => (
+                  <button
+                    key={rating}
+                    type="button"
+                    className="w-10 h-10 border rounded-full"
+                    onClick={() => setAnswered({...answered, [q.id]: true})}
+                  >
+                    {rating}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        
+        <button 
+          type="submit" 
+          className="px-4 py-2 bg-blue-500 text-white rounded"
+        >
+          Submit
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function SimpleBreakStage({ stage, onNext }) {
+  return (
+    <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+      <h3 className="text-lg font-bold mb-2">{stage.title}</h3>
+      <p className="mb-4">{stage.description}</p>
+      <div className="p-3 bg-gray-50 rounded border mb-4">
+        {stage.message}
+      </div>
+      <button 
+        onClick={onNext}
+        className="px-4 py-2 bg-blue-500 text-white rounded"
+      >
+        Continue
+      </button>
+    </div>
+  );
+}
+
+function SimplePreviewContent() {
   const { 
     experiment, 
     currentStage, 
-    timeRemaining, 
+    goToNextStage, 
     loadExperiment, 
     isLoading, 
     error,
     progress
   } = usePreview();
   
-  // Add force timeout for loading state to prevent UI from getting stuck
-  const [forceTimeout, setForceTimeout] = useState(false);
-  
+  const [timeoutOccurred, setTimeoutOccurred] = useState(false);
   const params = useParams();
   const experimentId = params.id as string;
 
   useEffect(() => {
     if (experimentId) {
-      console.log(`Preview page: Loading experiment: ${experimentId}`);
+      console.log(`Loading experiment: ${experimentId}`);
       loadExperiment(experimentId);
       
-      // Set a timeout to force-exit loading state after 10 seconds
+      // Set a timeout to handle long loading times
       const timeoutId = setTimeout(() => {
-        console.log('Preview page: Force timeout triggered');
-        setForceTimeout(true);
-      }, 10000);
+        setTimeoutOccurred(true);
+      }, 5000); // 5 seconds timeout
       
       return () => clearTimeout(timeoutId);
     }
   }, [experimentId, loadExperiment]);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('Preview page state:', {
-      isLoading,
-      hasError: !!error,
-      hasExperiment: !!experiment,
-      hasCurrentStage: !!currentStage
-    });
-  }, [isLoading, error, experiment, currentStage]);
-
-  if (isLoading && !forceTimeout) {
-    console.log('Rendering loading state...');
+  // Simple loading indicator
+  if (isLoading && !timeoutOccurred) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">Loading Experiment...</h2>
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-purple-500 mx-auto"></div>
+        <div className="text-center p-4">
+          <p className="mb-2">Loading Experiment...</p>
+          <div className="w-8 h-8 border-t-2 border-blue-500 rounded-full animate-spin mx-auto"></div>
         </div>
       </div>
     );
   }
 
+  // Error state
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-6 bg-red-50 rounded-lg border border-red-200">
-          <h2 className="text-xl font-semibold text-red-600 mb-2">Error</h2>
-          <p className="text-gray-700 mb-4">{error}</p>
+        <div className="max-w-md p-4 bg-white rounded border text-center">
+          <h2 className="text-lg font-bold text-red-500 mb-2">Error</h2>
+          <p className="mb-4">{error}</p>
           <Link 
-            href="/admin/experiments" 
-            className="inline-block px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+            href={`/admin/experiments/${experimentId}/designer`}
+            className="px-4 py-2 bg-blue-500 text-white rounded inline-block"
           >
-            Return to Experiments
+            Back to Designer
           </Link>
         </div>
       </div>
     );
   }
 
-  // Forced show content even if loading is stuck
-  if (forceTimeout && !error) {
-    console.log('Force timeout triggered - showing content anyway');
-    
-    if (!experiment || !currentStage) {
-      return (
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-center max-w-md mx-auto p-6 bg-yellow-50 rounded-lg border border-yellow-200">
-            <h2 className="text-xl font-semibold text-yellow-600 mb-2">Loading Timeout</h2>
-            <p className="text-gray-700 mb-4">The experiment is taking too long to load. Please try refreshing the page or check your connection.</p>
-            <div className="flex space-x-4 justify-center">
-              <button 
-                onClick={() => window.location.reload()}
-                className="inline-block px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-              >
-                Refresh Page
-              </button>
-              <Link 
-                href={`/admin/experiments/${experimentId}/designer`}
-                className="inline-block px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-              >
-                Go to Designer
-              </Link>
-            </div>
-          </div>
-        </div>
-      );
-    }
-  }
-
+  // No experiment or stage found
   if (!experiment || !currentStage) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center max-w-md mx-auto p-6 bg-yellow-50 rounded-lg border border-yellow-200">
-          <h2 className="text-xl font-semibold text-yellow-600 mb-2">No Stages Found</h2>
-          <p className="text-gray-700 mb-4">This experiment doesn&apos;t have any stages to preview. Please add stages in the experiment designer.</p>
+        <div className="max-w-md p-4 bg-white rounded border text-center">
+          <h2 className="text-lg font-bold mb-2">No Content Available</h2>
+          <p className="mb-4">
+            {timeoutOccurred 
+              ? "Loading took too long. There might be a connection issue." 
+              : "This experiment doesn't have any stages to preview."}
+          </p>
           <Link 
             href={`/admin/experiments/${experimentId}/designer`}
-            className="inline-block px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
+            className="px-4 py-2 bg-blue-500 text-white rounded inline-block"
           >
-            Go to Designer
+            Back to Designer
           </Link>
         </div>
       </div>
     );
   }
 
-  // Format time remaining into minutes and seconds
-  const minutes = Math.floor(timeRemaining / 60);
-  const seconds = timeRemaining % 60;
-  const formattedTime = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-
+  // Main content with experiment stages
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Navigation and Time Bar */}
-      <div className="bg-white border-b shadow-sm p-3 sticky top-0 z-10">
-        <div className="container mx-auto flex justify-between items-center">
+    <div className="min-h-screen p-4">
+      {/* Simple header */}
+      <div className="mb-6 bg-white p-3 rounded border">
+        <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-xl font-bold text-gray-800">{experiment.name}</h1>
+            <h1 className="text-lg font-bold">{experiment.name}</h1>
             <p className="text-sm text-gray-500">Preview Mode</p>
           </div>
           
           <div className="flex items-center space-x-4">
-            <div className="flex items-center">
-              <div className="w-32 bg-gray-200 rounded-full h-2.5 mr-2">
-                <div 
-                  className="bg-purple-600 h-2.5 rounded-full" 
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-              <span className="text-sm text-gray-600">{progress}%</span>
-            </div>
-            
-            <div className="text-center bg-gray-100 px-3 py-2 rounded-lg">
-              <div className="text-sm text-gray-500">Time Remaining</div>
-              <div className={`font-mono text-lg font-bold ${timeRemaining < 30 ? 'text-red-600' : 'text-gray-700'}`}>
-                {formattedTime}
-              </div>
+            {/* Simple progress bar */}
+            <div className="w-32 bg-gray-200 h-2 rounded-full">
+              <div 
+                className="bg-blue-500 h-2 rounded-full" 
+                style={{ width: `${progress}%` }}
+              ></div>
             </div>
             
             <Link
               href={`/admin/experiments/${experimentId}/designer`}
-              className="bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700"
+              className="px-3 py-1 bg-gray-200 rounded text-sm"
             >
-              Exit Preview
+              Exit
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Current Stage */}
-      <div className="flex-grow">
-        {currentStage.type === 'instructions' && <InstructionsStage />}
-        {currentStage.type === 'scenario' && <ScenarioStage />}
-        {currentStage.type === 'survey' && <SurveyStage />}
-        {currentStage.type === 'break' && <BreakStage />}
+      {/* Stage content */}
+      <div className="py-4">
+        {currentStage.type === 'instructions' && (
+          <SimpleInstructionsStage 
+            stage={currentStage} 
+            onNext={goToNextStage} 
+          />
+        )}
+        
+        {currentStage.type === 'survey' && (
+          <SimpleSurveyStage 
+            stage={currentStage} 
+            onNext={goToNextStage} 
+          />
+        )}
+        
+        {currentStage.type === 'break' && (
+          <SimpleBreakStage 
+            stage={currentStage} 
+            onNext={goToNextStage} 
+          />
+        )}
+        
+        {currentStage.type === 'scenario' && (
+          <div className="max-w-2xl mx-auto p-4 bg-white rounded border">
+            <h3 className="text-lg font-bold mb-2">{currentStage.title}</h3>
+            <p className="mb-4">{currentStage.description}</p>
+            <p className="mb-4">Scenario content would appear here</p>
+            <button 
+              onClick={goToNextStage}
+              className="px-4 py-2 bg-blue-500 text-white rounded"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default function ExperimentPreviewPage() {
+export default function SimplifiedPreviewPage() {
   return (
     <PreviewProvider>
-      <ExperimentPreviewContent />
+      <SimplePreviewContent />
     </PreviewProvider>
   );
 }
