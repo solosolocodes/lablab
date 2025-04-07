@@ -31,8 +31,21 @@ function getExperimentId(request: NextRequest): string | null {
   return experimentId;
 }
 
+// Type definitions for MongoDB documents
+type MongoDocument = {
+  _id?: mongoose.Types.ObjectId | string;
+  [key: string]: unknown;
+};
+
+// Return type for serialized documents
+type SerializedDocument = {
+  id?: string;
+  [key: string]: unknown;
+};
+
 // Serialize MongoDB document to safe JSON
-function serializeDocument(doc: any): any {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function serializeDocument(doc: unknown): unknown {
   if (doc === null || typeof doc !== 'object') {
     return doc;
   }
@@ -47,16 +60,19 @@ function serializeDocument(doc: any): any {
     return doc.toISOString();
   }
   
+  // Document should be an object at this point
+  const document = doc as MongoDocument;
+  
   // Handle ObjectId
-  if (doc._id && typeof doc._id.toString === 'function') {
-    doc.id = doc._id.toString();
+  if (document._id && typeof document._id === 'object' && 'toString' in document._id) {
+    document.id = document._id.toString();
   }
   
   // Create a new object to avoid modifying the original
-  const result: any = {};
+  const result: SerializedDocument = {};
   
   // Process all properties
-  for (const [key, value] of Object.entries(doc)) {
+  for (const [key, value] of Object.entries(document)) {
     // Skip the _id field as we've already handled it
     if (key === '_id') continue;
     
@@ -64,8 +80,8 @@ function serializeDocument(doc: any): any {
     if (key === '__v') continue;
     
     // Handle ObjectIds in the document
-    if (key.endsWith('Id') && mongoose.isValidObjectId(value)) {
-      result[key] = value.toString();
+    if (key.endsWith('Id') && value !== null && typeof value === 'object' && mongoose.isValidObjectId(value)) {
+      result[key] = String(value);
       continue;
     }
     
@@ -76,8 +92,13 @@ function serializeDocument(doc: any): any {
   return result;
 }
 
+// Interface for error details
+interface ErrorDetails {
+  [key: string]: unknown;
+}
+
 // Standard error response helper
-function errorResponse(message: string, status: number, details?: any) {
+function errorResponse(message: string, status: number, details?: ErrorDetails) {
   const responseData = { 
     success: false, 
     message,
@@ -96,12 +117,20 @@ function errorResponse(message: string, status: number, details?: any) {
 }
 
 // Options for CORS preflight requests
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS(_request: NextRequest) {
+  // Using underscore prefix to indicate unused parameter
   return new NextResponse(null, {
     status: 204,
     headers: corsHeaders,
   });
 }
+
+// Error type for database operations
+type DatabaseError = 
+  | mongoose.Error.MongooseServerSelectionError 
+  | mongoose.Error.DisconnectedError 
+  | mongoose.Error.CastError 
+  | Error;
 
 // Retry a database operation with backoff
 async function retryOperation<T>(
@@ -109,12 +138,19 @@ async function retryOperation<T>(
   maxRetries = 3,
   retryDelay = 500
 ): Promise<T> {
-  let lastError: any;
+  let lastError: DatabaseError | null = null;
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await operation();
     } catch (error) {
+      // Type guard to ensure error is Error-like
+      if (!(error instanceof Error)) {
+        throw error; // If it's not an Error, just throw it
+      }
+      
+      lastError = error as DatabaseError;
+      
       // Only retry for connection/timeout type errors
       if (
         error instanceof mongoose.Error.MongooseServerSelectionError ||
@@ -123,8 +159,6 @@ async function retryOperation<T>(
         (error instanceof Error && error.name === 'MongoError' && 
          (error.message.includes('timeout') || error.message.includes('connection')))
       ) {
-        lastError = error;
-        
         // Only retry if we're not on the last attempt
         if (attempt < maxRetries - 1) {
           // Exponential backoff with jitter
@@ -141,7 +175,12 @@ async function retryOperation<T>(
   }
   
   // This shouldn't be reached but TypeScript needs it
-  throw lastError;
+  if (lastError) {
+    throw lastError;
+  }
+  
+  // This is to satisfy TypeScript - should never happen
+  throw new Error('Unexpected end of retryOperation without result or error');
 }
 
 // GET handler for a specific experiment

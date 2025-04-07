@@ -93,8 +93,20 @@ export default function ExperimentDesignerPage() {
 
   // Fetch experiment data
   useEffect(() => {
+    // Types for API response
+    interface ApiResponse {
+      [key: string]: unknown;
+    }
+    
+    // Types for error tracking
+    interface ApiError extends Error {
+      status?: number;
+      statusText?: string;
+      data?: unknown;
+    }
+    
     // Common fetchWithRetry function for all API requests
-    const fetchWithRetry = async (url: string, options: RequestInit = {}, maxRetries = 3, timeout = 10000) => {
+    const fetchWithRetry = async (url: string, options: RequestInit = {}, maxRetries = 3, timeout = 10000): Promise<ApiResponse> => {
       // Set default headers if not provided
       const fetchOptions = {
         ...options,
@@ -106,7 +118,7 @@ export default function ExperimentDesignerPage() {
       
       // Implement exponential backoff retry
       let retries = 0;
-      let lastError: Error | null = null;
+      let lastError: ApiError | null = null;
       
       while (retries <= maxRetries) {
         try {
@@ -135,9 +147,9 @@ export default function ExperimentDesignerPage() {
           }
           
           // Parse JSON
-          let data;
+          let data: ApiResponse;
           try {
-            data = JSON.parse(responseText);
+            data = JSON.parse(responseText) as ApiResponse;
           } catch (jsonError) {
             console.error('JSON parse error:', jsonError);
             throw new Error(`Invalid JSON response from server: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`);
@@ -145,32 +157,37 @@ export default function ExperimentDesignerPage() {
           
           // Handle non-OK responses
           if (!response.ok) {
-            const errorMessage = data?.message || `Server error (${response.status})`;
-            const error = new Error(errorMessage);
+            const errorMessage = (data?.message as string) || `Server error (${response.status})`;
+            const error = new Error(errorMessage) as ApiError;
             // Add extra properties to the error
-            (error as any).status = response.status;
-            (error as any).statusText = response.statusText;
-            (error as any).data = data;
+            error.status = response.status;
+            error.statusText = response.statusText;
+            error.data = data;
             throw error;
           }
           
           return data;
         } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error));
+          // Create a properly typed error object
+          const typedError: ApiError = error instanceof Error 
+            ? error as ApiError 
+            : new Error(String(error));
+          
+          lastError = typedError;
           
           // Don't retry aborted requests (timeouts) or certain HTTP status codes
           if (
-            lastError.name === 'AbortError' || 
-            ((error as any)?.status >= 400 && (error as any)?.status < 500)
+            typedError.name === 'AbortError' || 
+            (typedError.status !== undefined && typedError.status >= 400 && typedError.status < 500)
           ) {
-            console.error(`Request to ${url} failed with non-retryable error:`, lastError);
-            throw lastError;
+            console.error(`Request to ${url} failed with non-retryable error:`, typedError);
+            throw typedError;
           }
           
           // If we've reached max retries, throw the last error
           if (retries >= maxRetries) {
-            console.error(`Request to ${url} failed after ${maxRetries + 1} attempts:`, lastError);
-            throw lastError;
+            console.error(`Request to ${url} failed after ${maxRetries + 1} attempts:`, typedError);
+            throw typedError;
           }
           
           // Exponential backoff with jitter
@@ -181,8 +198,11 @@ export default function ExperimentDesignerPage() {
         }
       }
       
-      // Should never get here, but TypeScript wants us to handle this case
-      throw lastError || new Error(`Unknown error fetching ${url}`);
+      // Should never get here, but TypeScript needs it
+      if (lastError) {
+        throw lastError;
+      }
+      throw new Error(`Unknown error fetching ${url}`);
     };
     
     const fetchExperiment = async () => {
