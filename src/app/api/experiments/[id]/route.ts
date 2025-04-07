@@ -50,6 +50,30 @@ export async function GET(request: NextRequest) {
   try {
     console.log(`API: GET experiment request received for ${request.nextUrl.pathname}`);
     
+    // Handler for ping requests to help diagnose connectivity issues
+    if (request.nextUrl.searchParams.has('ping')) {
+      console.log('API: Ping request received, responding with pong');
+      return NextResponse.json(
+        { 
+          status: 'ok', 
+          message: 'pong', 
+          timestamp: new Date().toISOString(),
+          serverInfo: {
+            nodejsVersion: process.version,
+            platform: process.platform,
+            memoryUsage: process.memoryUsage().rss / (1024 * 1024) + 'MB'
+          }
+        },
+        { 
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store'
+          }
+        }
+      );
+    }
+    
     // Get experiment ID
     const experimentId = getExperimentId(request);
     console.log(`API: Experiment ID: ${experimentId}`);

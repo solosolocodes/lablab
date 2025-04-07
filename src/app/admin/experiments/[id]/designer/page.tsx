@@ -98,24 +98,55 @@ export default function ExperimentDesignerPage() {
       
       try {
         setIsLoading(true);
-        const response = await fetch(`/api/experiments/${experimentId}`);
+        
+        // Log request details
+        console.log(`Making request to: /api/experiments/${experimentId}`);
+        
+        // Add custom headers to help with debugging
+        const response = await fetch(`/api/experiments/${experimentId}`, {
+          headers: {
+            'Accept': 'application/json',
+            'X-Request-Time': new Date().toISOString(),
+            'X-Client-Version': '1.0'
+          }
+        });
+        
+        // Log the response headers for debugging
+        console.log('Response headers:', {
+          contentType: response.headers.get('content-type'),
+          status: response.status,
+          statusText: response.statusText,
+          headerCount: [...response.headers.entries()].length
+        });
         
         // Even if response is not OK, try to get the error details from JSON
         let data;
+        let responseText = '';
         try {
-          const responseText = await response.text();
-          console.log('Raw response from server:', responseText);
+          responseText = await response.text();
+          console.log(`Raw response from server (${responseText.length} bytes):`, 
+            responseText.substring(0, 500) + (responseText.length > 500 ? '...' : ''));
           
           // Only try to parse if we have a non-empty response
           if (responseText && responseText.trim()) {
             try {
               data = JSON.parse(responseText);
+              console.log('Parsed JSON data successfully:', Object.keys(data));
             } catch (jsonParseError) {
               console.error('Failed to parse response as JSON:', jsonParseError);
-              data = { message: 'Invalid server response format' };
+              data = { message: 'Invalid server response format', rawText: responseText.substring(0, 200) };
             }
           } else {
-            console.error('Empty response from server');
+            console.error('Empty response from server - this might be CORS or server issue');
+            // Try an alternative approach with a ping
+            try {
+              console.log('Attempting to ping server to verify connectivity...');
+              const pingResponse = await fetch('/api/experiments?ping=true');
+              console.log('Ping response status:', pingResponse.status);
+            } catch (pingError) {
+              console.error('Ping to server also failed:', pingError);
+            }
+            
             data = { message: 'Empty response from server' };
           }
         } catch (e) {
@@ -136,15 +167,16 @@ export default function ExperimentDesignerPage() {
         // If we reach here, the response was OK
         if (!data) {
           console.error('Server returned OK status but no data');
-          throw new Error('Server returned empty response with OK status');
+          throw new Error(`Server returned empty response with OK status (Response text length: ${responseText.length})`);
         }
         
         // Verify data has minimum required fields
         if (!data.id || !data.name) {
           console.error('Server returned incomplete experiment data:', data);
-          throw new Error('Server returned incomplete experiment data');
+          throw new Error(`Server returned incomplete experiment data: ${JSON.stringify(data).substring(0, 100)}...`);
         }
         
+        console.log('Successfully loaded experiment:', { id: data.id, name: data.name });
         setExperiment(data);
         
         // Also fetch scenarios and user groups
