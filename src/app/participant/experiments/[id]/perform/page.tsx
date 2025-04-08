@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ParticipantPerformProvider, useParticipantPerform } from '@/contexts/ParticipantPerformContext';
+import { useParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import { ParticipantPerformProvider, useParticipantPerform } from '@/contexts/ParticipantPerformContext';
 
-// Define interfaces for our components
+// Define basic interfaces for stage types
 interface Question {
   id: string;
   text: string;
@@ -37,7 +36,11 @@ interface InstructionsStage extends Stage {
   format?: string;
 }
 
-// Define the stage components
+// Type guard function to check if a stage is an instructions stage
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function isInstructionsStage(stage: Stage): stage is InstructionsStage {
+  return stage.type === 'instructions' && typeof stage.content === 'string';
+}
 
 function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext: () => void }) {
   const { isStageTransitioning, saveStageResponse } = useParticipantPerform();
@@ -98,7 +101,7 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
         <button 
           onClick={handleNext}
           disabled={isStageTransitioning}
-          className={`px-6 py-2 bg-blue-500 text-white rounded ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Continue
         </button>
@@ -184,7 +187,7 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
         <button 
           onClick={handleNext}
           disabled={isStageTransitioning || !timerComplete}
-          className={`px-6 py-2 ${timerComplete ? 'bg-blue-500' : 'bg-gray-400 cursor-not-allowed'} text-white rounded ${isStageTransitioning ? 'opacity-50' : ''}`}
+          className={`px-6 py-2 ${timerComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
           {timerComplete ? 'Continue' : 'Please wait...'}
         </button>
@@ -415,7 +418,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         <div className="flex justify-center">
           <button 
             onClick={handleNext}
-            className="px-6 py-2 bg-blue-500 text-white rounded"
+            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
             Skip to Next Stage
           </button>
@@ -485,6 +488,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                   strokeDasharray={`${2 * Math.PI * 45}`}
                   strokeDashoffset={`${2 * Math.PI * 45 * (1 - roundTimeRemaining / roundDuration)}`}
                   transform="rotate(-90 50 50)"
+                  className="transition-all duration-1000 ease-linear"
                 />
               )}
               
@@ -721,7 +725,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                       return (
                         <div 
                           key={asset.id} 
-                          className="bg-white border border-gray-200 rounded-lg p-5 shadow"
+                          className="bg-white border border-gray-200 rounded-lg p-5 shadow hover:shadow-md transition-shadow"
                         >
                           {/* Header with symbol and name */}
                           <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
@@ -771,13 +775,13 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                           <div className="flex gap-4 mt-4">
                             <button
                               onClick={() => toast.success(`Buy action for ${asset.symbol} (simulation only)`)}
-                              className="flex-1 text-base bg-green-100 text-green-700 font-medium py-3 px-4 rounded-md"
+                              className="flex-1 text-base bg-green-100 hover:bg-green-200 text-green-700 font-medium py-3 px-4 rounded-md transition-colors"
                             >
                               Buy
                             </button>
                             <button
                               onClick={() => toast.success(`Sell action for ${asset.symbol} (simulation only)`)}
-                              className="flex-1 text-base bg-red-100 text-red-700 font-medium py-3 px-4 rounded-md"
+                              className="flex-1 text-base bg-red-100 hover:bg-red-200 text-red-700 font-medium py-3 px-4 rounded-md transition-colors"
                             >
                               Sell
                             </button>
@@ -812,7 +816,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         <button 
           onClick={handleNext}
           disabled={isStageTransitioning || !scenarioComplete}
-          className={`px-6 py-2 ${scenarioComplete ? 'bg-blue-500' : 'bg-gray-400 cursor-not-allowed'} text-white rounded ${isStageTransitioning ? 'opacity-50' : ''}`}
+          className={`px-6 py-2 ${scenarioComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
           {scenarioComplete ? 'Continue' : 'Please complete all rounds...'}
         </button>
@@ -1023,7 +1027,7 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
         <button 
           onClick={handleSubmit}
           disabled={isStageTransitioning || isSubmitting}
-          className={`px-6 py-2 bg-blue-500 text-white rounded ${
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${
             (isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
@@ -1040,110 +1044,30 @@ function ExperimentPerformer() {
     progress, 
     currentStageIndex, 
     currentStage,
-    loadExperiment, 
+    loadExperiment,
     goToNextStage, 
-    completeExperiment 
+    completeExperiment,
+    isLoading,
+    loadError
   } = useParticipantPerform();
   
   const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadInitiated, setLoadInitiated] = useState(false);
   
-  const router = useRouter();
   const params = useParams();
   const experimentId = params.id as string;
   
-  // Load experiment data with better error handling and status tracking
-  // Added functionality to manually bypass loading screen after timeout
-  const [manualOverride, setManualOverride] = useState(false);
-  
+  // Load experiment data once on mount
   useEffect(() => {
-    // Prevent duplicate loading
-    if (loadInitiated) return;
-    
-    let isMounted = true; // Track component mount state
-    let loadAttempts = 0;
-    const maxAttempts = 3;
-    setLoadInitiated(true);
-    
-    // Set up a long timer to enable manual override in case of persistent issues
-    const manualOverrideTimer = setTimeout(() => {
-      if (isMounted && isLoading) {
-        console.log('Setting up manual override option for persistent loading...');
-        setManualOverride(true);
+    const loadData = async () => {
+      if (experimentId) {
+        console.log(`Loading experiment ${experimentId}...`);
+        await loadExperiment(experimentId);
       }
-    }, 15000); // 15 seconds
-    
-    async function loadData() {
-      console.log('Starting experiment data load...');
-      
-      if (!experimentId) {
-        if (isMounted) {
-          setLoadError('No experiment ID provided');
-          setIsLoading(false);
-        }
-        return;
-      }
-      
-      try {
-        if (isMounted) setIsLoading(true);
-        
-        loadAttempts++;
-        console.log(`Loading experiment ${experimentId}... (attempt ${loadAttempts}/${maxAttempts})`);
-        
-        // Set a timeout for the entire load operation
-        const loadTimeout = 12000; // 12 seconds
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error(`Loading experiment timed out after ${loadTimeout/1000} seconds`));
-          }, loadTimeout);
-        });
-        
-        // Race between the experiment loading and timeout
-        await Promise.race([
-          loadExperiment(experimentId),
-          timeoutPromise
-        ]);
-        
-        console.log('Experiment loaded successfully');
-        if (isMounted) {
-          setIsLoading(false);
-          setLoadError(null);
-          setManualOverride(false); // Reset manual override if we succeed
-        }
-      } catch (err) {
-        console.error('Error loading experiment:', err);
-        if (isMounted) {
-          // If we haven't exceeded max attempts, try again with exponential backoff
-          if (loadAttempts < maxAttempts) {
-            const backoffTime = Math.min(1000 * (2 ** loadAttempts), 8000); // Exponential backoff with max 8 seconds
-            console.log(`Retrying in ${backoffTime/1000} seconds...`);
-            setTimeout(loadData, backoffTime);
-            return;
-          }
-          
-          setLoadError((err as Error)?.message || 'Failed to load experiment');
-          setIsLoading(false);
-          toast.error('Failed to load experiment after multiple attempts. Please try refreshing the page.');
-        }
-      }
-    }
-    
-    // Use a minimal delay before loading to prevent conflicts
-    const initTimer = setTimeout(() => {
-      loadData();
-    }, 100);
-    
-    // Cleanup function to prevent state updates after unmounting
-    return () => {
-      console.log('Component unmounting, cancelling any pending operations');
-      clearTimeout(initTimer);
-      clearTimeout(manualOverrideTimer);
-      isMounted = false;
     };
-  }, [experimentId, loadExperiment, loadInitiated, isLoading]);
-  
+    
+    loadData();
+  }, [experimentId, loadExperiment]);
+
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
     setViewMode('experiment');
@@ -1168,44 +1092,18 @@ function ExperimentPerformer() {
   
   // Handle exit button
   const handleExit = () => {
-    router.push('/participant/dashboard');
+    window.close();
   };
   
-  // Simple loading indicator instead of full-screen overlay
+  // Simple loading state
   if (isLoading) {
     return (
       <div className="p-4">
         <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
-          <p className="text-gray-600">Loading experiment, please wait...</p>
-          
+          <p className="text-gray-600 text-sm">Loading experiment, please wait...</p>
           <div className="mt-2 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
             <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
           </div>
-          
-          {/* Manual override option appears after timeout */}
-          {manualOverride && (
-            <div className="mt-4 pt-3 border-t border-gray-100">
-              <p className="text-amber-600 text-sm mb-2">Taking longer than expected?</p>
-              <div className="flex space-x-2 justify-center">
-                <button 
-                  onClick={() => {
-                    setIsLoading(false); 
-                    console.log('User manually bypassed loading screen');
-                  }}
-                  className="px-3 py-1 text-xs bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
-                >
-                  Continue Anyway
-                </button>
-                <button 
-                  onClick={handleExit}
-                  className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                >
-                  Return to Dashboard
-                </button>
-              </div>
-            </div>
-          )}
-          
           <p className="text-xs text-gray-400 mt-3">Experiment ID: {experimentId}</p>
         </div>
       </div>
@@ -1215,8 +1113,8 @@ function ExperimentPerformer() {
   // Error state
   if (loadError) {
     return (
-      <div className="w-full h-full flex items-center justify-center p-6">
-        <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
+      <div className="p-4">
+        <div className="bg-white p-8 rounded-lg shadow-md text-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -1233,7 +1131,7 @@ function ExperimentPerformer() {
               onClick={handleExit}
               className="px-4 py-2 bg-gray-300 text-gray-700 rounded"
             >
-              Return to Dashboard
+              Close
             </button>
           </div>
         </div>
@@ -1244,8 +1142,8 @@ function ExperimentPerformer() {
   // No experiment data loaded
   if (!experiment || !progress) {
     return (
-      <div className="w-full h-full flex items-center justify-center p-6">
-        <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
+      <div className="p-4">
+        <div className="bg-white p-8 rounded-lg shadow-md text-center">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -1255,7 +1153,7 @@ function ExperimentPerformer() {
             onClick={handleExit}
             className="px-4 py-2 bg-blue-500 text-white rounded"
           >
-            Return to Dashboard
+            Close Window
           </button>
         </div>
       </div>
@@ -1279,7 +1177,7 @@ function ExperimentPerformer() {
             onClick={handleExit}
             className="px-6 py-2 bg-green-500 text-white rounded"
           >
-            Return to Dashboard
+            Close Window
           </button>
         </div>
       </div>
@@ -1340,7 +1238,7 @@ function ExperimentPerformer() {
           <div className="text-center">
             <button 
               onClick={handleWelcomeNext}
-              className="px-8 py-3 bg-blue-500 text-white rounded text-lg font-medium"
+              className="px-8 py-3 bg-blue-500 text-white rounded text-lg font-medium hover:bg-blue-600 transition-colors"
             >
               Begin Experiment
             </button>
@@ -1377,7 +1275,7 @@ function ExperimentPerformer() {
         
         {/* Render the appropriate stage component */}
         <div className="w-full">
-          {currentStage.type === 'instructions' && (
+          {currentStage.type === 'instructions' && 'content' in currentStage && (
             <InstructionsView 
               stage={currentStage as InstructionsStage} 
               onNext={handleStageNext} 
@@ -1420,7 +1318,7 @@ function ExperimentPerformer() {
               <div className="flex justify-center">
                 <button 
                   onClick={handleStageNext}
-                  className="px-6 py-2 bg-blue-500 text-white rounded"
+                  className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                 >
                   Continue
                 </button>
@@ -1437,54 +1335,52 @@ function ExperimentPerformer() {
 
 export default function PerformExperimentPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
-  const isAuthLoading = status === 'loading';
+  const params = useParams();
+  const experimentId = params.id as string;
   
-  // Authentication check
-  useEffect(() => {
-    // If not authenticated or not a participant, redirect to login
-    if (!isAuthLoading && (!session || session.user.role !== 'participant')) {
-      router.push('/participant/login');
-    }
-  }, [session, isAuthLoading, router]);
-  
-  // Still loading auth
-  if (isAuthLoading) {
+  // Check if user is authenticated as a participant
+  if (status === 'loading') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50">
-        <div className="w-full max-w-md text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Checking authentication...</p>
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <h2 className="text-lg font-medium">Loading...</h2>
         </div>
       </div>
     );
   }
   
-  // Authentication check
   if (!session || session.user.role !== 'participant') {
-    return null; // Will redirect via useEffect
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="text-center bg-white p-8 rounded-lg shadow-md max-w-md">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h2 className="text-xl font-bold mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-6">You must be logged in as a participant to access this experiment.</p>
+          <a href="/participant/login" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+            Login as Participant
+          </a>
+        </div>
+      </div>
+    );
   }
-
+  
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm py-3">
         <div className="container mx-auto px-4 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-            <Link href="/participant/dashboard" className="text-gray-600 hover:text-gray-900">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-              </svg>
-            </Link>
-            <h1 className="text-xl font-bold text-gray-800">LabLab Experiment</h1>
-          </div>
-          <div className="text-sm text-gray-600">
-            {session.user.email}
-          </div>
+          <h1 className="text-xl font-bold text-blue-600">LabLab Experiment</h1>
+          <button 
+            onClick={() => window.close()}
+            className="text-sm py-1 px-3 border border-gray-300 rounded hover:bg-gray-100"
+          >
+            Close Window
+          </button>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-grow container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto">
           <ParticipantPerformProvider>
@@ -1493,7 +1389,6 @@ export default function PerformExperimentPage() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="bg-white py-3 shadow-inner mt-auto">
         <div className="container mx-auto px-4">
           <p className="text-center text-gray-600 text-xs">

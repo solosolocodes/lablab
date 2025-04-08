@@ -39,7 +39,7 @@ interface ParticipantPerformContextType {
   progress: ProgressData | null;
   currentStageIndex: number;
   timeRemaining: number;
-  loadExperiment: (experimentId: string) => Promise<void>;
+  loadExperiment: (experimentId: string) => Promise<boolean>;
   goToNextStage: () => void;
   goToPreviousStage: () => boolean;
   resetTimer: () => void;
@@ -48,6 +48,8 @@ interface ParticipantPerformContextType {
   saveStageResponse: (stageId: string, stageType: string, response: any) => Promise<void>;
   updateProgressData: () => Promise<void>;
   completeExperiment: () => Promise<void>;
+  isLoading: boolean;
+  loadError: string | null;
 }
 
 const ParticipantPerformContext = createContext<ParticipantPerformContextType | undefined>(undefined);
@@ -59,16 +61,22 @@ export function ParticipantPerformProvider({ children }: { children: React.React
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [isStageTransitioning, setIsStageTransitioning] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  
   // Track ongoing operations to prevent race conditions
   const pendingOperations = useRef<AbortController[]>([]);
 
   // Load experiment data with proper error handling and timeout
-  const loadExperiment = async (experimentId: string) => {
+  const loadExperiment = async (experimentId: string): Promise<boolean> => {
     // Create a unique operation ID to track this specific load request
     const operationId = `load-${experimentId}-${Date.now()}`;
     console.log(`[${operationId}] Starting experiment data load for ID: ${experimentId}`);
     
     try {
+      setIsLoading(true);
+      setLoadError(null);
+      
       // First, abort any pending operations to prevent race conditions
       pendingOperations.current.forEach(controller => {
         if (!controller.signal.aborted) {
@@ -101,14 +109,13 @@ export function ParticipantPerformProvider({ children }: { children: React.React
         const cacheBuster = `_=${Date.now()}`;
         
         const [experimentResponse, progressResponse] = await Promise.all([
-          fetch(`/api/experiments/${experimentId}?${cacheBuster}`, {
+          fetch(`/api/experiments/${experimentId}?${cacheBuster}&preview=true`, {
             signal: controller.signal,
             headers: { 
               'Cache-Control': 'no-cache, no-store, must-revalidate',
               'Pragma': 'no-cache',
               'Expires': '0'
-            },
-            next: { revalidate: 0 }
+            }
           }),
           fetch(`/api/participant/experiments/${experimentId}/progress?${cacheBuster}`, {
             signal: controller.signal,
@@ -116,8 +123,7 @@ export function ParticipantPerformProvider({ children }: { children: React.React
               'Cache-Control': 'no-cache, no-store, must-revalidate',
               'Pragma': 'no-cache',
               'Expires': '0'
-            },
-            next: { revalidate: 0 }
+            }
           })
         ]);
         
@@ -181,6 +187,7 @@ export function ParticipantPerformProvider({ children }: { children: React.React
         }
         
         setTimerActive(true);
+        setIsLoading(false);
         
         console.log(`[${operationId}] Experiment load completed successfully`);
         // Return to indicate success
@@ -207,10 +214,12 @@ export function ParticipantPerformProvider({ children }: { children: React.React
       if (!(error instanceof Error && error.message === 'Request was cancelled')) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
         toast.error(`Failed to load experiment data: ${errorMessage}. Please try again or contact support.`);
+        setLoadError(errorMessage);
       }
       
-      // Re-throw to allow caller to handle
-      throw error;
+      setIsLoading(false);
+      // Return false to indicate failure
+      return false;
     }
   };
 
@@ -415,7 +424,9 @@ export function ParticipantPerformProvider({ children }: { children: React.React
         isStageTransitioning,
         saveStageResponse,
         updateProgressData,
-        completeExperiment
+        completeExperiment,
+        isLoading,
+        loadError
       }}
     >
       {children}
