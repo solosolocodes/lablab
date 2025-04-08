@@ -1048,16 +1048,32 @@ function ExperimentPerformer() {
   const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadInitiated, setLoadInitiated] = useState(false);
   
   const router = useRouter();
   const params = useParams();
   const experimentId = params.id as string;
   
   // Load experiment data with better error handling and status tracking
+  // Added functionality to manually bypass loading screen after timeout
+  const [manualOverride, setManualOverride] = useState(false);
+  
   useEffect(() => {
+    // Prevent duplicate loading
+    if (loadInitiated) return;
+    
     let isMounted = true; // Track component mount state
     let loadAttempts = 0;
     const maxAttempts = 3;
+    setLoadInitiated(true);
+    
+    // Set up a long timer to enable manual override in case of persistent issues
+    const manualOverrideTimer = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.log('Setting up manual override option for persistent loading...');
+        setManualOverride(true);
+      }
+    }, 15000); // 15 seconds
     
     async function loadData() {
       console.log('Starting experiment data load...');
@@ -1077,7 +1093,7 @@ function ExperimentPerformer() {
         console.log(`Loading experiment ${experimentId}... (attempt ${loadAttempts}/${maxAttempts})`);
         
         // Set a timeout for the entire load operation
-        const loadTimeout = 20000; // 20 seconds
+        const loadTimeout = 12000; // 12 seconds
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => {
             reject(new Error(`Loading experiment timed out after ${loadTimeout/1000} seconds`));
@@ -1094,6 +1110,7 @@ function ExperimentPerformer() {
         if (isMounted) {
           setIsLoading(false);
           setLoadError(null);
+          setManualOverride(false); // Reset manual override if we succeed
         }
       } catch (err) {
         console.error('Error loading experiment:', err);
@@ -1113,14 +1130,19 @@ function ExperimentPerformer() {
       }
     }
     
-    loadData();
+    // Use a minimal delay before loading to prevent conflicts
+    const initTimer = setTimeout(() => {
+      loadData();
+    }, 100);
     
     // Cleanup function to prevent state updates after unmounting
     return () => {
       console.log('Component unmounting, cancelling any pending operations');
+      clearTimeout(initTimer);
+      clearTimeout(manualOverrideTimer);
       isMounted = false;
     };
-  }, [experimentId, loadExperiment]);
+  }, [experimentId, loadExperiment, loadInitiated, isLoading]);
   
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
@@ -1149,14 +1171,42 @@ function ExperimentPerformer() {
     router.push('/participant/dashboard');
   };
   
-  // Loading state with improved timeout handling
+  // Simple loading indicator instead of full-screen overlay
   if (isLoading) {
     return (
-      <div className="w-full h-full flex items-center justify-center p-6">
-        <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading experiment...</p>
-          <p className="text-xs text-gray-500 mt-2">ID: {experimentId}</p>
+      <div className="p-4">
+        <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
+          <p className="text-gray-600">Loading experiment, please wait...</p>
+          
+          <div className="mt-2 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
+          </div>
+          
+          {/* Manual override option appears after timeout */}
+          {manualOverride && (
+            <div className="mt-4 pt-3 border-t border-gray-100">
+              <p className="text-amber-600 text-sm mb-2">Taking longer than expected?</p>
+              <div className="flex space-x-2 justify-center">
+                <button 
+                  onClick={() => {
+                    setIsLoading(false); 
+                    console.log('User manually bypassed loading screen');
+                  }}
+                  className="px-3 py-1 text-xs bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
+                >
+                  Continue Anyway
+                </button>
+                <button 
+                  onClick={handleExit}
+                  className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <p className="text-xs text-gray-400 mt-3">Experiment ID: {experimentId}</p>
         </div>
       </div>
     );
@@ -1388,18 +1438,18 @@ function ExperimentPerformer() {
 export default function PerformExperimentPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const isLoading = status === 'loading';
+  const isAuthLoading = status === 'loading';
   
   // Authentication check
   useEffect(() => {
     // If not authenticated or not a participant, redirect to login
-    if (!isLoading && (!session || session.user.role !== 'participant')) {
+    if (!isAuthLoading && (!session || session.user.role !== 'participant')) {
       router.push('/participant/login');
     }
-  }, [session, isLoading, router]);
+  }, [session, isAuthLoading, router]);
   
   // Still loading auth
-  if (isLoading) {
+  if (isAuthLoading) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50">
         <div className="w-full max-w-md text-center">
