@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-interface BuyModalProps {
+interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   asset: {
@@ -13,26 +13,32 @@ interface BuyModalProps {
   };
   currentPrice: number;
   availableFunds: number;
-  onConfirmBuy: (assetId: string, quantity: number, totalCost: number) => Promise<boolean>;
+  mode: 'buy' | 'sell';
+  onConfirmTransaction: (assetId: string, quantity: number, totalValue: number) => Promise<boolean>;
 }
 
-export default function BuyModal({ 
+export default function TransactionModal({ 
   isOpen, 
   onClose, 
   asset, 
   currentPrice, 
   availableFunds,
-  onConfirmBuy
-}: BuyModalProps) {
+  mode = 'buy',
+  onConfirmTransaction
+}: TransactionModalProps) {
   const [quantity, setQuantity] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [transactionSuccess, setTransactionSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Calculate maximum purchasable amount based on available funds
-  const maxPurchasable = Math.floor(availableFunds / currentPrice);
-  const totalCost = quantity * currentPrice;
+  // Calculate maximum amount for transaction
+  const maxAmount = mode === 'buy' 
+    ? Math.floor(availableFunds / currentPrice) // Max purchasable based on USD funds
+    : asset.amount; // Max sellable based on owned assets
+    
+  // Calculate total value of transaction
+  const totalValue = quantity * currentPrice;
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -89,10 +95,23 @@ export default function BuyModal({
     }
   };
 
-  // Handle buy confirmation
-  const handleConfirmBuy = async () => {
-    if (quantity <= 0 || totalCost > availableFunds) {
+  // Handle transaction confirmation
+  const handleConfirmTransaction = async () => {
+    // Validate transaction
+    if (quantity <= 0) {
       setError("Invalid transaction amount");
+      return;
+    }
+    
+    // Buy-specific validation
+    if (mode === 'buy' && totalValue > availableFunds) {
+      setError("Not enough funds available");
+      return;
+    }
+    
+    // Sell-specific validation
+    if (mode === 'sell' && quantity > asset.amount) {
+      setError("Not enough assets to sell");
       return;
     }
 
@@ -100,16 +119,16 @@ export default function BuyModal({
     setError(null);
     
     try {
-      const success = await onConfirmBuy(asset.id, quantity, totalCost);
+      const success = await onConfirmTransaction(asset.id, quantity, totalValue);
       
       if (success) {
         setTransactionSuccess(true);
       } else {
-        setError("Transaction failed. Please try again.");
+        setError(`${mode === 'buy' ? 'Purchase' : 'Sale'} failed. Please try again.`);
       }
     } catch (err) {
       setError("An error occurred during the transaction");
-      console.error("Buy transaction error:", err);
+      console.error(`${mode} transaction error:`, err);
     } finally {
       setIsProcessing(false);
     }
@@ -124,9 +143,9 @@ export default function BuyModal({
         className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 relative"
       >
         {/* Modal header */}
-        <div className="bg-blue-600 text-white rounded-t-lg p-4">
-          <h3 className="text-xl font-bold">Buy {asset.symbol}</h3>
-          <p className="text-blue-100 text-sm">{asset.name}</p>
+        <div className={`${mode === 'buy' ? 'bg-blue-600' : 'bg-purple-600'} text-white rounded-t-lg p-4`}>
+          <h3 className="text-xl font-bold">{mode === 'buy' ? 'Buy' : 'Sell'} {asset.symbol}</h3>
+          <p className={`${mode === 'buy' ? 'text-blue-100' : 'text-purple-100'} text-sm`}>{asset.name}</p>
         </div>
         
         {/* Modal content */}
@@ -138,10 +157,15 @@ export default function BuyModal({
                 <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"></path>
                 </svg>
-                <span className="text-green-700 font-medium">Purchase successful!</span>
+                <span className="text-green-700 font-medium">
+                  {mode === 'buy' ? 'Purchase' : 'Sale'} successful!
+                </span>
               </div>
               <p className="text-green-600 text-sm mt-1">
-                You bought {quantity} {asset.symbol} for ${totalCost.toFixed(2)}
+                {mode === 'buy' 
+                  ? `You bought ${quantity} ${asset.symbol} for $${totalValue.toFixed(2)}`
+                  : `You sold ${quantity} ${asset.symbol} for $${totalValue.toFixed(2)}`
+                }
               </p>
             </div>
           )}
@@ -164,62 +188,77 @@ export default function BuyModal({
               <div className="text-sm text-gray-500">Current Price</div>
               <div className="text-lg font-mono font-bold text-gray-900">${currentPrice.toFixed(2)}</div>
             </div>
-            <div className="bg-gray-50 p-3 rounded-md">
-              <div className="text-sm text-gray-500">Available USD</div>
-              <div className="text-lg font-mono font-bold text-gray-900">${availableFunds.toFixed(2)}</div>
-            </div>
+            {mode === 'buy' ? (
+              <div className="bg-gray-50 p-3 rounded-md">
+                <div className="text-sm text-gray-500">Available USD</div>
+                <div className="text-lg font-mono font-bold text-gray-900">${availableFunds.toFixed(2)}</div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 p-3 rounded-md">
+                <div className="text-sm text-gray-500">Your Holdings</div>
+                <div className="text-lg font-mono font-bold text-gray-900">{asset.amount.toFixed(2)} {asset.symbol}</div>
+              </div>
+            )}
           </div>
           
-          {/* Purchase amount selector */}
+          {/* Transaction amount selector */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Select quantity to buy
+              Select quantity to {mode === 'buy' ? 'buy' : 'sell'}
             </label>
             <div className="flex items-center gap-2 mb-2">
               <input 
                 type="range" 
                 min="1" 
-                max={maxPurchasable} 
+                max={maxAmount || 1} 
                 value={quantity}
                 onChange={handleSliderChange}
                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                disabled={isProcessing || transactionSuccess || maxPurchasable === 0}
+                disabled={isProcessing || transactionSuccess || maxAmount === 0}
               />
               <input
                 type="number"
                 min="1"
-                max={maxPurchasable}
+                max={maxAmount}
                 value={quantity}
                 onChange={handleInputChange}
                 className="w-16 p-2 border border-gray-300 rounded-md text-center"
-                disabled={isProcessing || transactionSuccess || maxPurchasable === 0}
+                disabled={isProcessing || transactionSuccess || maxAmount === 0}
               />
             </div>
             <div className="text-xs text-gray-500 text-right">
-              Max: {maxPurchasable} {asset.symbol}
+              Max: {maxAmount} {asset.symbol}
             </div>
           </div>
           
           {/* Transaction summary */}
-          <div className="bg-blue-50 p-4 rounded-lg mb-4">
+          <div className={`${mode === 'buy' ? 'bg-blue-50' : 'bg-purple-50'} p-4 rounded-lg mb-4`}>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-blue-800">Quantity:</span>
+              <span className={`${mode === 'buy' ? 'text-blue-800' : 'text-purple-800'}`}>Quantity:</span>
               <span className="font-medium">{quantity} {asset.symbol}</span>
             </div>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-blue-800">Price per unit:</span>
+              <span className={`${mode === 'buy' ? 'text-blue-800' : 'text-purple-800'}`}>Price per unit:</span>
               <span className="font-medium">${currentPrice.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-blue-100">
-              <span className="text-blue-800 font-medium">Total Cost:</span>
-              <span className="font-bold text-lg">${totalCost.toFixed(2)}</span>
+              <span className={`${mode === 'buy' ? 'text-blue-800' : 'text-purple-800'} font-medium`}>
+                {mode === 'buy' ? 'Total Cost:' : 'Total Return:'}
+              </span>
+              <span className="font-bold text-lg">${totalValue.toFixed(2)}</span>
             </div>
           </div>
           
-          {/* Warning if not enough funds */}
-          {totalCost > availableFunds && (
+          {/* Transaction warnings */}
+          {mode === 'buy' && totalValue > availableFunds && (
             <div className="text-red-600 text-sm bg-red-50 p-2 rounded mb-4">
               Not enough USD available for this purchase
+            </div>
+          )}
+          
+          {mode === 'sell' && quantity > asset.amount && (
+            <div className="text-red-600 text-sm bg-red-50 p-2 rounded mb-4">
+              Not enough {asset.symbol} available to sell
             </div>
           )}
           
@@ -233,13 +272,20 @@ export default function BuyModal({
               Cancel
             </button>
             <button
-              onClick={handleConfirmBuy}
+              onClick={handleConfirmTransaction}
               className={`flex-1 px-4 py-2 rounded-md transition-colors ${
-                totalCost <= availableFunds && !isProcessing && !transactionSuccess
-                  ? 'bg-green-600 hover:bg-green-700 text-white'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                mode === 'buy'
+                  ? (totalValue <= availableFunds && !isProcessing && !transactionSuccess
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed')
+                  : (quantity <= asset.amount && !isProcessing && !transactionSuccess
+                      ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed')
               }`}
-              disabled={totalCost > availableFunds || isProcessing || transactionSuccess || maxPurchasable === 0}
+              disabled={(mode === 'buy' ? totalValue > availableFunds : quantity > asset.amount) 
+                || isProcessing 
+                || transactionSuccess 
+                || maxAmount === 0}
             >
               {isProcessing ? (
                 <span className="flex items-center justify-center">
@@ -252,7 +298,7 @@ export default function BuyModal({
               ) : transactionSuccess ? (
                 'Complete'
               ) : (
-                'Confirm Buy'
+                `Confirm ${mode === 'buy' ? 'Buy' : 'Sell'}`
               )}
             </button>
           </div>

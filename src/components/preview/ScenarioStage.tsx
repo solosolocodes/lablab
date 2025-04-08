@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
-import BuyModal from '../modals/BuyModal';
+import TransactionModal from '../modals/TransactionModal';
 
 // Interface for Scenario data from MongoDB
 interface AssetPrice {
@@ -55,7 +55,8 @@ export default function ScenarioStage() {
   // Trading functionality state
   const [usdBalance, setUsdBalance] = useState(10000); // Starting with $10,000 USD
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [buyModalOpen, setBuyModalOpen] = useState(false);
+  const [transactionModalOpen, setTransactionModalOpen] = useState(false);
+  const [transactionMode, setTransactionMode] = useState<'buy' | 'sell'>('buy');
   const [selectedAsset, setSelectedAsset] = useState<WalletAsset | null>(null);
   const [selectedAssetPrice, setSelectedAssetPrice] = useState(0);
 
@@ -204,8 +205,8 @@ export default function ScenarioStage() {
     return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
   
-  // Handle opening the buy modal
-  const handleOpenBuyModal = (asset: WalletAsset) => {
+  // Handle opening the transaction modal
+  const handleOpenTransactionModal = (asset: WalletAsset, mode: 'buy' | 'sell') => {
     // Find current price for the asset
     const assetPrice = scenarioData?.assetPrices?.find(p => 
       p.assetId === asset.id || p.symbol === asset.symbol
@@ -217,17 +218,18 @@ export default function ScenarioStage() {
       
       setSelectedAsset(asset);
       setSelectedAssetPrice(currentPrice);
-      setBuyModalOpen(true);
+      setTransactionMode(mode);
+      setTransactionModalOpen(true);
     } else {
       console.error("No price data available for asset:", asset);
       // Could show a notification/error here
     }
   };
   
-  // Handle the buy transaction
-  const handleBuyTransaction = async (assetId: string, quantity: number, totalCost: number): Promise<boolean> => {
+  // Handle transactions (buy or sell)
+  const handleTransaction = async (assetId: string, quantity: number, totalValue: number): Promise<boolean> => {
     // Simple validation
-    if (quantity <= 0 || totalCost > usdBalance) {
+    if (quantity <= 0) {
       return false;
     }
     
@@ -239,26 +241,45 @@ export default function ScenarioStage() {
         return false;
       }
       
+      // Buy-specific validation
+      if (transactionMode === 'buy' && totalValue > usdBalance) {
+        return false;
+      }
+      
+      // Sell-specific validation
+      if (transactionMode === 'sell' && quantity > assetToUpdate.amount) {
+        return false;
+      }
+      
       // Update USD balance
-      setUsdBalance(prevBalance => prevBalance - totalCost);
+      if (transactionMode === 'buy') {
+        setUsdBalance(prevBalance => prevBalance - totalValue);
+      } else {
+        setUsdBalance(prevBalance => prevBalance + totalValue);
+      }
       
       // Update asset amount in wallet
       setWalletAssets(prevAssets => 
         prevAssets.map(asset => 
           asset.id === assetId 
-            ? { ...asset, amount: asset.amount + quantity } 
+            ? { 
+                ...asset, 
+                amount: transactionMode === 'buy' 
+                  ? asset.amount + quantity 
+                  : asset.amount - quantity 
+              } 
             : asset
         )
       );
       
       // Record the transaction
       const newTransaction: Transaction = {
-        type: 'buy',
+        type: transactionMode,
         assetId,
         symbol: assetToUpdate.symbol,
         quantity,
         price: selectedAssetPrice,
-        totalValue: totalCost,
+        totalValue,
         timestamp: new Date()
       };
       
@@ -700,13 +721,14 @@ export default function ScenarioStage() {
                             <div className="flex gap-2 mt-2">
                               <button 
                                 className="flex-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 font-medium py-1 px-2 rounded-md transition-colors"
-                                onClick={() => handleOpenBuyModal(asset)}
+                                onClick={() => handleOpenTransactionModal(asset, 'buy')}
                                 disabled={!priceDataAvailable || scenarioComplete}
                               >
                                 Buy
                               </button>
                               <button 
                                 className="flex-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 font-medium py-1 px-2 rounded-md transition-colors"
+                                onClick={() => handleOpenTransactionModal(asset, 'sell')}
                                 disabled={asset.amount <= 0 || !priceDataAvailable || scenarioComplete}
                               >
                                 Sell
@@ -787,15 +809,16 @@ export default function ScenarioStage() {
         </div>
       </div>
       
-      {/* Buy Modal */}
+      {/* Transaction Modal */}
       {selectedAsset && (
-        <BuyModal 
-          isOpen={buyModalOpen}
-          onClose={() => setBuyModalOpen(false)}
+        <TransactionModal 
+          isOpen={transactionModalOpen}
+          onClose={() => setTransactionModalOpen(false)}
           asset={selectedAsset}
           currentPrice={selectedAssetPrice}
           availableFunds={usdBalance}
-          onConfirmBuy={handleBuyTransaction}
+          mode={transactionMode}
+          onConfirmTransaction={handleTransaction}
         />
       )}
     </div>
