@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
+import BuyModal from '../modals/BuyModal';
 
 // Interface for Scenario data from MongoDB
 interface AssetPrice {
@@ -29,6 +30,16 @@ interface WalletAsset {
   [key: string]: unknown;
 }
 
+interface Transaction {
+  type: 'buy' | 'sell';
+  assetId: string;
+  symbol: string;
+  quantity: number;
+  price: number;
+  totalValue: number;
+  timestamp: Date;
+}
+
 export default function ScenarioStage() {
   const { currentStage, goToNextStage } = usePreview();
   const [currentRound, setCurrentRound] = useState(1);
@@ -40,6 +51,13 @@ export default function ScenarioStage() {
   const [isLoadingWallet, setIsLoadingWallet] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
+  
+  // Trading functionality state
+  const [usdBalance, setUsdBalance] = useState(10000); // Starting with $10,000 USD
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [buyModalOpen, setBuyModalOpen] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<WalletAsset | null>(null);
+  const [selectedAssetPrice, setSelectedAssetPrice] = useState(0);
 
   if (!currentStage || currentStage.type !== 'scenario') {
     return <div>Invalid stage type</div>;
@@ -186,7 +204,75 @@ export default function ScenarioStage() {
     return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
   
-  // Progress calculations removed
+  // Handle opening the buy modal
+  const handleOpenBuyModal = (asset: WalletAsset) => {
+    // Find current price for the asset
+    const assetPrice = scenarioData?.assetPrices?.find(p => 
+      p.assetId === asset.id || p.symbol === asset.symbol
+    );
+    
+    if (assetPrice?.prices?.length) {
+      const currentRoundIndex = Math.min(currentRound - 1, assetPrice.prices.length - 1);
+      const currentPrice = assetPrice.prices[currentRoundIndex];
+      
+      setSelectedAsset(asset);
+      setSelectedAssetPrice(currentPrice);
+      setBuyModalOpen(true);
+    } else {
+      console.error("No price data available for asset:", asset);
+      // Could show a notification/error here
+    }
+  };
+  
+  // Handle the buy transaction
+  const handleBuyTransaction = async (assetId: string, quantity: number, totalCost: number): Promise<boolean> => {
+    // Simple validation
+    if (quantity <= 0 || totalCost > usdBalance) {
+      return false;
+    }
+    
+    try {
+      // Find the asset to update
+      const assetToUpdate = walletAssets.find(asset => asset.id === assetId);
+      if (!assetToUpdate) {
+        console.error("Asset not found:", assetId);
+        return false;
+      }
+      
+      // Update USD balance
+      setUsdBalance(prevBalance => prevBalance - totalCost);
+      
+      // Update asset amount in wallet
+      setWalletAssets(prevAssets => 
+        prevAssets.map(asset => 
+          asset.id === assetId 
+            ? { ...asset, amount: asset.amount + quantity } 
+            : asset
+        )
+      );
+      
+      // Record the transaction
+      const newTransaction: Transaction = {
+        type: 'buy',
+        assetId,
+        symbol: assetToUpdate.symbol,
+        quantity,
+        price: selectedAssetPrice,
+        totalValue: totalCost,
+        timestamp: new Date()
+      };
+      
+      setTransactions(prevTransactions => [...prevTransactions, newTransaction]);
+      
+      // Simulate network latency (remove in production)
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      return true;
+    } catch (error) {
+      console.error("Transaction error:", error);
+      return false;
+    }
+  };
   
   // Auto-advance after completion with delay
   useEffect(() => {
@@ -483,25 +569,37 @@ export default function ScenarioStage() {
                             </div>
                           </div>
                           
-                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-                            <div className="flex-1">
-                              <div className="text-base text-gray-600 mb-2">Total Value</div>
-                              <div className="text-2xl font-mono font-bold text-blue-900">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                              <div className="text-base text-gray-600 mb-2">Assets Value</div>
+                              <div className="text-xl font-mono font-bold text-blue-900">
                                 ${Math.round(totalUsdValue).toLocaleString()}
                               </div>
                             </div>
                             
+                            <div>
+                              <div className="text-base text-gray-600 mb-2">USD Balance</div>
+                              <div className="text-xl font-mono font-bold text-green-700">
+                                ${usdBalance.toLocaleString()}
+                              </div>
+                            </div>
+                            
                             {hasCompleteData && (
-                              <div className={`flex-1 px-5 py-3 rounded-lg ${colors.bg} flex items-center justify-center`}>
-                                <div>
-                                  <div className="text-base text-gray-600 mb-2 text-center">Change From Last Round</div>
-                                  <div className={`text-2xl font-mono font-bold ${colors.text} flex items-center justify-center`}>
-                                    {colors.icon} ${Math.round(Math.abs(portfolioChange)).toLocaleString()} ({Math.abs(portfolioChangePercent).toFixed(1)}%)
-                                  </div>
+                              <div className={`px-3 py-2 rounded-lg ${colors.bg}`}>
+                                <div className="text-base text-gray-600 mb-2">Round Change</div>
+                                <div className={`text-xl font-mono font-bold ${colors.text} flex items-center`}>
+                                  {colors.icon} ${Math.round(Math.abs(portfolioChange)).toLocaleString()} ({Math.abs(portfolioChangePercent).toFixed(1)}%)
                                 </div>
                               </div>
                             )}
                           </div>
+                          
+                          {/* Transaction count */}
+                          {transactions.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-blue-200 text-sm text-blue-800">
+                              <span className="font-medium">{transactions.length}</span> transactions in this session
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
@@ -600,10 +698,17 @@ export default function ScenarioStage() {
                             
                             {/* Action buttons */}
                             <div className="flex gap-2 mt-2">
-                              <button className="flex-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 font-medium py-1 px-2 rounded-md transition-colors">
+                              <button 
+                                className="flex-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 font-medium py-1 px-2 rounded-md transition-colors"
+                                onClick={() => handleOpenBuyModal(asset)}
+                                disabled={!priceDataAvailable || scenarioComplete}
+                              >
                                 Buy
                               </button>
-                              <button className="flex-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 font-medium py-1 px-2 rounded-md transition-colors">
+                              <button 
+                                className="flex-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 font-medium py-1 px-2 rounded-md transition-colors"
+                                disabled={asset.amount <= 0 || !priceDataAvailable || scenarioComplete}
+                              >
                                 Sell
                               </button>
                             </div>
@@ -681,6 +786,18 @@ export default function ScenarioStage() {
           )}
         </div>
       </div>
+      
+      {/* Buy Modal */}
+      {selectedAsset && (
+        <BuyModal 
+          isOpen={buyModalOpen}
+          onClose={() => setBuyModalOpen(false)}
+          asset={selectedAsset}
+          currentPrice={selectedAssetPrice}
+          availableFunds={usdBalance}
+          onConfirmBuy={handleBuyTransaction}
+        />
+      )}
     </div>
   );
 }
