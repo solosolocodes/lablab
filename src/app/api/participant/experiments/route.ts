@@ -21,11 +21,12 @@ export async function GET(request: NextRequest) {
     
     console.log(`[DEBUG] Processing request for user: ${session.user.email}`);
     
-    // Special bypass for troubleshooting 1@1.com 500 error
-    if (session.user.email === '1@1.com') {
-      console.log(`[DEBUG] Special handling for test user 1@1.com - returning empty array`);
-      return NextResponse.json([]);
-    }
+    // Log full session info for troubleshooting
+    console.log('[DEBUG] Session info:', JSON.stringify({
+      email: session.user.email,
+      id: session.user.id,
+      role: session.user.role
+    }));
     
     // Step 2: Database connection
     try {
@@ -41,25 +42,41 @@ export async function GET(request: NextRequest) {
     // Step 3: Get user details
     let user;
     try {
-      user = await User.findOne({ email: session.user.email });
-      if (!user) {
-        console.error(`User not found for email: ${session.user.email}`);
-        
-        // Check if this is our test user and create a temporary user for debugging
-        if (session.user.email === '1@1.com') {
-          console.log(`[DEBUG] Creating temporary in-memory user for test account 1@1.com`);
-          user = {
-            _id: new mongoose.Types.ObjectId(),
-            email: '1@1.com',
-            name: 'Test User',
-            role: 'participant'
-          };
-          console.log(`[DEBUG] Temporary user created with ID: ${user._id}`);
-        } else {
-          return NextResponse.json({ message: 'User not found' }, { status: 404 });
+      // Try to find user by ID first (from session)
+      if (session.user.id) {
+        try {
+          const userId = new mongoose.Types.ObjectId(session.user.id);
+          user = await User.findById(userId);
+          if (user) {
+            console.log(`[DEBUG] Found user by ID: ${user._id}, name: ${user.name}, role: ${user.role}`);
+          }
+        } catch (idError) {
+          console.log(`[DEBUG] Error finding user by ID: ${idError instanceof Error ? idError.message : 'Unknown error'}`);
+          // Continue to email lookup if ID lookup fails
         }
       }
-      console.log(`[DEBUG] Found user: ${user._id}, role: ${user.role}`);
+      
+      // If not found by ID, try by email
+      if (!user) {
+        user = await User.findOne({ email: session.user.email });
+        if (user) {
+          console.log(`[DEBUG] Found user by email: ${user._id}, name: ${user.name}, role: ${user.role}`);
+        }
+      }
+      
+      // If still no user found
+      if (!user) {
+        console.error(`[DEBUG] User not found for email: ${session.user.email} and id: ${session.user.id}`);
+        
+        // Create a session-based user object for queries if no database record exists
+        user = {
+          _id: session.user.id ? new mongoose.Types.ObjectId(session.user.id) : new mongoose.Types.ObjectId(),
+          email: session.user.email,
+          name: session.user.name || 'Participant',
+          role: session.user.role || 'participant'
+        };
+        console.log(`[DEBUG] Created session-based user object with ID: ${user._id}`);
+      }
     } catch (userError) {
       console.error('Error finding user:', userError);
       return NextResponse.json({ 
@@ -83,19 +100,56 @@ export async function GET(request: NextRequest) {
         ? new mongoose.Types.ObjectId(user._id) 
         : user._id;
       
+      console.log(`[DEBUG] Looking for user groups with user ID: ${userId}`);
+      
+      // First try exact match with the user's ID
       userGroups = await UserGroup.find({
         users: userId
-      }).select('_id');
+      }).select('_id name').lean();
       
       console.log(`[DEBUG] Found ${userGroups.length} user groups for user ${userId}`);
       
-      if (userGroups.length === 0) {
+      // If user groups found, log their names for debugging
+      if (userGroups.length > 0) {
+        console.log(`[DEBUG] User groups: ${userGroups.map(g => g.name || g._id).join(', ')}`);
+      } else {
         console.log(`[DEBUG] User ${userId} is not a member of any user groups`);
-        // Return empty array instead of error if user isn't in any groups
-        return NextResponse.json([]);
+        
+        // Try a string comparison as fallback if exact ObjectId match fails
+        if (typeof user._id === 'object') {
+          console.log(`[DEBUG] Trying string comparison as fallback...`);
+          
+          // Get all user groups
+          const allGroups = await UserGroup.find({}).lean();
+          console.log(`[DEBUG] Found ${allGroups.length} total user groups`);
+          
+          // Manually filter to find matching user IDs
+          userGroups = allGroups.filter(group => {
+            if (!group.users || !Array.isArray(group.users)) return false;
+            
+            return group.users.some(groupUserId => {
+              // Convert both to strings for comparison
+              const groupUserIdStr = groupUserId.toString();
+              const userIdStr = userId.toString();
+              return groupUserIdStr === userIdStr;
+            });
+          });
+          
+          console.log(`[DEBUG] Found ${userGroups.length} groups after manual string comparison`);
+          if (userGroups.length > 0) {
+            console.log(`[DEBUG] Matched user groups: ${userGroups.map(g => g.name || g._id).join(', ')}`);
+          }
+        }
+        
+        // If still no user groups, return empty array
+        if (userGroups.length === 0) {
+          console.log(`[DEBUG] After all attempts, user ${userId} is not in any groups`);
+          return NextResponse.json([]);
+        }
       }
     } catch (groupError) {
       console.error('Error finding user groups:', groupError);
+      console.error(groupError instanceof Error ? groupError.stack : 'No stack trace available');
       return NextResponse.json({ 
         message: 'Error finding user groups', 
         error: groupError instanceof Error ? groupError.message : 'Unknown error' 
@@ -112,26 +166,51 @@ export async function GET(request: NextRequest) {
     // Step 5: Find experiments
     let experiments;
     try {
-      // Find all active experiments associated with the user's groups
-      const experimentQuery: any = {
-        status: 'active', // Only include active experiments
-      };
+      // Log group IDs for debugging
+      console.log(`[DEBUG] User group IDs:`, userGroupIds.map(id => id.toString()));
       
-      // Only apply user group filter if we have valid user groups
-      if (userGroupIds.length > 0) {
-        experimentQuery['userGroups.userGroupId'] = { $in: userGroupIds }; // Filter by user's group membership
+      // Convert all userGroupIds to strings and ObjectIds for comparison
+      const userGroupIdStrings = userGroupIds.map(id => id.toString());
+      const userGroupIdObjects = userGroupIds.map(id => 
+        typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id
+      );
+      
+      // Find all active experiments
+      const allActiveExperiments = await Experiment.find({
+        status: 'active' // Only include active experiments
+      }).select('_id name description status userGroups createdAt').lean();
+      
+      console.log(`[DEBUG] Found ${allActiveExperiments.length} total active experiments`);
+      
+      // Manually filter experiments to find those that match user groups
+      // This approach is more reliable than relying on MongoDB query with nested arrays
+      experiments = allActiveExperiments.filter(experiment => {
+        if (!experiment.userGroups || !Array.isArray(experiment.userGroups) || experiment.userGroups.length === 0) {
+          return false;
+        }
+        
+        return experiment.userGroups.some(groupAssignment => {
+          // Get the userGroupId in string format for comparison
+          const expGroupId = groupAssignment.userGroupId.toString();
+          return userGroupIdStrings.includes(expGroupId);
+        });
+      });
+      
+      console.log(`[DEBUG] Found ${experiments.length} experiments matching user's groups`);
+      
+      // Log matching experiments
+      if (experiments.length > 0) {
+        console.log(`[DEBUG] Matched experiments: ${experiments.map(e => e.name).join(', ')}`);
+        
+        // Log detailed information about each experiment's user groups
+        experiments.forEach(exp => {
+          console.log(`[DEBUG] Experiment "${exp.name}" has user groups:`, 
+            exp.userGroups.map(g => g.userGroupId.toString()).join(', '));
+        });
       }
-      
-      console.log(`[DEBUG] Finding experiments with query:`, JSON.stringify(experimentQuery));
-      
-      // Get all the experiments
-      experiments = await Experiment.find(experimentQuery)
-        .select('_id name description status userGroups createdAt')
-        .lean();
-      
-      console.log(`[DEBUG] Found ${experiments.length} experiments`);
     } catch (experimentError) {
       console.error('Error finding experiments:', experimentError);
+      console.error(experimentError instanceof Error ? experimentError.stack : 'No stack trace available');
       return NextResponse.json({ 
         message: 'Error finding experiments', 
         error: experimentError instanceof Error ? experimentError.message : 'Unknown error' 
