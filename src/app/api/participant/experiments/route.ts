@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
 import { withDatabaseConnection } from '@/lib/dbConnect';
 import Experiment from '@/models/Experiment';
 import User from '@/models/User';
@@ -59,7 +60,7 @@ function generateFallbackExperiments() {
 export async function GET(request: NextRequest) {
   try {
     // Step 1: Authentication
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     
     // Check for authentication
     if (!session || !session.user) {
