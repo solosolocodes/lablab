@@ -237,13 +237,10 @@ export default function ExperimentRunner({ experimentId, onComplete }: Experimen
             <p className="text-sm font-medium">{experiment.name}</p>
           </div>
           <div>
-            {/* Progress bar */}
-            <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-500"
-                style={{ width: `${((currentStageIndex + 1) / experiment.stages.length) * 100}%` }}
-              ></div>
-            </div>
+            {/* Simple progress text - easier to render than animated progress bar */}
+            <span className="text-xs text-gray-600">
+              {Math.round(((currentStageIndex + 1) / experiment.stages.length) * 100)}% complete
+            </span>
           </div>
         </div>
         
@@ -291,7 +288,7 @@ export default function ExperimentRunner({ experimentId, onComplete }: Experimen
               <div className="flex justify-center">
                 <button 
                   onClick={handleStageNext}
-                  className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                  className="px-6 py-2 bg-blue-500 text-white rounded"
                 >
                   Continue
                 </button>

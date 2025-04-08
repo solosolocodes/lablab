@@ -311,7 +311,6 @@ export default function ScenarioStage({ stage, onNext }: ScenarioStageProps) {
                   strokeDasharray={`${2 * Math.PI * 45}`}
                   strokeDashoffset={`${2 * Math.PI * 45 * (1 - roundTimeRemaining / roundDuration)}`}
                   transform="rotate(-90 50 50)"
-                  className="transition-all duration-1000 ease-linear"
                 />
               )}
               
@@ -639,7 +638,7 @@ export default function ScenarioStage({ stage, onNext }: ScenarioStageProps) {
         <button 
           onClick={handleNext}
           disabled={isStageTransitioning || !scenarioComplete}
-          className={`px-6 py-2 ${scenarioComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
+          className={`px-6 py-2 ${scenarioComplete ? 'bg-blue-500' : 'bg-gray-400 cursor-not-allowed'} text-white rounded ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
           {scenarioComplete ? 'Continue' : 'Please complete all rounds...'}
         </button>

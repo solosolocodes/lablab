@@ -236,7 +236,7 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
         <button 
           onClick={handleSubmit}
           disabled={isStageTransitioning || isSubmitting}
-          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${
+          className={`px-6 py-2 bg-blue-500 text-white rounded ${
             (isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >

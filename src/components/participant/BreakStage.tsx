@@ -91,7 +91,7 @@ export default function BreakStage({ stage, onNext }: BreakStageProps) {
         <button 
           onClick={handleNext}
           disabled={isStageTransitioning || !timerComplete}
-          className={`px-6 py-2 ${timerComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
+          className={`px-6 py-2 ${timerComplete ? 'bg-blue-500' : 'bg-gray-400 cursor-not-allowed'} text-white rounded ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
           {timerComplete ? 'Continue' : 'Please wait...'}
         </button>

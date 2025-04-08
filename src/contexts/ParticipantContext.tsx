@@ -225,7 +225,7 @@ export function ParticipantProvider({ children }: { children: React.ReactNode })
         saveStageResponse(currentStage.id, currentStage.type, "done");
       }
       
-      // Use setTimeout to create a smooth transition effect
+      // Use setTimeout with minimal delay, similar to preview implementation
       setTimeout(() => {
         const nextIndex = currentStageIndex + 1;
         setCurrentStageIndex(nextIndex);
@@ -239,7 +239,7 @@ export function ParticipantProvider({ children }: { children: React.ReactNode })
         setTimeout(() => {
           setIsStageTransitioning(false);
         }, 100);
-      }, 300);
+      }, 50);
     } else {
       // If we're at the last stage, complete the experiment
       completeExperiment();

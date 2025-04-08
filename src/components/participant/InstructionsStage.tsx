@@ -72,7 +72,7 @@ export default function InstructionsStage({ stage, onNext }: InstructionsStagePr
         <button 
           onClick={handleNext}
           disabled={isStageTransitioning}
-          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${
+          className={`px-6 py-2 bg-blue-500 text-white rounded ${
             isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
