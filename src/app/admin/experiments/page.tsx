@@ -219,6 +219,55 @@ export default function ExperimentsPage() {
     setIsSubmitting(false);
   };
 
+  // Publish an experiment
+  const publishExperiment = async (experimentId: string) => {
+    const experiment = experiments.find(e => e.id === experimentId);
+    if (!experiment) return;
+    
+    if (!confirm(`Are you sure you want to publish the experiment "${experiment.name}"? This will make it active and visible to participants in the selected user groups.`)) {
+      return;
+    }
+    
+    try {
+      // Start loading
+      toast.loading('Publishing experiment...', { id: `publish-experiment-${experimentId}` });
+      
+      // Send publish request to API (updating status to 'active')
+      const response = await fetch(`/api/experiments/${experimentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...experiment,
+          status: 'active',
+          lastEditedAt: new Date().toISOString()
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to publish experiment');
+      }
+      
+      // Update in local state
+      setExperiments(experiments.map(exp => 
+        exp.id === experimentId 
+          ? { ...exp, status: 'active' }
+          : exp
+      ));
+      
+      // Show success message
+      toast.success('Experiment published successfully', { id: `publish-experiment-${experimentId}` });
+    } catch (error) {
+      console.error('Error publishing experiment:', error);
+      toast.error(
+        'Failed to publish experiment: ' + (error instanceof Error ? error.message : 'Unknown error'), 
+        { id: `publish-experiment-${experimentId}` }
+      );
+    }
+  };
+
   // Delete an experiment
   const deleteExperiment = async (experimentId: string) => {
     const experiment = experiments.find(e => e.id === experimentId);
@@ -478,6 +527,15 @@ export default function ExperimentsPage() {
                     >
                       Preview
                     </Link>
+                    {experiment.status !== 'active' && (
+                      <button
+                        onClick={() => publishExperiment(experiment.id)}
+                        className="text-blue-600 hover:text-blue-800 mr-3"
+                        title="Publish Experiment"
+                      >
+                        Publish
+                      </button>
+                    )}
                     <button 
                       onClick={() => deleteExperiment(experiment.id)}
                       className="text-red-600 hover:text-red-900"

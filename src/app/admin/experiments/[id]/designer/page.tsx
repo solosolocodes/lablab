@@ -686,7 +686,7 @@ export default function ExperimentDesignerPage() {
   };
 
   // Save the experiment (as draft)
-  const saveExperiment = async (status: 'draft' | 'published' = 'draft') => {
+  const saveExperiment = async (status: 'draft' | 'published' | 'active' = 'draft') => {
     if (!experiment) return;
     
     try {
@@ -713,6 +713,17 @@ export default function ExperimentDesignerPage() {
         });
       }
       
+      // Additional validation for active experiments
+      if (status === 'active') {
+        if (experiment.stages.length === 0) {
+          validationErrors.push('Experiment must have at least one stage to be published');
+        }
+        
+        if (experiment.userGroups.length === 0) {
+          validationErrors.push('Experiment must have at least one user group to be published');
+        }
+      }
+      
       // Show validation errors if any
       if (validationErrors.length > 0) {
         const errorMessage = validationErrors.join('\n• ');
@@ -722,7 +733,13 @@ export default function ExperimentDesignerPage() {
       }
       
       // Show saving indicator to user
-      const savingToast = toast.loading(status === 'draft' ? 'Saving experiment...' : 'Publishing experiment...');
+      const actionText = status === 'draft' 
+        ? 'Saving experiment...' 
+        : status === 'active'
+          ? 'Publishing experiment...'
+          : 'Saving and publishing experiment...';
+          
+      const savingToast = toast.loading(actionText);
       
       const updatedExperiment = {
         ...experiment,
@@ -771,14 +788,24 @@ export default function ExperimentDesignerPage() {
           if (response.ok) {
             saveSuccessful = true;
             toast.dismiss(savingToast);
-            toast.success(status === 'draft' ? 'Experiment saved as draft' : 'Experiment published successfully!');
             
-            if (status === 'published') {
+            // Different success message based on status
+            if (status === 'draft') {
+              toast.success('Experiment saved as draft');
+            } else if (status === 'active') {
+              toast.success('Experiment published successfully! It is now active and visible to participants.');
+              // Redirect to experiments list after activating
+              setTimeout(() => {
+                router.push('/admin/experiments');
+              }, 1500);
+            } else {
+              toast.success('Experiment saved and published!');
               // Redirect to experiments list after publishing
               setTimeout(() => {
                 router.push('/admin/experiments');
               }, 1500);
             }
+            
             break;
           } else {
             let errorMessage = response.statusText;
@@ -858,7 +885,13 @@ export default function ExperimentDesignerPage() {
       return;
     }
     
-    await saveExperiment('published');
+    // Update the status to 'active' instead of 'published'
+    if (experiment.userGroups.length === 0) {
+      toast.error('Cannot publish an experiment without any user groups. Please add at least one user group.');
+      return;
+    }
+    
+    await saveExperiment('active');
   };
 
   // Loading state
@@ -1734,7 +1767,7 @@ export default function ExperimentDesignerPage() {
                 onClick={publishExperiment}
                 disabled={experiment.stages.length === 0}
               >
-                Publish Experiment
+                {experiment.status === 'active' ? 'Update Published Experiment' : 'Publish Experiment'}
               </button>
             </div>
           </div>
