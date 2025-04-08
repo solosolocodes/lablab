@@ -42,14 +42,31 @@ export default function ParticipantDashboard() {
   // Fetch assigned experiments
   useEffect(() => {
     if (session && session.user) {
-      fetchExperiments();
+      try {
+        fetchExperiments();
+      } catch (error) {
+        console.error('Error in experiment fetch effect:', error);
+        // Set experiments to empty array to prevent UI from breaking
+        setExperiments([]);
+        toast.error('Could not load experiments. Please try again later.');
+      }
     }
   }, [session, filter]);
 
   const fetchExperiments = async () => {
     try {
       setIsLoadingExperiments(true);
-      const response = await fetch(`/api/participant/experiments?status=${filter}`);
+      
+      console.log('Fetching experiments with filter:', filter);
+      
+      // Add a timeout to the fetch for safety
+      const fetchPromise = fetch(`/api/participant/experiments?status=${filter}`);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timed out')), 10000)
+      );
+      
+      // Race between the fetch and timeout
+      const response = await Promise.race([fetchPromise, timeoutPromise]) as Response;
       
       if (!response.ok) {
         // Try to get detailed error information from the response
@@ -64,10 +81,28 @@ export default function ParticipantDashboard() {
         throw new Error(errorMessage);
       }
       
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+        console.log('Received experiment data:', data);
+      } catch (jsonError) {
+        console.error('Error parsing JSON response:', jsonError);
+        // Return empty array if we can't parse the response
+        data = [];
+      }
+      
+      // Ensure data is always an array
+      if (!Array.isArray(data)) {
+        console.warn('Experiments data is not an array, defaulting to empty array');
+        data = [];
+      }
+      
       setExperiments(data);
     } catch (error) {
       console.error('Error fetching experiments:', error);
+      
+      // Always set experiments to empty array to prevent UI from breaking
+      setExperiments([]);
       
       // Check if it's a database connection error and provide a more friendly message
       if (error instanceof Error && (
@@ -75,6 +110,8 @@ export default function ParticipantDashboard() {
         error.message.includes('MongoDB connection failed')
       )) {
         toast.error('Database connection issue. Please try again later or contact support.');
+      } else if (error instanceof Error && error.message.includes('timed out')) {
+        toast.error('Request timed out. The server might be busy, please try again later.');
       } else {
         toast.error(`Failed to load your experiments: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
