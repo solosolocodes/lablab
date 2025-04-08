@@ -59,37 +59,63 @@ export function ParticipantPerformProvider({ children }: { children: React.React
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [isStageTransitioning, setIsStageTransitioning] = useState(false);
+  // Track ongoing operations to prevent race conditions
+  const pendingOperations = useRef<AbortController[]>([]);
 
   // Load experiment data with proper error handling and timeout
   const loadExperiment = async (experimentId: string) => {
+    // Create a unique operation ID to track this specific load request
+    const operationId = `load-${experimentId}-${Date.now()}`;
+    console.log(`[${operationId}] Starting experiment data load for ID: ${experimentId}`);
+    
     try {
-      console.log(`Loading experiment data for ID: ${experimentId}`);
+      // First, abort any pending operations to prevent race conditions
+      pendingOperations.current.forEach(controller => {
+        if (!controller.signal.aborted) {
+          console.log('Aborting previous pending operation');
+          controller.abort();
+        }
+      });
+      
+      // Clear completed operations
+      pendingOperations.current = pendingOperations.current.filter(
+        controller => !controller.signal.aborted
+      );
+      
+      // Set up abort controller for this operation
+      const controller = new AbortController();
+      pendingOperations.current.push(controller);
       
       // Set up timeout for the fetch operations
       const timeout = 15000; // 15 seconds
-      const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.log('Fetch timeout reached, aborting requests');
+        console.log(`[${operationId}] Fetch timeout reached (${timeout}ms), aborting requests`);
         controller.abort();
       }, timeout);
       
       try {
-        // Fetch experiment details and progress in parallel
-        console.log('Starting parallel fetch for experiment data and progress');
+        // Fetch experiment details and progress in parallel with unique request IDs
+        console.log(`[${operationId}] Starting parallel fetch for experiment data and progress`);
+        
+        // Add cache-busting query param to prevent browser/CDN caching
+        const cacheBuster = `_=${Date.now()}`;
+        
         const [experimentResponse, progressResponse] = await Promise.all([
-          fetch(`/api/experiments/${experimentId}`, {
+          fetch(`/api/experiments/${experimentId}?${cacheBuster}`, {
             signal: controller.signal,
             headers: { 
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
             },
             next: { revalidate: 0 }
           }),
-          fetch(`/api/participant/experiments/${experimentId}/progress`, {
+          fetch(`/api/participant/experiments/${experimentId}/progress?${cacheBuster}`, {
             signal: controller.signal,
             headers: { 
-              'Cache-Control': 'no-cache',
-              'Pragma': 'no-cache'
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
             },
             next: { revalidate: 0 }
           })
@@ -98,22 +124,25 @@ export function ParticipantPerformProvider({ children }: { children: React.React
         // Clear timeout since requests completed
         clearTimeout(timeoutId);
         
+        // Remove this controller from pending operations
+        pendingOperations.current = pendingOperations.current.filter(c => c !== controller);
+        
         if (!experimentResponse.ok) {
-          console.error(`Failed to fetch experiment: ${experimentResponse.status}`);
+          console.error(`[${operationId}] Failed to fetch experiment: ${experimentResponse.status}`);
           throw new Error(`Failed to fetch experiment details (status: ${experimentResponse.status})`);
         }
         
         if (!progressResponse.ok) {
-          console.error(`Failed to fetch progress: ${progressResponse.status}`);
+          console.error(`[${operationId}] Failed to fetch progress: ${progressResponse.status}`);
           throw new Error(`Failed to fetch experiment progress (status: ${progressResponse.status})`);
         }
         
         // Parse JSON responses
-        console.log('Parsing JSON responses');
+        console.log(`[${operationId}] Parsing JSON responses`);
         const experimentData = await experimentResponse.json();
         const progressData = await progressResponse.json();
         
-        console.log("Successfully loaded experiment data and progress");
+        console.log(`[${operationId}] Successfully loaded experiment data and progress`);
         
         // Validate experiment data
         if (!experimentData || !experimentData.stages || !Array.isArray(experimentData.stages)) {
@@ -127,7 +156,7 @@ export function ParticipantPerformProvider({ children }: { children: React.React
           return orderA - orderB;
         });
 
-        console.log(`Setting experiment with ${sortedStages.length} stages`);
+        console.log(`[${operationId}] Setting experiment with ${sortedStages.length} stages`);
         setExperiment({ ...experimentData, stages: sortedStages });
         setProgress(progressData);
         
@@ -140,7 +169,7 @@ export function ParticipantPerformProvider({ children }: { children: React.React
           }
         }
         
-        console.log(`Setting current stage index to ${startIndex}`);
+        console.log(`[${operationId}] Setting current stage index to ${startIndex}`);
         setCurrentStageIndex(startIndex);
         if (sortedStages.length > 0) {
           setTimeRemaining(sortedStages[startIndex].durationSeconds || 0);
@@ -153,16 +182,33 @@ export function ParticipantPerformProvider({ children }: { children: React.React
         
         setTimerActive(true);
         
+        console.log(`[${operationId}] Experiment load completed successfully`);
         // Return to indicate success
         return true;
       } catch (fetchError) {
+        // Make sure timeout is cleared
         clearTimeout(timeoutId);
+        
+        // Remove this controller from pending operations
+        pendingOperations.current = pendingOperations.current.filter(c => c !== controller);
+        
+        // Check if this was aborted intentionally
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          console.log(`[${operationId}] Request was aborted`);
+          throw new Error('Request was cancelled');
+        }
+        
         throw fetchError;
       }
     } catch (error) {
-      console.error('Error loading experiment:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      toast.error(`Failed to load experiment data: ${errorMessage}. Please try again or contact support.`);
+      console.error(`[${operationId}] Error loading experiment:`, error);
+      
+      // Only show toast error if this wasn't an abort
+      if (!(error instanceof Error && error.message === 'Request was cancelled')) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        toast.error(`Failed to load experiment data: ${errorMessage}. Please try again or contact support.`);
+      }
+      
       // Re-throw to allow caller to handle
       throw error;
     }
@@ -335,6 +381,19 @@ export function ParticipantPerformProvider({ children }: { children: React.React
     
     return () => clearInterval(interval);
   }, [timerActive, timeRemaining]);
+  
+  // Cleanup function to abort all pending operations when the provider unmounts
+  useEffect(() => {
+    return () => {
+      console.log('ParticipantPerformProvider unmounting, aborting all pending operations');
+      pendingOperations.current.forEach(controller => {
+        if (!controller.signal.aborted) {
+          controller.abort();
+        }
+      });
+      pendingOperations.current = [];
+    };
+  }, []);
 
   // Get current stage reference
   const currentStage = experiment && currentStageIndex < experiment.stages.length
