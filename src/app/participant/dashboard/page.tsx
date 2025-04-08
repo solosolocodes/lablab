@@ -52,14 +52,23 @@ export default function ParticipantDashboard() {
       const response = await fetch(`/api/participant/experiments?status=${filter}`);
       
       if (!response.ok) {
-        throw new Error('Failed to fetch experiments');
+        // Try to get detailed error information from the response
+        let errorMessage = 'Failed to fetch experiments';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error('API error details:', errorData);
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError);
+        }
+        throw new Error(errorMessage);
       }
       
       const data = await response.json();
       setExperiments(data);
     } catch (error) {
       console.error('Error fetching experiments:', error);
-      toast.error('Failed to load your studies');
+      toast.error(`Failed to load your experiments: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoadingExperiments(false);
     }
@@ -284,7 +293,7 @@ export default function ParticipantDashboard() {
                      'No completed experiments'}
                   </h4>
                   <p className="text-gray-600 mb-4">
-                    {filter === 'all' ? 'You don\'t have any experiments assigned to you yet.' : 
+                    {filter === 'all' ? 'You don\'t have any experiments assigned to you yet. You may need to be added to a user group by an administrator.' : 
                      filter === 'not_started' ? 'All available experiments have been started or completed.' :
                      filter === 'in_progress' ? 'You haven\'t started any experiments yet.' :
                      'You haven\'t completed any experiments yet.'}
