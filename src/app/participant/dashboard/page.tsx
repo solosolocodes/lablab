@@ -2,13 +2,35 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Button from '@/components/Button';
+import Link from 'next/link';
+import { toast } from 'react-hot-toast';
+
+// Define types for experiment and progress data
+type ExperimentProgressStatus = 'not_started' | 'in_progress' | 'completed';
+
+type ExperimentWithProgress = {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  progress: {
+    status: ExperimentProgressStatus;
+    startedAt?: string;
+    completedAt?: string;
+    lastActivityAt?: string;
+  };
+  createdAt: string;
+};
 
 export default function ParticipantDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const isLoading = status === 'loading';
+  const [experiments, setExperiments] = useState<ExperimentWithProgress[]>([]);
+  const [isLoadingExperiments, setIsLoadingExperiments] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'not_started' | 'in_progress' | 'completed'>('all');
 
   useEffect(() => {
     // If not authenticated or not a participant, redirect to login
@@ -17,10 +39,41 @@ export default function ParticipantDashboard() {
     }
   }, [session, isLoading, router]);
 
+  // Fetch assigned experiments
+  useEffect(() => {
+    if (session && session.user) {
+      fetchExperiments();
+    }
+  }, [session, filter]);
+
+  const fetchExperiments = async () => {
+    try {
+      setIsLoadingExperiments(true);
+      const response = await fetch(`/api/participant/experiments?status=${filter}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch experiments');
+      }
+      
+      const data = await response.json();
+      setExperiments(data);
+    } catch (error) {
+      console.error('Error fetching experiments:', error);
+      toast.error('Failed to load your studies');
+    } finally {
+      setIsLoadingExperiments(false);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut({ redirect: false });
     router.push('/');
   };
+
+  // Filter experiments based on progress status
+  const filteredExperiments = filter === 'all' 
+    ? experiments 
+    : experiments.filter(exp => exp.progress.status === filter);
 
   if (isLoading) {
     return (
@@ -36,62 +89,225 @@ export default function ParticipantDashboard() {
     return null; // Will redirect via useEffect
   }
 
+  // Get counts for badge indicators
+  const availableCount = experiments.filter(exp => exp.progress.status === 'not_started').length;
+  const inProgressCount = experiments.filter(exp => exp.progress.status === 'in_progress').length;
+  const completedCount = experiments.filter(exp => exp.progress.status === 'completed').length;
+
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm py-4">
-        <div className="container mx-auto px-6 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-blue-600">Participant Dashboard</h1>
-          <Button
-            variant="outline"
-            className="text-red-600 border-red-600 hover:bg-red-50"
-            onClick={handleSignOut}
-          >
-            Sign Out
-          </Button>
+      {/* Header - More compact */}
+      <header className="bg-white shadow-sm py-3">
+        <div className="container mx-auto px-4 flex justify-between items-center">
+          <h1 className="text-xl font-bold text-blue-600">LabLab Dashboard</h1>
+          <div className="flex items-center space-x-3">
+            <div className="text-sm text-gray-600 hidden md:block">
+              {session.user.name}
+            </div>
+            <Button
+              variant="outline"
+              className="text-red-600 border-red-600 hover:bg-red-50 text-sm py-1.5 px-3"
+              onClick={handleSignOut}
+            >
+              Sign Out
+            </Button>
+          </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-grow container mx-auto px-6 py-8">
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Welcome, {session.user.name}!</h2>
-          <div className="space-y-2">
-            <p><span className="font-medium">Email:</span> {session.user.email}</p>
-            <p><span className="font-medium">Role:</span> Participant</p>
-            <p><span className="font-medium">User ID:</span> {session.user.id}</p>
+      {/* Main Content - More compact layout */}
+      <main className="flex-grow container mx-auto px-4 py-4">
+        {/* User info and filter navigation */}
+        <div className="bg-white rounded-lg shadow overflow-hidden mb-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between p-4 border-b border-gray-100">
+            <div className="flex items-center space-x-4 mb-3 md:mb-0">
+              <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                {session.user.name?.charAt(0).toUpperCase() || 'P'}
+              </div>
+              <div>
+                <h2 className="text-lg font-medium">Welcome, {session.user.name}</h2>
+                <p className="text-sm text-gray-600">{session.user.email}</p>
+              </div>
+            </div>
+            <div className="flex space-x-1 overflow-x-auto">
+              <button 
+                onClick={() => setFilter('all')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors whitespace-nowrap ${
+                  filter === 'all' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                All Studies
+                <span className="ml-1 bg-white bg-opacity-20 text-xs px-1.5 py-0.5 rounded-full">
+                  {experiments.length}
+                </span>
+              </button>
+              <button 
+                onClick={() => setFilter('not_started')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors whitespace-nowrap ${
+                  filter === 'not_started' 
+                    ? 'bg-indigo-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Available
+                {availableCount > 0 && (
+                  <span className="ml-1 bg-white bg-opacity-20 text-xs px-1.5 py-0.5 rounded-full">
+                    {availableCount}
+                  </span>
+                )}
+              </button>
+              <button 
+                onClick={() => setFilter('in_progress')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors whitespace-nowrap ${
+                  filter === 'in_progress' 
+                    ? 'bg-amber-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                In Progress
+                {inProgressCount > 0 && (
+                  <span className="ml-1 bg-white bg-opacity-20 text-xs px-1.5 py-0.5 rounded-full">
+                    {inProgressCount}
+                  </span>
+                )}
+              </button>
+              <button 
+                onClick={() => setFilter('completed')}
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors whitespace-nowrap ${
+                  filter === 'completed' 
+                    ? 'bg-green-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Completed
+                {completedCount > 0 && (
+                  <span className="ml-1 bg-white bg-opacity-20 text-xs px-1.5 py-0.5 rounded-full">
+                    {completedCount}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div className="h-2 bg-blue-500"></div>
-            <div className="p-6">
-              <h3 className="text-lg font-semibold mb-3">My Studies</h3>
-              <p className="text-gray-600 mb-4">You are not enrolled in any studies yet.</p>
-              <Button className="w-full bg-blue-600 hover:bg-blue-700">
-                Browse Available Studies
-              </Button>
-            </div>
+        {/* Loading state */}
+        {isLoadingExperiments && (
+          <div className="flex justify-center my-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
           </div>
+        )}
 
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-            <div className="h-2 bg-green-500"></div>
-            <div className="p-6">
-              <h3 className="text-lg font-semibold mb-3">My Progress</h3>
-              <p className="text-gray-600 mb-4">Track your participation and progress here.</p>
-              <Button className="w-full bg-green-600 hover:bg-green-700">
-                View Progress
-              </Button>
-            </div>
+        {/* Experiments grid - Compact cards */}
+        {!isLoadingExperiments && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredExperiments.map(experiment => (
+              <div key={experiment.id} className="bg-white rounded-lg shadow overflow-hidden flex flex-col h-full">
+                {/* Status indicator bar */}
+                <div className={`h-1.5 ${
+                  experiment.progress.status === 'completed' 
+                    ? 'bg-green-500'
+                    : experiment.progress.status === 'in_progress'
+                      ? 'bg-amber-500'
+                      : 'bg-indigo-500'
+                }`}></div>
+                
+                <div className="p-4 flex-grow">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-medium text-gray-900">{experiment.name}</h3>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      experiment.progress.status === 'completed'
+                        ? 'bg-green-100 text-green-800'
+                        : experiment.progress.status === 'in_progress'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-indigo-100 text-indigo-800'
+                    }`}>
+                      {experiment.progress.status === 'completed'
+                        ? 'Completed'
+                        : experiment.progress.status === 'in_progress'
+                          ? 'In Progress'
+                          : 'Not Started'}
+                    </span>
+                  </div>
+                  
+                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                    {experiment.description}
+                  </p>
+                  
+                  {/* Time information */}
+                  <div className="text-xs text-gray-500 mb-3">
+                    {experiment.progress.status === 'completed' && experiment.progress.completedAt && (
+                      <p>Completed: {new Date(experiment.progress.completedAt).toLocaleDateString()}</p>
+                    )}
+                    {experiment.progress.status === 'in_progress' && experiment.progress.startedAt && (
+                      <p>Started: {new Date(experiment.progress.startedAt).toLocaleDateString()}</p>
+                    )}
+                    {experiment.progress.status === 'not_started' && (
+                      <p>Available since: {new Date(experiment.createdAt).toLocaleDateString()}</p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="px-4 pb-4">
+                  {experiment.progress.status === 'completed' ? (
+                    <Button className="w-full bg-green-600 hover:bg-green-700 py-1.5 text-sm">
+                      View Results
+                    </Button>
+                  ) : experiment.progress.status === 'in_progress' ? (
+                    <Link href={`/participant/experiments/${experiment.id}`} passHref>
+                      <Button className="w-full bg-amber-600 hover:bg-amber-700 py-1.5 text-sm">
+                        Continue
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Link href={`/participant/experiments/${experiment.id}`} passHref>
+                      <Button className="w-full bg-indigo-600 hover:bg-indigo-700 py-1.5 text-sm">
+                        Start Study
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            {filteredExperiments.length === 0 && (
+              <div className="col-span-full text-center p-8 bg-white rounded-lg shadow">
+                <div className="flex flex-col items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                  <h4 className="text-lg font-medium text-gray-800 mb-1">
+                    {filter === 'all' ? 'No studies available' : 
+                     filter === 'not_started' ? 'No available studies' :
+                     filter === 'in_progress' ? 'No studies in progress' :
+                     'No completed studies'}
+                  </h4>
+                  <p className="text-gray-600 mb-4">
+                    {filter === 'all' ? 'You don\'t have any studies assigned to you yet.' : 
+                     filter === 'not_started' ? 'All available studies have been started or completed.' :
+                     filter === 'in_progress' ? 'You haven\'t started any studies yet.' :
+                     'You haven\'t completed any studies yet.'}
+                  </p>
+                  {filter !== 'all' && (
+                    <Button 
+                      className="bg-blue-600 hover:bg-blue-700 text-sm"
+                      onClick={() => setFilter('all')}
+                    >
+                      View All Studies
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white py-6 shadow-inner">
-        <div className="container mx-auto px-6">
-          <p className="text-center text-gray-600">
+      {/* Footer - More compact */}
+      <footer className="bg-white py-3 shadow-inner mt-auto">
+        <div className="container mx-auto px-4">
+          <p className="text-center text-gray-600 text-xs">
             © {new Date().getFullYear()} LabLab Platform. All rights reserved.
           </p>
         </div>
