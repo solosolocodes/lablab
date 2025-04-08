@@ -60,59 +60,111 @@ export function ParticipantPerformProvider({ children }: { children: React.React
   const [timerActive, setTimerActive] = useState(false);
   const [isStageTransitioning, setIsStageTransitioning] = useState(false);
 
-  // Load experiment data
+  // Load experiment data with proper error handling and timeout
   const loadExperiment = async (experimentId: string) => {
     try {
-      // Fetch experiment details and progress in parallel
-      const [experimentResponse, progressResponse] = await Promise.all([
-        fetch(`/api/experiments/${experimentId}`),
-        fetch(`/api/participant/experiments/${experimentId}/progress`)
-      ]);
+      console.log(`Loading experiment data for ID: ${experimentId}`);
       
-      if (!experimentResponse.ok) {
-        throw new Error('Failed to fetch experiment details');
-      }
+      // Set up timeout for the fetch operations
+      const timeout = 15000; // 15 seconds
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.log('Fetch timeout reached, aborting requests');
+        controller.abort();
+      }, timeout);
       
-      if (!progressResponse.ok) {
-        throw new Error('Failed to fetch experiment progress');
-      }
-      
-      const experimentData = await experimentResponse.json();
-      const progressData = await progressResponse.json();
-      
-      // Sort stages by order
-      const sortedStages = [...experimentData.stages].sort((a, b) => {
-        const orderA = typeof a.order === 'number' ? a.order : 0;
-        const orderB = typeof b.order === 'number' ? b.order : 0;
-        return orderA - orderB;
-      });
-
-      setExperiment({ ...experimentData, stages: sortedStages });
-      setProgress(progressData);
-      
-      // Figure out which stage to start with based on progress
-      let startIndex = 0;
-      if (progressData.currentStageId && sortedStages.length > 0) {
-        const stageIndex = sortedStages.findIndex(stage => stage.id === progressData.currentStageId);
-        if (stageIndex !== -1) {
-          startIndex = stageIndex;
+      try {
+        // Fetch experiment details and progress in parallel
+        console.log('Starting parallel fetch for experiment data and progress');
+        const [experimentResponse, progressResponse] = await Promise.all([
+          fetch(`/api/experiments/${experimentId}`, {
+            signal: controller.signal,
+            headers: { 
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            },
+            next: { revalidate: 0 }
+          }),
+          fetch(`/api/participant/experiments/${experimentId}/progress`, {
+            signal: controller.signal,
+            headers: { 
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            },
+            next: { revalidate: 0 }
+          })
+        ]);
+        
+        // Clear timeout since requests completed
+        clearTimeout(timeoutId);
+        
+        if (!experimentResponse.ok) {
+          console.error(`Failed to fetch experiment: ${experimentResponse.status}`);
+          throw new Error(`Failed to fetch experiment details (status: ${experimentResponse.status})`);
         }
+        
+        if (!progressResponse.ok) {
+          console.error(`Failed to fetch progress: ${progressResponse.status}`);
+          throw new Error(`Failed to fetch experiment progress (status: ${progressResponse.status})`);
+        }
+        
+        // Parse JSON responses
+        console.log('Parsing JSON responses');
+        const experimentData = await experimentResponse.json();
+        const progressData = await progressResponse.json();
+        
+        console.log("Successfully loaded experiment data and progress");
+        
+        // Validate experiment data
+        if (!experimentData || !experimentData.stages || !Array.isArray(experimentData.stages)) {
+          throw new Error('Invalid experiment data format');
+        }
+        
+        // Sort stages by order
+        const sortedStages = [...experimentData.stages].sort((a, b) => {
+          const orderA = typeof a.order === 'number' ? a.order : 0;
+          const orderB = typeof b.order === 'number' ? b.order : 0;
+          return orderA - orderB;
+        });
+
+        console.log(`Setting experiment with ${sortedStages.length} stages`);
+        setExperiment({ ...experimentData, stages: sortedStages });
+        setProgress(progressData);
+        
+        // Figure out which stage to start with based on progress
+        let startIndex = 0;
+        if (progressData.currentStageId && sortedStages.length > 0) {
+          const stageIndex = sortedStages.findIndex(stage => stage.id === progressData.currentStageId);
+          if (stageIndex !== -1) {
+            startIndex = stageIndex;
+          }
+        }
+        
+        console.log(`Setting current stage index to ${startIndex}`);
+        setCurrentStageIndex(startIndex);
+        if (sortedStages.length > 0) {
+          setTimeRemaining(sortedStages[startIndex].durationSeconds || 0);
+        }
+        
+        // Update progress if it's the first time viewing
+        if (progressData.status === 'not_started') {
+          await updateProgress('in_progress', sortedStages[0]?.id);
+        }
+        
+        setTimerActive(true);
+        
+        // Return to indicate success
+        return true;
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
       }
-      
-      setCurrentStageIndex(startIndex);
-      if (sortedStages.length > 0) {
-        setTimeRemaining(sortedStages[startIndex].durationSeconds || 0);
-      }
-      
-      // Update progress if it's the first time viewing
-      if (progressData.status === 'not_started') {
-        await updateProgress('in_progress', sortedStages[0]?.id);
-      }
-      
-      setTimerActive(true);
     } catch (error) {
       console.error('Error loading experiment:', error);
-      toast.error('Failed to load experiment data');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      toast.error(`Failed to load experiment data: ${errorMessage}. Please try again or contact support.`);
+      // Re-throw to allow caller to handle
+      throw error;
     }
   };
 

@@ -1047,27 +1047,79 @@ function ExperimentPerformer() {
   
   const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   const router = useRouter();
   const params = useParams();
   const experimentId = params.id as string;
   
-  // Load experiment data
+  // Load experiment data with better error handling and status tracking
   useEffect(() => {
+    let isMounted = true; // Track component mount state
+    let loadAttempts = 0;
+    const maxAttempts = 3;
+    
     async function loadData() {
+      console.log('Starting experiment data load...');
+      
+      if (!experimentId) {
+        if (isMounted) {
+          setLoadError('No experiment ID provided');
+          setIsLoading(false);
+        }
+        return;
+      }
+      
       try {
-        setIsLoading(true);
-        await loadExperiment(experimentId);
-        setIsLoading(false);
+        if (isMounted) setIsLoading(true);
+        
+        loadAttempts++;
+        console.log(`Loading experiment ${experimentId}... (attempt ${loadAttempts}/${maxAttempts})`);
+        
+        // Set a timeout for the entire load operation
+        const loadTimeout = 20000; // 20 seconds
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error(`Loading experiment timed out after ${loadTimeout/1000} seconds`));
+          }, loadTimeout);
+        });
+        
+        // Race between the experiment loading and timeout
+        await Promise.race([
+          loadExperiment(experimentId),
+          timeoutPromise
+        ]);
+        
+        console.log('Experiment loaded successfully');
+        if (isMounted) {
+          setIsLoading(false);
+          setLoadError(null);
+        }
       } catch (err) {
         console.error('Error loading experiment:', err);
-        setIsLoading(false);
+        if (isMounted) {
+          // If we haven't exceeded max attempts, try again with exponential backoff
+          if (loadAttempts < maxAttempts) {
+            const backoffTime = Math.min(1000 * (2 ** loadAttempts), 8000); // Exponential backoff with max 8 seconds
+            console.log(`Retrying in ${backoffTime/1000} seconds...`);
+            setTimeout(loadData, backoffTime);
+            return;
+          }
+          
+          setLoadError((err as Error)?.message || 'Failed to load experiment');
+          setIsLoading(false);
+          toast.error('Failed to load experiment after multiple attempts. Please try refreshing the page.');
+        }
       }
     }
     
-    if (experimentId) {
-      loadData();
-    }
+    loadData();
+    
+    // Cleanup function to prevent state updates after unmounting
+    return () => {
+      console.log('Component unmounting, cancelling any pending operations');
+      isMounted = false;
+    };
   }, [experimentId, loadExperiment]);
   
   // Handle the Next button click on the welcome screen
@@ -1097,13 +1149,43 @@ function ExperimentPerformer() {
     router.push('/participant/dashboard');
   };
   
-  // Loading state
+  // Loading state with improved timeout handling
   if (isLoading) {
     return (
       <div className="w-full h-full flex items-center justify-center p-6">
         <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading experiment...</p>
+          <p className="text-xs text-gray-500 mt-2">ID: {experimentId}</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Error state
+  if (loadError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center p-6">
+        <div className="bg-white p-8 rounded-lg shadow-md text-center max-w-md">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 className="text-lg font-bold mb-2">Error Loading Experiment</h3>
+          <p className="text-gray-600 mb-4">{loadError}</p>
+          <div className="flex justify-center space-x-4">
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-500 text-white rounded"
+            >
+              Retry
+            </button>
+            <button 
+              onClick={handleExit}
+              className="px-4 py-2 bg-gray-300 text-gray-700 rounded"
+            >
+              Return to Dashboard
+            </button>
+          </div>
         </div>
       </div>
     );
