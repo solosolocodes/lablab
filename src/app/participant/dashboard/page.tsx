@@ -315,31 +315,37 @@ export default function ParticipantDashboard() {
                       View Results
                     </Button>
                   ) : experiment.progress.status === 'in_progress' ? (
-                    <Link href={`/participant/experiments/${experiment.id}/perform`} passHref>
-                      <Button 
-                        className={`w-full py-1.5 text-sm ${
-                          experiment.status === 'active' 
-                            ? 'bg-amber-600' 
-                            : 'bg-gray-400 cursor-not-allowed'
-                        }`}
-                        disabled={experiment.status !== 'active'}
-                      >
-                        {experiment.status === 'active' ? 'Continue' : 'Experiment Paused'}
-                      </Button>
-                    </Link>
+                    <Button 
+                      className={`w-full py-1.5 text-sm ${
+                        experiment.status === 'active' 
+                          ? 'bg-amber-600' 
+                          : 'bg-gray-400 cursor-not-allowed'
+                      }`}
+                      disabled={experiment.status !== 'active'}
+                      onClick={() => {
+                        if (experiment.status === 'active') {
+                          window.open(`/participant/experiments/${experiment.id}/perform`, '_blank', 'noopener,noreferrer');
+                        }
+                      }}
+                    >
+                      {experiment.status === 'active' ? 'Continue' : 'Experiment Paused'}
+                    </Button>
                   ) : (
-                    <Link href={`/participant/experiments/${experiment.id}/perform`} passHref>
-                      <Button 
-                        className={`w-full py-1.5 text-sm ${
-                          experiment.status === 'active' 
-                            ? 'bg-indigo-600' 
-                            : 'bg-gray-400 cursor-not-allowed'
-                        }`}
-                        disabled={experiment.status !== 'active'}
-                      >
-                        {experiment.status === 'active' ? 'Start Experiment' : 'Not Available'}
-                      </Button>
-                    </Link>
+                    <Button 
+                      className={`w-full py-1.5 text-sm ${
+                        experiment.status === 'active' 
+                          ? 'bg-indigo-600' 
+                          : 'bg-gray-400 cursor-not-allowed'
+                      }`}
+                      disabled={experiment.status !== 'active'}
+                      onClick={() => {
+                        if (experiment.status === 'active') {
+                          window.open(`/participant/experiments/${experiment.id}/perform`, '_blank', 'noopener,noreferrer');
+                        }
+                      }}
+                    >
+                      {experiment.status === 'active' ? 'Start Experiment' : 'Not Available'}
+                    </Button>
                   )}
                 </div>
               </div>
