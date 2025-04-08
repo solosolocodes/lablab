@@ -315,11 +315,11 @@ export default function ParticipantDashboard() {
                       View Results
                     </Button>
                   ) : experiment.progress.status === 'in_progress' ? (
-                    <Link href={`/participant/experiments/${experiment.id}`} passHref>
+                    <Link href={`/participant/experiments/${experiment.id}/perform`} passHref>
                       <Button 
                         className={`w-full py-1.5 text-sm ${
                           experiment.status === 'active' 
-                            ? 'bg-amber-600 hover:bg-amber-700' 
+                            ? 'bg-amber-600' 
                             : 'bg-gray-400 cursor-not-allowed'
                         }`}
                         disabled={experiment.status !== 'active'}
@@ -328,11 +328,11 @@ export default function ParticipantDashboard() {
                       </Button>
                     </Link>
                   ) : (
-                    <Link href={`/participant/experiments/${experiment.id}`} passHref>
+                    <Link href={`/participant/experiments/${experiment.id}/perform`} passHref>
                       <Button 
                         className={`w-full py-1.5 text-sm ${
                           experiment.status === 'active' 
-                            ? 'bg-indigo-600 hover:bg-indigo-700' 
+                            ? 'bg-indigo-600' 
                             : 'bg-gray-400 cursor-not-allowed'
                         }`}
                         disabled={experiment.status !== 'active'}
