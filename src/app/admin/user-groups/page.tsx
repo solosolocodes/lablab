@@ -346,12 +346,52 @@ export default function UserGroupsPage() {
         
         // Add user to selected group if a group ID was provided
         if (formData.groupId) {
-          const updatedGroups = userGroups.map(group => 
-            group.id === formData.groupId 
-              ? { ...group, users: [...group.users, newUser] }
-              : group
-          );
-          setUserGroups(updatedGroups);
+          try {
+            // Find the group
+            const selectedGroup = userGroups.find(g => g.id === formData.groupId);
+            if (!selectedGroup) throw new Error("Selected group not found");
+            
+            // Update the group in MongoDB with the new user
+            const updatedUserIds = [...selectedGroup.users.map(u => u.id), newUser.id];
+            
+            // API request to update the group
+            const response = await fetch('/api/user-groups', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                id: selectedGroup.id,
+                name: selectedGroup.name,
+                description: selectedGroup.description,
+                users: updatedUserIds,
+              }),
+            });
+            
+            if (!response.ok) {
+              const data = await response.json();
+              throw new Error(data.message || 'Failed to add user to group');
+            }
+            
+            const responseData = await response.json();
+            
+            // Update local state with server response
+            const updatedGroups = userGroups.map(group => 
+              group.id === formData.groupId 
+                ? responseData.group 
+                : group
+            );
+            setUserGroups(updatedGroups);
+            
+            toast.success(`User added to group "${selectedGroup.name}"`, { id: 'add-user-to-group' });
+          } catch (error) {
+            console.error('Error adding user to group:', error);
+            toast.error(
+              'Failed to add user to group: ' + (error instanceof Error ? error.message : 'Unknown error'), 
+              { id: 'add-user-to-group' }
+            );
+            // User was created but not added to group
+          }
         }
       } catch (error) {
         console.error('Error creating participant:', error);
@@ -1054,9 +1094,9 @@ export default function UserGroupsPage() {
                         <span className="text-sm font-medium">{group.name}</span>
                         <Button
                           type="button"
-                          className={`text-xs px-3 py-1 ${isUserInGroup 
-                            ? 'bg-red-100 text-red-800 hover:bg-red-200' 
-                            : 'bg-green-100 text-green-800 hover:bg-green-200'}`}
+                          className={`text-xs px-3 py-1 font-medium ${isUserInGroup 
+                            ? 'bg-red-500 text-white hover:bg-red-600' 
+                            : 'bg-green-500 text-white hover:bg-green-600'}`}
                           onClick={() => toggleUserInGroup(selectedUser.id, group.id)}
                         >
                           {isUserInGroup ? 'Remove' : 'Add'}
@@ -1088,7 +1128,7 @@ export default function UserGroupsPage() {
                     {filteredUsers.filter(user => !selectedGroup.users.some(u => u.id === user.id)).length > 0 && (
                       <Button
                         type="button"
-                        className="text-xs px-3 py-1 bg-green-100 text-green-800 hover:bg-green-200"
+                        className="text-xs px-3 py-1 bg-green-500 text-white hover:bg-green-600 font-medium"
                         onClick={() => {
                           if (confirm(`Add all ${filteredUsers.filter(user => !selectedGroup.users.some(u => u.id === user.id)).length} filtered users to "${selectedGroup.name}"?`)) {
                             // Get IDs of all filtered users that aren't in the group yet
@@ -1159,7 +1199,7 @@ export default function UserGroupsPage() {
                     {selectedGroup.users.length > 0 && (
                       <Button
                         type="button"
-                        className="text-xs px-3 py-1 bg-red-100 text-red-800 hover:bg-red-200"
+                        className="text-xs px-3 py-1 bg-red-500 text-white hover:bg-red-600 font-medium"
                         onClick={() => {
                           if (confirm(`Remove all users from "${selectedGroup.name}"?`)) {
                             // Show loading indicator
@@ -1237,9 +1277,9 @@ export default function UserGroupsPage() {
                         </div>
                         <Button
                           type="button"
-                          className={`text-xs px-3 py-1 ${isUserInGroup 
-                            ? 'bg-red-100 text-red-800 hover:bg-red-200' 
-                            : 'bg-green-100 text-green-800 hover:bg-green-200'}`}
+                          className={`text-xs px-3 py-1 font-medium ${isUserInGroup 
+                            ? 'bg-red-500 text-white hover:bg-red-600' 
+                            : 'bg-green-500 text-white hover:bg-green-600'}`}
                           onClick={() => toggleUserInGroup(user.id, selectedGroup.id)}
                         >
                           {isUserInGroup ? 'Remove' : 'Add'}
