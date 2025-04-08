@@ -13,7 +13,8 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession();
+    // Use let instead of const so we can reassign it if needed
+    let session = await getServerSession();
     
     // TEMPORARILY REMOVED AUTHENTICATION CHECK FOR TESTING
     // WARNING: This is insecure and should be restored after testing
@@ -104,7 +105,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession();
+    // Use let instead of const so we can reassign it if needed
+    let session = await getServerSession();
     
     // TEMPORARILY REMOVED AUTHENTICATION CHECK FOR TESTING
     // WARNING: This is insecure and should be restored after testing

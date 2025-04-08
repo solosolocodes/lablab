@@ -12,7 +12,8 @@ import mongoose from 'mongoose';
 export async function GET(request: NextRequest) {
   try {
     // Step 1: Authentication
-    const session = await getServerSession();
+    // Use let instead of const so we can reassign it if needed
+    let session = await getServerSession();
     
     // TEMPORARILY REMOVED AUTHENTICATION CHECK FOR TESTING
     // WARNING: This is insecure and should be restored after testing
