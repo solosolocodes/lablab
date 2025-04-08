@@ -7,6 +7,8 @@ if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable');
 }
 
+console.log(`[DEBUG DB] Using MongoDB URI from ${process.env.MONGODB_URI ? 'environment variable' : 'fallback hardcoded value'}`);
+
 // Define the types for the cached connection
 interface ConnectionCache {
   conn: typeof mongoose | null;
@@ -107,7 +109,22 @@ async function connectDB() {
       return mongoose;
     })
     .catch(err => {
-      console.error('MongoDB connection error:', err);
+      // Log detailed connection error information
+      console.error('MongoDB connection error details:');
+      console.error('- Error name:', err.name);
+      console.error('- Error message:', err.message);
+      console.error('- Error code:', err.code);
+      console.error('- Error stack:', err.stack);
+      
+      // Handle specific MongoDB error cases
+      if (err.name === 'MongoServerSelectionError') {
+        console.error('- Could not connect to MongoDB server. Check network connectivity and server status.');
+      } else if (err.message.includes('Authentication failed')) {
+        console.error('- Authentication failed. Check MongoDB username and password.');
+      } else if (err.message.includes('ENOTFOUND')) {
+        console.error('- DNS lookup failed. Check MongoDB URI hostname.');
+      }
+      
       // Reset on error to force a retry on next request
       cached.promise = null;
       throw err; // Re-throw to allow calling code to handle the error
@@ -117,10 +134,26 @@ async function connectDB() {
     cached.conn = await cached.promise;
     return cached.conn;
   } catch (error) {
-    console.error('Failed to connect to MongoDB:', error);
+    console.error('Failed to connect to MongoDB in connectDB function:', error);
+    
+    // Log detailed error information
+    if (error instanceof Error) {
+      console.error('- Error name:', error.name);
+      console.error('- Error message:', error.message);
+      
+      // Add user-friendly error messages for common MongoDB issues
+      if (error.name === 'MongoNetworkError' || error.message.includes('failed to connect')) {
+        console.error('MongoDB connection failed: Network error - please check your internet connection and MongoDB server status');
+      } else if (error.message.includes('Authentication failed')) {
+        console.error('MongoDB connection failed: Authentication error - please check your MongoDB username and password');
+      } else if (error.message.includes('ENOTFOUND')) {
+        console.error('MongoDB connection failed: DNS lookup error - please check the hostname in your MongoDB URI');
+      }
+    }
+    
     // Clear the promise so the next call will try again
     cached.promise = null;
-    throw error;
+    throw new Error(`MongoDB connection failed: ${error instanceof Error ? error.message : 'Unknown database error'}`);
   }
 }
 

@@ -68,7 +68,16 @@ export default function ParticipantDashboard() {
       setExperiments(data);
     } catch (error) {
       console.error('Error fetching experiments:', error);
-      toast.error(`Failed to load your experiments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Check if it's a database connection error and provide a more friendly message
+      if (error instanceof Error && (
+        error.message.includes('Database connection failed') ||
+        error.message.includes('MongoDB connection failed')
+      )) {
+        toast.error('Database connection issue. Please try again later or contact support.');
+      } else {
+        toast.error(`Failed to load your experiments: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     } finally {
       setIsLoadingExperiments(false);
     }
