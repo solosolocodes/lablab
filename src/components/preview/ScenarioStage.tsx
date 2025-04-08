@@ -59,6 +59,17 @@ export default function ScenarioStage() {
   const [transactionMode, setTransactionMode] = useState<'buy' | 'sell'>('buy');
   const [selectedAsset, setSelectedAsset] = useState<WalletAsset | null>(null);
   const [selectedAssetPrice, setSelectedAssetPrice] = useState(0);
+  
+  // Round-based price update states
+  const [priceChangeAlerts, setPriceChangeAlerts] = useState<{
+    assetId: string;
+    symbol: string;
+    previousPrice: number;
+    newPrice: number;
+    percentChange: number;
+  }[]>([]);
+  const [showPriceAlerts, setShowPriceAlerts] = useState(false);
+  const [priceAlertTimer, setPriceAlertTimer] = useState<NodeJS.Timeout | null>(null);
 
   if (!currentStage || currentStage.type !== 'scenario') {
     return <div>Invalid stage type</div>;
@@ -161,6 +172,38 @@ export default function ScenarioStage() {
   const totalRounds = scenarioData?.rounds || currentStage.rounds || 1;
   const roundDuration = scenarioData?.roundDuration || currentStage.roundDuration || 60;
   
+  // Calculate price changes between rounds
+  const calculatePriceChanges = (newRound: number, previousRound: number) => {
+    if (!scenarioData?.assetPrices?.length) return;
+    
+    const priceChanges = scenarioData.assetPrices.map(assetPrice => {
+      if (assetPrice.prices.length <= Math.max(newRound - 1, 0) || 
+          assetPrice.prices.length <= Math.max(previousRound - 1, 0)) {
+        return null;
+      }
+      
+      const newPrice = assetPrice.prices[newRound - 1];
+      const oldPrice = assetPrice.prices[previousRound - 1];
+      const percentChange = ((newPrice - oldPrice) / oldPrice) * 100;
+      
+      return {
+        assetId: assetPrice.assetId,
+        symbol: assetPrice.symbol,
+        previousPrice: oldPrice,
+        newPrice: newPrice,
+        percentChange: percentChange
+      };
+    }).filter(change => change !== null) as {
+      assetId: string;
+      symbol: string;
+      previousPrice: number;
+      newPrice: number;
+      percentChange: number;
+    }[];
+    
+    return priceChanges;
+  };
+  
   // Handle round timer - only start once we have the scenario data
   useEffect(() => {
     // Only initialize timer if we have scenario data and we're not in an error state
@@ -180,8 +223,28 @@ export default function ScenarioStage() {
         if (prevTime <= 1) {
           // Time for this round is up
           if (currentRound < totalRounds) {
+            // Calculate price changes for the new round
+            const newRound = currentRound + 1;
+            const priceChanges = calculatePriceChanges(newRound, currentRound);
+            
+            if (priceChanges && priceChanges.length > 0) {
+              setPriceChangeAlerts(priceChanges);
+              setShowPriceAlerts(true);
+              
+              // Auto-dismiss price alerts after 5 seconds
+              if (priceAlertTimer) {
+                clearTimeout(priceAlertTimer);
+              }
+              
+              const timer = setTimeout(() => {
+                setShowPriceAlerts(false);
+              }, 5000);
+              
+              setPriceAlertTimer(timer);
+            }
+            
             // Move to next round
-            setCurrentRound(prev => prev + 1);
+            setCurrentRound(newRound);
             return roundDuration; // Reset timer for next round
           } else {
             // All rounds complete
@@ -195,8 +258,13 @@ export default function ScenarioStage() {
     }, 1000);
     
     // Cleanup interval on unmount
-    return () => clearInterval(interval);
-  }, [currentStage.id, roundDuration, totalRounds, isLoading, error, scenarioData]); // Add dependencies
+    return () => {
+      clearInterval(interval);
+      if (priceAlertTimer) {
+        clearTimeout(priceAlertTimer);
+      }
+    };
+  }, [currentStage.id, roundDuration, totalRounds, isLoading, error, scenarioData, currentRound, priceAlertTimer]); // Add dependencies
   
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
@@ -419,7 +487,14 @@ export default function ScenarioStage() {
                 <div className="text-center md:text-left">
                   <div className="mb-1">
                     <span className="font-semibold text-blue-800 text-lg">Round</span>
-                    <span className="ml-2 text-2xl font-bold text-blue-900">{currentRound} of {totalRounds}</span>
+                    <span className="ml-2 text-2xl font-bold text-blue-900 flex items-center">
+                      {currentRound} of {totalRounds}
+                      {showPriceAlerts && (
+                        <span className="ml-2 px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 rounded-full animate-pulse">
+                          Prices Updated!
+                        </span>
+                      )}
+                    </span>
                   </div>
                   
                   <div className="text-sm">
@@ -645,6 +720,12 @@ export default function ScenarioStage() {
                           icon: '→'
                         };
                         
+                        // Check if this asset has a recent price change alert
+                        const hasRecentPriceChange = showPriceAlerts && 
+                          priceChangeAlerts.some(alert => 
+                            alert.assetId === asset.id || alert.symbol === asset.symbol
+                          );
+                        
                         if (assetPrice?.prices?.length) {
                           priceDataAvailable = true;
                           const currentRoundIndex = Math.min(currentRound - 1, assetPrice.prices.length - 1);
@@ -671,7 +752,7 @@ export default function ScenarioStage() {
                         return (
                           <div 
                             key={asset.id} 
-                            className="bg-white border border-gray-200 rounded-lg p-3 shadow hover:shadow-md transition-shadow text-sm"
+                            className={`bg-white border ${hasRecentPriceChange ? `${colors.border || 'border-indigo-300'} ring-2 ring-indigo-300` : 'border-gray-200'} rounded-lg p-3 shadow hover:shadow-md transition-all ${hasRecentPriceChange ? 'animate-pulse' : ''} text-sm`}
                           >
                             {/* Header with symbol and name */}
                             <div className="flex justify-between items-center mb-2 border-b border-gray-100 pb-2">
@@ -685,7 +766,7 @@ export default function ScenarioStage() {
                               </div>
                               {priceDataAvailable && (
                                 <div className={`px-2 py-1 rounded-lg ${colors.bg}`}>
-                                  <span className={`text-xs font-medium ${colors.text} flex items-center`}>
+                                  <span className={`text-xs font-medium ${colors.text} flex items-center ${hasRecentPriceChange ? 'font-bold' : ''}`}>
                                     {colors.icon} {Math.abs(changePercent).toFixed(1)}%
                                   </span>
                                 </div>
@@ -711,8 +792,13 @@ export default function ScenarioStage() {
                               )}
                               
                               {priceDataAvailable && (
-                                <div className="text-xs text-gray-600 border-t border-gray-100 pt-1 text-center">
+                                <div className={`text-xs ${hasRecentPriceChange ? colors.text : 'text-gray-600'} border-t border-gray-100 pt-1 text-center ${hasRecentPriceChange ? 'font-medium' : ''}`}>
                                   Price: ${currentPrice.toFixed(2)}
+                                  {hasRecentPriceChange && (
+                                    <span className="ml-1 inline-block">
+                                      {colors.icon}
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -808,6 +894,64 @@ export default function ScenarioStage() {
           )}
         </div>
       </div>
+      
+      {/* Price Change Alerts */}
+      {showPriceAlerts && priceChangeAlerts.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-40 w-80 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+          <div className="bg-indigo-600 text-white p-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold">Round {currentRound} Price Updates</h3>
+              <button 
+                onClick={() => setShowPriceAlerts(false)}
+                className="text-white hover:text-indigo-200"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div className="max-h-60 overflow-y-auto p-2">
+            {priceChangeAlerts.map((alert, index) => {
+              const isPositive = alert.percentChange > 0;
+              const isNegative = alert.percentChange < 0;
+              const isUnchanged = alert.percentChange === 0;
+              
+              // Determine colors based on price change
+              const colors = {
+                bg: isPositive ? 'bg-green-50' : isNegative ? 'bg-red-50' : 'bg-gray-50',
+                text: isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-gray-600',
+                icon: isPositive ? '↑' : isNegative ? '↓' : '→',
+                border: isPositive ? 'border-green-200' : isNegative ? 'border-red-200' : 'border-gray-200'
+              };
+              
+              return (
+                <div 
+                  key={`${alert.assetId}-${index}`}
+                  className={`${colors.bg} ${colors.border} border rounded-lg p-3 mb-2`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">{alert.symbol}</span>
+                    <span className={`${colors.text} font-mono flex items-center`}>
+                      {colors.icon} {Math.abs(alert.percentChange).toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                    <div>
+                      <span className="text-gray-500">Previous Price:</span>
+                      <div className="font-mono font-medium">${alert.previousPrice.toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">New Price:</span>
+                      <div className={`font-mono font-medium ${colors.text}`}>${alert.newPrice.toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       
       {/* Transaction Modal */}
       {selectedAsset && (
