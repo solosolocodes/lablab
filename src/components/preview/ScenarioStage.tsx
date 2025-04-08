@@ -231,6 +231,17 @@ export default function ScenarioStage() {
               setPriceChangeAlerts(priceChanges);
               setShowPriceAlerts(true);
               
+              // Log price changes to the database
+              logPriceChangesToDatabase(priceChanges)
+                .then(success => {
+                  if (!success) {
+                    console.warn("Price changes were not logged to database");
+                  }
+                })
+                .catch(error => {
+                  console.error("Error logging price changes:", error);
+                });
+              
               // Auto-dismiss price alerts after 5 seconds
               if (priceAlertTimer) {
                 clearTimeout(priceAlertTimer);
@@ -264,7 +275,7 @@ export default function ScenarioStage() {
         clearTimeout(priceAlertTimer);
       }
     };
-  }, [currentStage.id, roundDuration, totalRounds, isLoading, error, scenarioData, currentRound, priceAlertTimer]); // Add dependencies
+  }, [currentStage.id, currentStage.experimentId, roundDuration, totalRounds, isLoading, error, scenarioData, currentRound, priceAlertTimer]); // Add dependencies
   
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
@@ -294,6 +305,87 @@ export default function ScenarioStage() {
     }
   };
   
+  // Log transaction to database
+  const logTransactionToDatabase = async (transaction: Transaction): Promise<boolean> => {
+    try {
+      if (!currentStage.experimentId) {
+        console.error("No experiment ID available for transaction logging");
+        return false;
+      }
+      
+      const response = await fetch(`/api/experiments/${currentStage.experimentId}/transactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          assetId: transaction.assetId,
+          symbol: transaction.symbol,
+          type: transaction.type,
+          quantity: transaction.quantity,
+          price: transaction.price,
+          totalValue: transaction.totalValue,
+          roundNumber: currentRound,
+          timestamp: transaction.timestamp
+        })
+      });
+      
+      if (!response.ok) {
+        console.error("Failed to log transaction:", await response.text());
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error logging transaction to database:", error);
+      return false;
+    }
+  };
+  
+  // Log price changes to database
+  const logPriceChangesToDatabase = async (priceChanges: {
+    assetId: string;
+    symbol: string;
+    previousPrice: number;
+    newPrice: number;
+    percentChange: number;
+  }[]): Promise<boolean> => {
+    if (!priceChanges || priceChanges.length === 0 || !currentStage.experimentId) {
+      return false;
+    }
+    
+    try {
+      const response = await fetch(`/api/experiments/${currentStage.experimentId}/price-logs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          logs: priceChanges.map(change => ({
+            experimentId: currentStage.experimentId,
+            assetId: change.assetId,
+            symbol: change.symbol,
+            roundNumber: currentRound,
+            price: change.newPrice,
+            previousPrice: change.previousPrice,
+            percentChange: change.percentChange,
+            timestamp: new Date()
+          }))
+        })
+      });
+      
+      if (!response.ok) {
+        console.error("Failed to log price changes:", await response.text());
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error("Error logging price changes to database:", error);
+      return false;
+    }
+  };
+
   // Handle transactions (buy or sell)
   const handleTransaction = async (assetId: string, quantity: number, totalValue: number): Promise<boolean> => {
     // Simple validation
@@ -340,7 +432,7 @@ export default function ScenarioStage() {
         )
       );
       
-      // Record the transaction
+      // Create transaction record
       const newTransaction: Transaction = {
         type: transactionMode,
         assetId,
@@ -351,7 +443,19 @@ export default function ScenarioStage() {
         timestamp: new Date()
       };
       
+      // Add to local state
       setTransactions(prevTransactions => [...prevTransactions, newTransaction]);
+      
+      // Log to database (async, don't wait for result)
+      logTransactionToDatabase(newTransaction)
+        .then(success => {
+          if (!success) {
+            console.warn("Transaction was not logged to database");
+          }
+        })
+        .catch(error => {
+          console.error("Error logging transaction:", error);
+        });
       
       // Simulate network latency (remove in production)
       await new Promise(resolve => setTimeout(resolve, 500));
