@@ -145,7 +145,7 @@ export default function ParticipantDashboard() {
   }
 
   // Get counts for badge indicators
-  const availableCount = experiments.filter(exp => exp.progress.status === 'not_started').length;
+  const availableCount = experiments.filter(exp => exp.progress.status === 'not_started' && exp.status === 'active').length;
   const inProgressCount = experiments.filter(exp => exp.progress.status === 'in_progress').length;
   const completedCount = experiments.filter(exp => exp.progress.status === 'completed').length;
 
@@ -206,7 +206,7 @@ export default function ParticipantDashboard() {
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                Available
+                Available to Start
                 {availableCount > 0 && (
                   <span className="ml-1 bg-white bg-opacity-20 text-xs px-1.5 py-0.5 rounded-full">
                     {availableCount}
@@ -270,7 +270,12 @@ export default function ParticipantDashboard() {
                 
                 <div className="p-4 flex-grow">
                   <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-medium text-gray-900">{experiment.name}</h3>
+                    <div>
+                      <h3 className="font-medium text-gray-900">{experiment.name}</h3>
+                      {experiment.status === 'active' && (
+                        <span className="text-xs text-green-600 font-medium">Active Experiment</span>
+                      )}
+                    </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       experiment.progress.status === 'completed'
                         ? 'bg-green-100 text-green-800'
@@ -311,14 +316,28 @@ export default function ParticipantDashboard() {
                     </Button>
                   ) : experiment.progress.status === 'in_progress' ? (
                     <Link href={`/participant/experiments/${experiment.id}`} passHref>
-                      <Button className="w-full bg-amber-600 hover:bg-amber-700 py-1.5 text-sm">
-                        Continue
+                      <Button 
+                        className={`w-full py-1.5 text-sm ${
+                          experiment.status === 'active' 
+                            ? 'bg-amber-600 hover:bg-amber-700' 
+                            : 'bg-gray-400 cursor-not-allowed'
+                        }`}
+                        disabled={experiment.status !== 'active'}
+                      >
+                        {experiment.status === 'active' ? 'Continue' : 'Experiment Paused'}
                       </Button>
                     </Link>
                   ) : (
                     <Link href={`/participant/experiments/${experiment.id}`} passHref>
-                      <Button className="w-full bg-indigo-600 hover:bg-indigo-700 py-1.5 text-sm">
-                        Start Experiment
+                      <Button 
+                        className={`w-full py-1.5 text-sm ${
+                          experiment.status === 'active' 
+                            ? 'bg-indigo-600 hover:bg-indigo-700' 
+                            : 'bg-gray-400 cursor-not-allowed'
+                        }`}
+                        disabled={experiment.status !== 'active'}
+                      >
+                        {experiment.status === 'active' ? 'Start Experiment' : 'Not Available'}
                       </Button>
                     </Link>
                   )}
@@ -339,10 +358,10 @@ export default function ParticipantDashboard() {
                      'No completed experiments'}
                   </h4>
                   <p className="text-gray-600 mb-4">
-                    {filter === 'all' ? 'You don\'t have any experiments assigned to you yet. You may need to be added to a user group by an administrator.' : 
-                     filter === 'not_started' ? 'All available experiments have been started or completed.' :
-                     filter === 'in_progress' ? 'You haven\'t started any experiments yet.' :
-                     'You haven\'t completed any experiments yet.'}
+                    {filter === 'all' ? 'You don\'t have any experiments assigned to you yet. Your administrator needs to add you to a user group that has been assigned to active experiments.' : 
+                     filter === 'not_started' ? 'All available experiments have been started or completed. Check back later for new experiments.' :
+                     filter === 'in_progress' ? 'You don\'t have any experiments in progress. Start a new experiment from the Available tab.' :
+                     'You haven\'t completed any experiments yet. Finish your in-progress experiments to see them here.'}
                   </p>
                   {filter !== 'all' && (
                     <Button 

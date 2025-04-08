@@ -110,6 +110,8 @@ export async function GET(request: NextRequest) {
           'userGroups.userGroupId': { $in: userGroupIds }
         }).select('_id name description status userGroups createdAt').lean();
         
+        console.log(`[DEBUG] Found ${experiments.length} active experiments for user groups: ${userGroupIds.join(', ')}`);
+        
         if (experiments.length === 0) {
           console.log(`[DEBUG] No active experiments found for user ${user._id}`);
           return NextResponse.json([]);
@@ -127,14 +129,9 @@ export async function GET(request: NextRequest) {
           progressMap.set(progress.experimentId.toString(), progress);
         });
         
-        // Combine data and filter
-        const experimentsWithProgress = experiments.map(experiment => {
+        // Combine data with progress info
+        let experimentsWithProgress = experiments.map(experiment => {
           const progress = progressMap.get(experiment._id.toString());
-          
-          // If filtering by status and this experiment doesn't match, skip it
-          if (filterStatus && progress && progress.status !== filterStatus) {
-            return null;
-          }
           
           return {
             id: experiment._id,
@@ -151,7 +148,14 @@ export async function GET(request: NextRequest) {
             },
             createdAt: experiment.createdAt
           };
-        }).filter(Boolean); // Remove null entries
+        });
+        
+        // Apply filtering only if specifically requested
+        if (filterStatus) {
+          experimentsWithProgress = experimentsWithProgress.filter(exp => 
+            exp.progress.status === filterStatus
+          );
+        }
         
         console.log(`[DEBUG] Found ${experimentsWithProgress.length} experiments for user`);
         return NextResponse.json(experimentsWithProgress);
@@ -161,11 +165,12 @@ export async function GET(request: NextRequest) {
         console.log('[DEBUG] Using fallback experiment data');
         let allExperiments = generateFallbackExperiments();
         
-        // Filter experiments if needed
+        // Filter experiments if specifically requested
         if (filterStatus) {
           allExperiments = allExperiments.filter(exp => exp.progress.status === filterStatus);
         }
         
+        console.log(`[DEBUG] Returning ${allExperiments.length} fallback experiments`);
         return NextResponse.json(allExperiments);
       },
       'fetch participant experiments'
