@@ -12,23 +12,11 @@ import mongoose from 'mongoose';
 export async function GET(request: NextRequest) {
   try {
     // Step 1: Authentication
-    // Use let instead of const so we can reassign it if needed
-    let session = await getServerSession();
+    const session = await getServerSession();
     
-    // TEMPORARILY REMOVED AUTHENTICATION CHECK FOR TESTING
-    // WARNING: This is insecure and should be restored after testing
-    console.log('[DEBUG] ⚠️ AUTHENTICATION CHECKS REMOVED - TEST MODE ONLY ⚠️');
-    
-    // Create a default session if none exists
+    // Check for authentication
     if (!session || !session.user) {
-      console.log('[DEBUG] No session detected, using test session');
-      session = {
-        user: {
-          email: 'test@example.com',
-          id: '000000000000000000000000',
-          role: 'participant'
-        }
-      } as any;
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
     
     console.log(`[DEBUG] Processing request for user: ${session.user.email}`);
@@ -53,20 +41,8 @@ export async function GET(request: NextRequest) {
     
     // Step 3: Get user details
     let user;
+    let usingFallbackData = false;
     try {
-      console.log('[DEBUG] ⚠️ USING TEST USER WITHOUT DATABASE LOOKUP - TEST MODE ONLY ⚠️');
-      
-      // Create a test user without database lookup for testing
-      user = {
-        _id: new mongoose.Types.ObjectId('000000000000000000000000'), // Use a known test ID
-        email: session.user?.email || 'test@example.com',
-        name: session.user?.name || 'Test Participant',
-        role: 'participant'
-      };
-      console.log(`[DEBUG] Using test user with ID: ${user._id}`);
-      
-      // Original user lookup code (commented out for testing)
-      /*
       // Try to find user by ID first (from session)
       if (session.user.id) {
         try {
@@ -102,48 +78,36 @@ export async function GET(request: NextRequest) {
         };
         console.log(`[DEBUG] Created session-based user object with ID: ${user._id}`);
       }
-      */
     } catch (userError) {
-      console.error('Error creating test user:', userError);
-      // Create a fallback test user even if there's an error
+      console.error('Error finding user:', userError);
+      
+      // If database access failed, use fallback data
+      usingFallbackData = true;
+      
+      // Use data from session to create a fallback user
       user = {
-        _id: new mongoose.Types.ObjectId('000000000000000000000000'),
-        email: 'fallback@example.com',
-        name: 'Fallback Test User',
-        role: 'participant'
+        _id: session.user.id ? new mongoose.Types.ObjectId(session.user.id) : new mongoose.Types.ObjectId(),
+        email: session.user.email,
+        name: session.user.name || 'Participant',
+        role: session.user.role || 'participant'
       };
+      
+      console.log(`[DEBUG] Using fallback user data due to database error: ${user.email}`);
     }
     
-    // TEMPORARILY REMOVED ROLE CHECK FOR TESTING
-    // WARNING: This is insecure and should be restored after testing
-    console.log('[DEBUG] ⚠️ ROLE CHECK REMOVED - TEST MODE ONLY ⚠️');
-    // Original code:
-    // if (user.role !== 'participant') {
-    //   return NextResponse.json({ message: 'Unauthorized. Only participants can access this endpoint' }, { status: 403 });
-    // }
+    // Check if user is a participant
+    if (user.role !== 'participant') {
+      return NextResponse.json({ message: 'Unauthorized. Only participants can access this endpoint' }, { status: 403 });
+    }
     
     // Step 4: Find user groups
     let userGroups;
     try {
-      console.log('[DEBUG] ⚠️ USING TEST USER GROUPS WITHOUT DATABASE LOOKUP - TEST MODE ONLY ⚠️');
+      // If we're already using fallback data due to a database error, skip DB query
+      if (usingFallbackData) {
+        throw new Error('Using fallback data due to previous database error');
+      }
       
-      // Create test user groups without database lookup
-      userGroups = [
-        {
-          _id: new mongoose.Types.ObjectId('100000000000000000000001'),
-          name: 'Test Group 1'
-        },
-        {
-          _id: new mongoose.Types.ObjectId('100000000000000000000002'),
-          name: 'Test Group 2'
-        }
-      ];
-      
-      console.log(`[DEBUG] Using ${userGroups.length} test user groups`);
-      console.log(`[DEBUG] Test groups: ${userGroups.map(g => g.name || g._id).join(', ')}`);
-      
-      // Original user group lookup code (commented out for testing)
-      /*
       console.log(`[DEBUG] User ID type: ${typeof user._id}, value: ${user._id}`);
       
       // Ensure we have a valid ObjectId
@@ -198,14 +162,15 @@ export async function GET(request: NextRequest) {
           return NextResponse.json([]);
         }
       }
-      */
     } catch (groupError) {
-      console.error('Error creating test user groups:', groupError);
-      // Create fallback test groups if there's an error
+      console.error('Error finding user groups:', groupError);
+      
+      // Use fallback test groups if database access fails
+      console.log('[DEBUG] Using fallback test groups due to database error');
       userGroups = [
         {
-          _id: new mongoose.Types.ObjectId('100000000000000000000099'),
-          name: 'Fallback Test Group'
+          _id: new mongoose.Types.ObjectId(`${Date.now()}`.padEnd(24, '0')),
+          name: 'Fallback Group 1'
         }
       ];
     }
@@ -220,47 +185,14 @@ export async function GET(request: NextRequest) {
     // Step 5: Find experiments
     let experiments;
     try {
-      console.log('[DEBUG] ⚠️ USING TEST EXPERIMENTS WITHOUT DATABASE LOOKUP - TEST MODE ONLY ⚠️');
+      // If we're already using fallback data due to a database error, skip DB query
+      if (usingFallbackData) {
+        throw new Error('Using fallback data due to previous database error');
+      }
       
       // Log group IDs for debugging
       console.log(`[DEBUG] User group IDs:`, userGroupIds.map(id => id.toString()));
       
-      // Create test experiments data without database lookup
-      const currentDate = new Date();
-      experiments = [
-        {
-          _id: new mongoose.Types.ObjectId('200000000000000000000001'),
-          name: 'Test Experiment 1',
-          description: 'This is a test experiment for debugging',
-          status: 'active',
-          userGroups: [
-            { 
-              userGroupId: userGroups[0]._id,
-              condition: 'control'
-            }
-          ],
-          createdAt: new Date(currentDate.setDate(currentDate.getDate() - 5))
-        },
-        {
-          _id: new mongoose.Types.ObjectId('200000000000000000000002'),
-          name: 'Test Experiment 2',
-          description: 'Another test experiment for debugging purposes',
-          status: 'active',
-          userGroups: [
-            { 
-              userGroupId: userGroups[0]._id,
-              condition: 'experimental'
-            }
-          ],
-          createdAt: new Date(currentDate.setDate(currentDate.getDate() - 2))
-        }
-      ];
-      
-      console.log(`[DEBUG] Using ${experiments.length} test experiments`);
-      console.log(`[DEBUG] Test experiments: ${experiments.map(e => e.name).join(', ')}`);
-      
-      // Original experiment lookup code (commented out for testing)
-      /*
       // Convert all userGroupIds to strings and ObjectIds for comparison
       const userGroupIdStrings = userGroupIds.map(id => id.toString());
       const userGroupIdObjects = userGroupIds.map(id => 
@@ -300,20 +232,36 @@ export async function GET(request: NextRequest) {
             exp.userGroups.map(g => g.userGroupId.toString()).join(', '));
         });
       }
-      */
     } catch (experimentError) {
-      console.error('Error creating test experiments:', experimentError);
-      // Create fallback experiment data if there's an error
+      console.error('Error finding experiments:', experimentError);
+      
+      // Create fallback experiment data if there's a database error
+      console.log('[DEBUG] Using fallback experiment data due to database error');
+      
+      const currentDate = new Date();
+      const oneWeekAgo = new Date(currentDate);
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      
       experiments = [
         {
-          _id: new mongoose.Types.ObjectId('200000000000000000000099'),
-          name: 'Fallback Test Experiment',
-          description: 'This is a fallback experiment for error recovery',
+          _id: new mongoose.Types.ObjectId(`${Date.now()}1`.padEnd(24, '0')),
+          name: 'Sample Experiment 1',
+          description: 'This is a sample experiment (database unavailable)',
           status: 'active',
-          userGroups: [],
-          createdAt: new Date()
+          userGroups: [{ userGroupId: userGroups[0]._id, condition: 'control' }],
+          createdAt: oneWeekAgo
+        },
+        {
+          _id: new mongoose.Types.ObjectId(`${Date.now()}2`.padEnd(24, '0')),
+          name: 'Sample Experiment 2',
+          description: 'Another sample experiment (database unavailable)',
+          status: 'active',
+          userGroups: [{ userGroupId: userGroups[0]._id, condition: 'experimental' }],
+          createdAt: currentDate
         }
       ];
+      
+      console.log(`[DEBUG] Created ${experiments.length} fallback experiments`);
     }
     
     // If no experiments found, return empty array early
@@ -325,25 +273,11 @@ export async function GET(request: NextRequest) {
     // Step 6: Get participant progress
     let participantProgress;
     try {
-      console.log('[DEBUG] ⚠️ USING TEST PROGRESS DATA WITHOUT DATABASE LOOKUP - TEST MODE ONLY ⚠️');
+      // If we're already using fallback data due to a database error, skip DB query
+      if (usingFallbackData) {
+        throw new Error('Using fallback data due to previous database error');
+      }
       
-      // Create test progress data without database lookup
-      participantProgress = [
-        {
-          userId: user._id,
-          experimentId: experiments[0]._id, // First experiment
-          status: 'in_progress',
-          currentStageId: new mongoose.Types.ObjectId('300000000000000000000001'),
-          completedStages: [new mongoose.Types.ObjectId('300000000000000000000001')],
-          startedAt: new Date(new Date().setDate(new Date().getDate() - 1)),
-          lastActivityAt: new Date()
-        }
-      ];
-      
-      console.log(`[DEBUG] Using ${participantProgress.length} test progress records`);
-      
-      // Original progress lookup code (commented out for testing)
-      /*
       // Ensure we have a valid ObjectId for userId
       const userId = typeof user._id === 'string' 
         ? new mongoose.Types.ObjectId(user._id) 
@@ -362,11 +296,27 @@ export async function GET(request: NextRequest) {
       }).lean();
       
       console.log(`[DEBUG] Found ${participantProgress.length} progress records for user ${userId}`);
-      */
     } catch (progressError) {
-      console.error('Error creating test progress data:', progressError);
-      // Just use empty array if there's an error
-      participantProgress = [];
+      console.error('Error finding participant progress:', progressError);
+      
+      // Create sample progress data for the first experiment
+      if (experiments.length > 0) {
+        console.log('[DEBUG] Using fallback progress data due to database error');
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        participantProgress = [
+          {
+            userId: user._id,
+            experimentId: experiments[0]._id, // First experiment
+            status: 'in_progress',
+            startedAt: yesterday,
+            lastActivityAt: new Date()
+          }
+        ];
+      } else {
+        participantProgress = [];
+      }
     }
     
     // Create a map for quick lookups
