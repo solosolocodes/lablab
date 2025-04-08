@@ -138,7 +138,7 @@ export default function ParticipantDashboard() {
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                All Studies
+                All Experiments
                 <span className="ml-1 bg-white bg-opacity-20 text-xs px-1.5 py-0.5 rounded-full">
                   {experiments.length}
                 </span>
@@ -263,7 +263,7 @@ export default function ParticipantDashboard() {
                   ) : (
                     <Link href={`/participant/experiments/${experiment.id}`} passHref>
                       <Button className="w-full bg-indigo-600 hover:bg-indigo-700 py-1.5 text-sm">
-                        Start Study
+                        Start Experiment
                       </Button>
                     </Link>
                   )}
@@ -278,23 +278,23 @@ export default function ParticipantDashboard() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                   </svg>
                   <h4 className="text-lg font-medium text-gray-800 mb-1">
-                    {filter === 'all' ? 'No studies available' : 
-                     filter === 'not_started' ? 'No available studies' :
-                     filter === 'in_progress' ? 'No studies in progress' :
-                     'No completed studies'}
+                    {filter === 'all' ? 'No experiments available' : 
+                     filter === 'not_started' ? 'No available experiments' :
+                     filter === 'in_progress' ? 'No experiments in progress' :
+                     'No completed experiments'}
                   </h4>
                   <p className="text-gray-600 mb-4">
-                    {filter === 'all' ? 'You don\'t have any studies assigned to you yet.' : 
-                     filter === 'not_started' ? 'All available studies have been started or completed.' :
-                     filter === 'in_progress' ? 'You haven\'t started any studies yet.' :
-                     'You haven\'t completed any studies yet.'}
+                    {filter === 'all' ? 'You don\'t have any experiments assigned to you yet.' : 
+                     filter === 'not_started' ? 'All available experiments have been started or completed.' :
+                     filter === 'in_progress' ? 'You haven\'t started any experiments yet.' :
+                     'You haven\'t completed any experiments yet.'}
                   </p>
                   {filter !== 'all' && (
                     <Button 
                       className="bg-blue-600 hover:bg-blue-700 text-sm"
                       onClick={() => setFilter('all')}
                     >
-                      View All Studies
+                      View All Experiments
                     </Button>
                   )}
                 </div>

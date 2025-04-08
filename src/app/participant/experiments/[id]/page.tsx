@@ -7,12 +7,53 @@ import Button from '@/components/Button';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 
+// Define better types for experimental stages
+type StageBase = {
+  id: string;
+  type: 'instructions' | 'scenario' | 'survey' | 'break';
+  title: string;
+  description: string;
+  durationSeconds: number;
+  required: boolean;
+  order: number;
+};
+
+type InstructionsStage = StageBase & {
+  type: 'instructions';
+  content: string;
+};
+
+type ScenarioStage = StageBase & {
+  type: 'scenario';
+  scenarioId: string;
+  rounds: number;
+  roundDuration: number;
+};
+
+type SurveyStage = StageBase & {
+  type: 'survey';
+  questions: Array<{
+    id: string;
+    text: string;
+    type: string;
+    required: boolean;
+    options?: string[];
+  }>;
+};
+
+type BreakStage = StageBase & {
+  type: 'break';
+  message: string;
+};
+
+type Stage = InstructionsStage | ScenarioStage | SurveyStage | BreakStage;
+
 type ExperimentData = {
   id: string;
   name: string;
   description: string;
   status: string;
-  stages: any[];
+  stages: Stage[];
   startStageId?: string;
 };
 
@@ -207,7 +248,7 @@ export default function ExperimentView() {
       <main className="flex-grow container mx-auto px-4 py-6">
         {/* Experiment Introduction */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-3">About This Study</h2>
+          <h2 className="text-xl font-semibold mb-3">About This Experiment</h2>
           <p className="text-gray-600 mb-4">{experiment.description}</p>
           
           {/* Progress Information */}
@@ -241,14 +282,84 @@ export default function ExperimentView() {
           <h2 className="text-xl font-semibold mb-4">Experiment Stages</h2>
           
           {/* This would be replaced with actual experiment UI/stages */}
-          <div className="border border-dashed border-gray-300 rounded-lg p-8 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-            </svg>
-            <h3 className="text-lg font-medium text-gray-700 mb-2">Experiment Interface</h3>
-            <p className="text-gray-500 mb-4">This is a placeholder for the experiment interface. In a real implementation, this would contain the interactive stages for the experiment.</p>
-            <p className="text-sm text-gray-400">Total Stages: {experiment.stages?.length || 0}</p>
-          </div>
+          {experiment.stages && experiment.stages.length > 0 ? (
+            <div className="space-y-4">
+              {experiment.stages.map((stage, index) => (
+                <div 
+                  key={stage.id || index}
+                  className={`border rounded-lg p-4 ${
+                    progress.completedStages?.includes(stage.id)
+                      ? 'bg-green-50 border-green-200'
+                      : progress.currentStageId === stage.id
+                        ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-300'
+                        : 'border-gray-200'
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center">
+                        <span className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-gray-700 text-sm mr-2">
+                          {index + 1}
+                        </span>
+                        <h3 className="font-medium text-gray-800">{stage.title}</h3>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">{stage.description}</p>
+                      
+                      {/* Additional stage details based on type */}
+                      {stage.type === 'instructions' && (
+                        <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                          <p className="text-sm text-gray-700">{stage.content}</p>
+                        </div>
+                      )}
+                      
+                      {stage.type === 'scenario' && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          <p>Rounds: {stage.rounds} × {stage.roundDuration}s each</p>
+                        </div>
+                      )}
+                      
+                      {stage.type === 'survey' && stage.questions && (
+                        <div className="mt-2">
+                          <p className="text-sm text-gray-600 mb-1">{stage.questions.length} questions</p>
+                        </div>
+                      )}
+                      
+                      {stage.type === 'break' && (
+                        <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                          <p className="text-sm text-gray-700">{stage.message}</p>
+                          <p className="text-xs text-gray-500 mt-1">Duration: {stage.durationSeconds}s</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex flex-shrink-0 ml-4">
+                      {progress.completedStages?.includes(stage.id) ? (
+                        <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                          Completed
+                        </span>
+                      ) : progress.currentStageId === stage.id ? (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                          Current
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">
+                          {stage.type}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="border border-dashed border-gray-300 rounded-lg p-8 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-700 mb-2">No Experiment Stages</h3>
+              <p className="text-gray-500">This experiment does not have any stages defined yet.</p>
+            </div>
+          )}
         </div>
         
         {/* Completed View or Actions */}

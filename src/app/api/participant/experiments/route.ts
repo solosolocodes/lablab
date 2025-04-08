@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
     
     // Find all active experiments associated with the user's groups
     const experimentQuery: any = {
-      status: 'active',
-      'userGroups.userGroupId': { $in: userGroupIds }
+      status: 'active', // Only include active experiments
+      'userGroups.userGroupId': { $in: userGroupIds } // Filter by user's group membership
     };
     
     // Get all the experiments
