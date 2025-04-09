@@ -1056,16 +1056,32 @@ function ExperimentPerformer() {
   const params = useParams();
   const experimentId = params.id as string;
   
-  // Load experiment data once on mount
+  // Load experiment data once on mount with proper cleanup
   useEffect(() => {
+    // Flag to track if component is mounted
+    let isMounted = true;
+    
     const loadData = async () => {
-      if (experimentId) {
+      if (experimentId && isMounted) {
         console.log(`Loading experiment ${experimentId}...`);
-        await loadExperiment(experimentId);
+        try {
+          await loadExperiment(experimentId);
+        } catch (error) {
+          // Only handle errors if component is still mounted
+          if (isMounted) {
+            console.error("Failed to load experiment:", error);
+          }
+        }
       }
     };
     
     loadData();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      console.log("ExperimentPerformer component unmounted, cleaning up");
+    };
   }, [experimentId, loadExperiment]);
 
   // Handle the Next button click on the welcome screen
@@ -1095,23 +1111,23 @@ function ExperimentPerformer() {
     window.close();
   };
   
-  // Simple loading state
+  // Use a more subtle loading indicator like in the admin preview page
   if (isLoading) {
     return (
       <div className="p-4">
-        <div className="bg-white p-4 rounded-lg border border-gray-200 text-center">
-          <p className="text-gray-600 text-sm">Loading experiment, please wait...</p>
-          <div className="mt-2 h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{width: '60%'}}></div>
+        <div className="w-full p-4 bg-white rounded border shadow-sm">
+          <div className="text-center py-4">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold">Loading Experiment...</h3>
+            <p className="text-gray-600 mt-2">Please wait while we prepare your experiment</p>
           </div>
-          <p className="text-xs text-gray-400 mt-3">Experiment ID: {experimentId}</p>
         </div>
       </div>
     );
   }
   
-  // Error state
-  if (loadError) {
+  // Error state - but don't show for cancellation errors
+  if (loadError && loadError !== 'Request was cancelled') {
     return (
       <div className="p-4">
         <div className="bg-white p-8 rounded-lg shadow-md text-center">
@@ -1122,7 +1138,12 @@ function ExperimentPerformer() {
           <p className="text-gray-600 mb-4">{loadError}</p>
           <div className="flex justify-center space-x-4">
             <button 
-              onClick={() => window.location.reload()}
+              onClick={() => {
+                // Clear error first
+                setLoadError(null);
+                // Then reload
+                setTimeout(() => loadExperiment(experimentId), 100);
+              }}
               className="px-4 py-2 bg-blue-500 text-white rounded"
             >
               Retry

@@ -162,32 +162,37 @@ export function ParticipantPerformProvider({ children }: { children: React.React
           return orderA - orderB;
         });
 
-        console.log(`[${operationId}] Setting experiment with ${sortedStages.length} stages`);
-        setExperiment({ ...experimentData, stages: sortedStages });
-        setProgress(progressData);
-        
-        // Figure out which stage to start with based on progress
-        let startIndex = 0;
-        if (progressData.currentStageId && sortedStages.length > 0) {
-          const stageIndex = sortedStages.findIndex(stage => stage.id === progressData.currentStageId);
-          if (stageIndex !== -1) {
-            startIndex = stageIndex;
+        // Only update state if component is still mounted
+        if (isMounted.current) {
+          console.log(`[${operationId}] Setting experiment with ${sortedStages.length} stages`);
+          setExperiment({ ...experimentData, stages: sortedStages });
+          setProgress(progressData);
+          
+          // Figure out which stage to start with based on progress
+          let startIndex = 0;
+          if (progressData.currentStageId && sortedStages.length > 0) {
+            const stageIndex = sortedStages.findIndex(stage => stage.id === progressData.currentStageId);
+            if (stageIndex !== -1) {
+              startIndex = stageIndex;
+            }
           }
+          
+          console.log(`[${operationId}] Setting current stage index to ${startIndex}`);
+          setCurrentStageIndex(startIndex);
+          if (sortedStages.length > 0) {
+            setTimeRemaining(sortedStages[startIndex].durationSeconds || 0);
+          }
+          
+          // Update progress if it's the first time viewing
+          if (progressData.status === 'not_started') {
+            await updateProgress('in_progress', sortedStages[0]?.id);
+          }
+          
+          setTimerActive(true);
+          setIsLoading(false);
+        } else {
+          console.log(`[${operationId}] Component unmounted, skipping state updates`);
         }
-        
-        console.log(`[${operationId}] Setting current stage index to ${startIndex}`);
-        setCurrentStageIndex(startIndex);
-        if (sortedStages.length > 0) {
-          setTimeRemaining(sortedStages[startIndex].durationSeconds || 0);
-        }
-        
-        // Update progress if it's the first time viewing
-        if (progressData.status === 'not_started') {
-          await updateProgress('in_progress', sortedStages[0]?.id);
-        }
-        
-        setTimerActive(true);
-        setIsLoading(false);
         
         console.log(`[${operationId}] Experiment load completed successfully`);
         // Return to indicate success
@@ -210,14 +215,19 @@ export function ParticipantPerformProvider({ children }: { children: React.React
     } catch (error) {
       console.error(`[${operationId}] Error loading experiment:`, error);
       
-      // Only show toast error if this wasn't an abort
-      if (!(error instanceof Error && error.message === 'Request was cancelled')) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        toast.error(`Failed to load experiment data: ${errorMessage}. Please try again or contact support.`);
-        setLoadError(errorMessage);
+      // Only update state if component is still mounted
+      if (isMounted.current) {
+        // Only show toast error if this wasn't an abort
+        if (!(error instanceof Error && error.message === 'Request was cancelled')) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          toast.error(`Failed to load experiment data: ${errorMessage}. Please try again or contact support.`);
+          setLoadError(errorMessage);
+        }
+        
+        setIsLoading(false);
+      } else {
+        console.log(`[${operationId}] Component unmounted, skipping error state updates`);
       }
-      
-      setIsLoading(false);
       // Return false to indicate failure
       return false;
     }
@@ -391,9 +401,18 @@ export function ParticipantPerformProvider({ children }: { children: React.React
     return () => clearInterval(interval);
   }, [timerActive, timeRemaining]);
   
+  // Track component mounted state to prevent state updates after unmount
+  const isMounted = useRef(true);
+  
   // Cleanup function to abort all pending operations when the provider unmounts
   useEffect(() => {
+    // Set mounted flag
+    isMounted.current = true;
+    
     return () => {
+      // Mark component as unmounted
+      isMounted.current = false;
+      
       console.log('ParticipantPerformProvider unmounting, aborting all pending operations');
       pendingOperations.current.forEach(controller => {
         if (!controller.signal.aborted) {
