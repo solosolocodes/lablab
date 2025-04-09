@@ -46,41 +46,63 @@ export default function SurveyEditorPage() {
   // Fetch survey when the component mounts - only once
   useEffect(() => {
     let mounted = true;
+    let fallbackTimer: NodeJS.Timeout | undefined;
 
     const initSurvey = async () => {
+      console.log('Survey editor: initializing', { surveyId, sessionStatus: status, isAdmin: session?.user?.role === 'admin' });
+      
+      if (!session && status !== 'loading') {
+        console.log('Survey editor: no session, redirecting');
+        router.push('/admin/login');
+        return;
+      }
+      
       if (session && session.user.role === 'admin' && surveyId) {
         try {
           // Try to fetch existing survey
+          console.log('Survey editor: fetching survey data');
           await fetchSurvey();
           
-          // If after 15 seconds we're still loading and no survey, use fallback
-          if (mounted && isLoading && !survey) {
-            const fallbackTimer = setTimeout(() => {
-              console.log('Creating fallback survey data');
-              // Create empty survey with the ID if not loaded yet
-              if (mounted && isLoading && !survey) {
-                setSurvey({
-                  _id: surveyId,
-                  title: 'New Survey',
-                  description: '',
-                  questions: [],
-                  status: 'draft',
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString()
-                });
-                setIsLoading(false);
-                toast.info('Using default survey template. Changes will be saved.');
-              }
-            }, 15000);
-            
-            return () => clearTimeout(fallbackTimer);
-          }
+          // Set immediate fallback timer for 5 seconds
+          fallbackTimer = setTimeout(() => {
+            console.log('Survey editor: checking if fallback needed');
+            // Create empty survey with the ID if not loaded yet
+            if (mounted && isLoading) {
+              console.log('Survey editor: creating fallback survey data');
+              setSurvey({
+                _id: surveyId,
+                title: 'New Survey',
+                description: '',
+                questions: [],
+                status: 'draft',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              });
+              setIsLoading(false);
+              toast.info('Using default survey template. Changes will be saved.');
+            }
+          }, 5000); // Reduced from 15s to 5s for faster fallback
         } catch (error) {
-          console.error('Error initializing survey:', error);
+          console.error('Survey editor: error initializing survey:', error);
           if (mounted) {
+            // On error, immediately use fallback
+            console.log('Survey editor: using fallback due to error');
+            setSurvey({
+              _id: surveyId,
+              title: 'New Survey',
+              description: '',
+              questions: [],
+              status: 'draft',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
             setIsLoading(false);
+            toast.error('Error loading survey. Using default template.');
           }
         }
+      } else if (status !== 'loading') {
+        console.log('Survey editor: not an admin or no survey ID');
+        setIsLoading(false);
       }
     };
     
@@ -88,8 +110,11 @@ export default function SurveyEditorPage() {
     
     return () => {
       mounted = false;
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+      }
     };
-  }, []);
+  }, [session, status, surveyId]);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -98,7 +123,7 @@ export default function SurveyEditorPage() {
     }
   }, [session, status, router]);
 
-  // Fetch survey data from API with retry
+  // Fetch survey data from API with retry and fallback
   const fetchSurvey = async () => {
     const MAX_RETRIES = 3;
     let attempts = 0;
@@ -106,39 +131,44 @@ export default function SurveyEditorPage() {
     const attemptFetch = async () => {
       try {
         setIsLoading(true);
-        console.log(`Fetching survey (attempt ${attempts + 1}/${MAX_RETRIES}):`, surveyId);
+        console.log(`Survey editor: fetching survey (attempt ${attempts + 1}/${MAX_RETRIES}):`, surveyId);
         
-        // Use XMLHttpRequest for better timeout control
-        return new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', `/api/admin/surveys/${surveyId}`, true);
-          xhr.timeout = 10000; // 10 second timeout
+        // Use fetch instead of XMLHttpRequest for simpler handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+        
+        try {
+          const response = await fetch(`/api/admin/surveys/${surveyId}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal
+          });
           
-          xhr.onload = function() {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try {
-                const data = JSON.parse(xhr.responseText);
-                resolve(data);
-              } catch (parseError) {
-                reject(new Error(`Failed to parse response: ${parseError.message}`));
-              }
-            } else {
-              reject(new Error(`HTTP error ${xhr.status}: ${xhr.statusText || xhr.responseText}`));
-            }
-          };
+          clearTimeout(timeoutId);
           
-          xhr.onerror = function() {
-            reject(new Error('Network error occurred'));
-          };
+          if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+          }
           
-          xhr.ontimeout = function() {
-            reject(new Error('Request timed out'));
-          };
+          const text = await response.text();
           
-          xhr.send();
-        });
+          try {
+            return JSON.parse(text);
+          } catch (parseError) {
+            console.error('Survey editor: JSON parse error:', parseError, 'Text:', text);
+            throw new Error(`Failed to parse API response: ${parseError.message}`);
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          if (fetchError.name === 'AbortError') {
+            throw new Error('Request timed out');
+          }
+          throw fetchError;
+        }
       } catch (error) {
-        console.error(`Attempt ${attempts + 1} failed:`, error);
+        console.error(`Survey editor: Attempt ${attempts + 1} failed:`, error);
         throw error;
       }
     };
@@ -146,30 +176,36 @@ export default function SurveyEditorPage() {
     while (attempts < MAX_RETRIES) {
       try {
         const data = await attemptFetch();
-        console.log('Survey data received:', data);
+        console.log('Survey editor: Survey data received:', data);
         
         if (data && data.survey) {
+          console.log('Survey editor: Setting survey data');
           setSurvey(data.survey);
           setIsLoading(false);
-          return; // Success
+          return true; // Success
         } else {
+          console.error('Survey editor: Received empty survey data');
           throw new Error('Received empty survey data');
         }
       } catch (error) {
         attempts++;
-        console.error(`Error fetching survey (attempt ${attempts}/${MAX_RETRIES}):`, error);
+        console.error(`Survey editor: Error fetching survey (attempt ${attempts}/${MAX_RETRIES}):`, error);
         
         if (attempts >= MAX_RETRIES) {
           toast.error(`Failed to load survey after ${MAX_RETRIES} attempts`);
           break;
         } else {
           // Wait before retrying (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+          const delay = 1000 * attempts;
+          console.log(`Survey editor: Waiting ${delay}ms before next attempt`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
     
+    console.log('Survey editor: All fetch attempts failed');
     setIsLoading(false);
+    return false;
   };
 
   // Save survey changes - simplified without auto-save
