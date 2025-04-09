@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
@@ -883,6 +883,10 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   
+  // State to control question slide animations
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionDirection, setTransitionDirection] = useState<'next' | 'prev' | null>(null);
+  
   // Calculate if we can navigate to previous/next questions
   const hasQuestions = stage.questions && stage.questions.length > 0;
   const totalQuestions = hasQuestions ? stage.questions.length : 0;
@@ -890,61 +894,35 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const canGoPrevious = currentQuestionIndex > 0;
   const currentQuestion = hasQuestions ? stage.questions[currentQuestionIndex] : null;
   
-  // Add keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle keyboard events if we're inside a textarea or input
-      if (
-        document.activeElement?.tagName === 'TEXTAREA' || 
-        document.activeElement?.tagName === 'INPUT'
-      ) {
-        if (e.key === 'Enter' && e.altKey) {
-          // Only handle Alt+Enter for submission while in a form field
-          if (!canGoNext && !isSubmitting && !isStageTransitioning) {
-            submitSurveyAnswers();
-          }
-        }
-        return;
-      }
-      
-      // Handle keyboard navigation
-      switch (e.key) {
-        case 'ArrowRight':
-          if (canGoNext) {
-            goToNextQuestion();
-          }
-          break;
-        case 'ArrowLeft':
-          if (canGoPrevious) {
-            goToPreviousQuestion();
-          }
-          break;
-        case 'Enter':
-          // Submit on enter if we're at the last question
-          if (!canGoNext && !isSubmitting && !isStageTransitioning) {
-            submitSurveyAnswers();
-          }
-          break;
-        default:
-          break;
-      }
-    };
+  // Handle answer changes
+  const handleAnswerChange = useCallback((questionId: string, value: string | string[]) => {
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: value
+    }));
     
-    // Add event listener
-    window.addEventListener('keydown', handleKeyDown);
-    
-    // Clean up
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [canGoNext, canGoPrevious, isSubmitting, isStageTransitioning, submitSurveyAnswers, transitionToQuestion]);
+    // Clear validation error when answering
+    if (validationErrors[questionId]) {
+      setValidationErrors(prev => {
+        const updated = { ...prev };
+        delete updated[questionId];
+        return updated;
+      });
+    }
+  }, [validationErrors]);
   
-  // State to control question slide animations
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [transitionDirection, setTransitionDirection] = useState<'next' | 'prev' | null>(null);
+  // Handle multiple choice selection
+  const handleMultipleChoiceSelect = useCallback((questionId: string, option: string) => {
+    handleAnswerChange(questionId, option);
+  }, [handleAnswerChange]);
+  
+  // Handle text input change
+  const handleTextChange = useCallback((questionId: string, text: string) => {
+    handleAnswerChange(questionId, text);
+  }, [handleAnswerChange]);
   
   // Helper for creating smooth transitions between questions
-  const transitionToQuestion = (direction: 'next' | 'prev', targetIndex: number) => {
+  const transitionToQuestion = useCallback((direction: 'next' | 'prev', targetIndex: number) => {
     // Start transition animation
     setIsTransitioning(true);
     setTransitionDirection(direction);
@@ -959,51 +937,24 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
         setTransitionDirection(null);
       }, 150);
     }, 150);
-  };
+  }, []);
   
   // Navigate to next question with smooth transition
-  const goToNextQuestion = () => {
+  const goToNextQuestion = useCallback(() => {
     if (canGoNext) {
       transitionToQuestion('next', currentQuestionIndex + 1);
     }
-  };
+  }, [canGoNext, transitionToQuestion, currentQuestionIndex]);
   
   // Navigate to previous question with smooth transition
-  const goToPreviousQuestion = () => {
+  const goToPreviousQuestion = useCallback(() => {
     if (canGoPrevious) {
       transitionToQuestion('prev', currentQuestionIndex - 1);
     }
-  };
-  
-  // Handle answer changes
-  const handleAnswerChange = (questionId: string, value: string | string[]) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: value
-    }));
-    
-    // Clear validation error when answering
-    if (validationErrors[questionId]) {
-      setValidationErrors(prev => {
-        const updated = { ...prev };
-        delete updated[questionId];
-        return updated;
-      });
-    }
-  };
-  
-  // Handle multiple choice selection
-  const handleMultipleChoiceSelect = (questionId: string, option: string) => {
-    handleAnswerChange(questionId, option);
-  };
-  
-  // Handle text input change
-  const handleTextChange = (questionId: string, text: string) => {
-    handleAnswerChange(questionId, text);
-  };
+  }, [canGoPrevious, transitionToQuestion, currentQuestionIndex]);
   
   // Submit answers to the API
-  const submitSurveyAnswers = async () => {
+  const submitSurveyAnswers = useCallback(async () => {
     // Validate required questions
     const errors: Record<string, string> = {};
     
@@ -1074,7 +1025,56 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [answers, stage.questions, stage.id, experimentId, session, onNext, setValidationErrors, setCurrentQuestionIndex]);
+  
+  // Add keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle keyboard events if we're inside a textarea or input
+      if (
+        document.activeElement?.tagName === 'TEXTAREA' || 
+        document.activeElement?.tagName === 'INPUT'
+      ) {
+        if (e.key === 'Enter' && e.altKey) {
+          // Only handle Alt+Enter for submission while in a form field
+          if (!canGoNext && !isSubmitting && !isStageTransitioning) {
+            submitSurveyAnswers();
+          }
+        }
+        return;
+      }
+      
+      // Handle keyboard navigation
+      switch (e.key) {
+        case 'ArrowRight':
+          if (canGoNext) {
+            goToNextQuestion();
+          }
+          break;
+        case 'ArrowLeft':
+          if (canGoPrevious) {
+            goToPreviousQuestion();
+          }
+          break;
+        case 'Enter':
+          // Submit on enter if we're at the last question
+          if (!canGoNext && !isSubmitting && !isStageTransitioning) {
+            submitSurveyAnswers();
+          }
+          break;
+        default:
+          break;
+      }
+    };
+    
+    // Add event listener
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [canGoNext, canGoPrevious, isSubmitting, isStageTransitioning, submitSurveyAnswers, goToNextQuestion, goToPreviousQuestion]);
   
   return (
     <div className="w-full bg-white rounded-lg border p-4">
