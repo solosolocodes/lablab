@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
@@ -1041,11 +1041,37 @@ function ExperimentContent() {
   
   // Load the experiment data when the component mounts
   useEffect(() => {
+    let isMounted = true;
+    
     if (experimentId) {
       // Pass true to indicate this is the participant view
-      loadExperiment(experimentId, true);
+      loadExperiment(experimentId, true)
+        .then(() => {
+          // Optional callback if needed
+        })
+        .catch(err => {
+          if (isMounted) {
+            console.error('Error loading experiment:', err);
+          }
+        });
     }
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, [experimentId, loadExperiment]);
+  
+  // Track if component is mounted to prevent updates after unmount
+  const isMountedRef = useRef(true);
+  
+  // Set isMounted to false when component unmounts
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
@@ -1056,7 +1082,9 @@ function ExperimentContent() {
       
       // Then update progress in the background
       Promise.resolve().then(() => {
-        updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id);
+        if (isMountedRef.current) {
+          updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id);
+        }
       });
     } else {
       setViewMode('experiment');
@@ -1067,10 +1095,21 @@ function ExperimentContent() {
   const handleStageNext = () => {
     if (!experiment) return;
     
+    // Safe state update check
+    if (!isMountedRef.current) return;
+    
     if (currentStageNumber < experiment.stages.length - 1) {
       setCurrentStageNumber(prev => prev + 1);
     } else {
+      // Final stage complete, show thank you and record completion
       setViewMode('thankyou');
+      
+      // Record completion in background
+      Promise.resolve().then(() => {
+        if (isMountedRef.current) {
+          updateParticipantProgress(experiment.id, 'completed');
+        }
+      });
     }
   };
   
@@ -1125,12 +1164,22 @@ function ExperimentContent() {
   if (viewMode === 'thankyou') {
     // Mark experiment as completed when showing thank you screen (non-blocking)
     useEffect(() => {
+      let isMounted = true;
+      
       if (experiment) {
         // Ensure the experiment is marked as completed in MongoDB (background task)
         Promise.resolve().then(() => {
-          updateParticipantProgress(experiment.id, 'completed');
+          // Only update if component is still mounted
+          if (isMounted) {
+            updateParticipantProgress(experiment.id, 'completed');
+          }
         });
       }
+      
+      // Cleanup function to prevent state updates after unmount
+      return () => {
+        isMounted = false;
+      };
     }, [experiment, updateParticipantProgress]);
     
     return (

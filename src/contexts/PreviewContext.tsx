@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 
 type Stage = {
   id: string;
@@ -49,6 +49,18 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
   const [isStageTransitioning, setIsStageTransitioning] = useState(false);
   const [isRecordingProgress, setIsRecordingProgress] = useState(false);
   const [stageStartTimes, setStageStartTimes] = useState<Record<string, Date>>({});
+  
+  // Create a ref to track mounted state
+  const isMountedRef = useRef(true);
+  
+  // Set up mounted state and cleanup
+  useEffect(() => {
+    isMountedRef.current = true;
+    
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Load experiment and progress data
   const loadExperiment = async (experimentId: string, isParticipantView = false) => {
@@ -69,6 +81,9 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         return orderA - orderB;
       });
       
+      // Check if component is still mounted
+      if (!isMountedRef.current) return;
+      
       // Set the experiment data
       setExperiment({ ...data, stages: sortedStages });
       
@@ -81,21 +96,31 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
             { headers: { 'Cache-Control': 'no-cache' } }
           );
           
+          // Check if component is still mounted
+          if (!isMountedRef.current) return;
+          
           if (progressResponse.ok) {
             const progressData = await progressResponse.json();
             
             // If we're starting a new experiment
             if (progressData.status === 'not_started') {
-              // Update progress to in_progress
-              await updateParticipantProgress(experimentId, 'in_progress', sortedStages[0]?.id);
+              // Update progress to in_progress (non-blocking)
+              Promise.resolve().then(() => {
+                if (isMountedRef.current) {
+                  updateParticipantProgress(experimentId, 'in_progress', sortedStages[0]?.id);
+                }
+              });
               
-              // Start with first stage
-              setCurrentStageIndex(0);
-              
-              // Record start time for the first stage
-              if (sortedStages.length > 0) {
-                const startTimes = { [sortedStages[0].id]: new Date() };
-                setStageStartTimes(startTimes);
+              // Only update state if still mounted
+              if (isMountedRef.current) {
+                // Start with first stage
+                setCurrentStageIndex(0);
+                
+                // Record start time for the first stage
+                if (sortedStages.length > 0) {
+                  const startTimes = { [sortedStages[0].id]: new Date() };
+                  setStageStartTimes(startTimes);
+                }
               }
             } 
             // If we're resuming an in-progress experiment
@@ -104,7 +129,9 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
               const stageIndex = sortedStages.findIndex(
                 stage => stage.id === progressData.currentStageId
               );
-              if (stageIndex !== -1) {
+              
+              // Only update state if still mounted
+              if (isMountedRef.current && stageIndex !== -1) {
                 setCurrentStageIndex(stageIndex);
                 
                 // Record start time for the current stage
@@ -118,12 +145,14 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
           console.error('Error fetching progress:', progressErr);
         }
       } else {
-        // Reset to first stage for preview
-        setCurrentStageIndex(0);
+        // Reset to first stage for preview (if still mounted)
+        if (isMountedRef.current) {
+          setCurrentStageIndex(0);
+        }
       }
       
-      // Set initial timer if there are stages
-      if (sortedStages.length > 0) {
+      // Set initial timer if there are stages (if still mounted)
+      if (isMountedRef.current && sortedStages.length > 0) {
         setTimeRemaining(sortedStages[0].durationSeconds);
         setTimerActive(true);
       }
@@ -183,7 +212,7 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
 
   // Go to next stage with smooth transition and record progress (non-blocking)
   const goToNextStage = useCallback(() => {
-    if (!experiment) return;
+    if (!experiment || !isMountedRef.current) return;
     
     const currentStage = experiment.stages[currentStageIndex];
     
@@ -196,7 +225,9 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       
       // Mark the current stage as completed in MongoDB (don't await - non-blocking)
       Promise.resolve().then(() => {
-        updateParticipantProgress(experiment.id, undefined, undefined, currentStage.id);
+        if (isMountedRef.current) {
+          updateParticipantProgress(experiment.id, undefined, undefined, currentStage.id);
+        }
       });
     }
     
@@ -206,6 +237,9 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       
       // Use setTimeout to create a smooth transition effect
       setTimeout(() => {
+        // Check if still mounted before state updates
+        if (!isMountedRef.current) return;
+        
         const nextIndex = currentStageIndex + 1;
         const nextStage = experiment.stages[nextIndex];
         
@@ -218,7 +252,9 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
           
           // Update current stage in MongoDB (don't await - non-blocking)
           Promise.resolve().then(() => {
-            updateParticipantProgress(experiment.id, 'in_progress', nextStage.id);
+            if (isMountedRef.current) {
+              updateParticipantProgress(experiment.id, 'in_progress', nextStage.id);
+            }
           });
         }
         
@@ -228,13 +264,17 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         
         // Complete transition after a small delay to prevent flickering
         setTimeout(() => {
-          setIsStageTransitioning(false);
+          if (isMountedRef.current) {
+            setIsStageTransitioning(false);
+          }
         }, 100);
       }, 50);
     } else if (isRecordingProgress) {
       // This was the last stage, complete the experiment (non-blocking)
       Promise.resolve().then(() => {
-        updateParticipantProgress(experiment.id, 'completed');
+        if (isMountedRef.current) {
+          updateParticipantProgress(experiment.id, 'completed');
+        }
       });
     }
   }, [experiment, currentStageIndex, isRecordingProgress, stageStartTimes]);
