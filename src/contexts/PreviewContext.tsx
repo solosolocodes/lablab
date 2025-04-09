@@ -27,13 +27,16 @@ interface PreviewContextType {
   experiment: ExperimentData | null;
   currentStageIndex: number;
   timeRemaining: number;
-  loadExperiment: (experimentId: string) => Promise<void>;
+  loadExperiment: (experimentId: string, isParticipantView?: boolean) => Promise<void>;
   goToNextStage: () => void;
   goToPreviousStage: () => boolean;
   resetTimer: () => void;
   currentStage: Stage | null;
   progress: number;
   isStageTransitioning: boolean;
+  isRecordingProgress: boolean;
+  stageStartTimes: Record<string, Date>;
+  updateParticipantProgress: (experimentId: string, status?: 'in_progress' | 'completed', currentStageId?: string, completedStageId?: string) => Promise<void>;
 }
 
 const PreviewContext = createContext<PreviewContextType | undefined>(undefined);
@@ -44,12 +47,14 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [isStageTransitioning, setIsStageTransitioning] = useState(false);
+  const [isRecordingProgress, setIsRecordingProgress] = useState(false);
+  const [stageStartTimes, setStageStartTimes] = useState<Record<string, Date>>({});
 
-  // Simplified experiment loading
-  const loadExperiment = async (experimentId: string) => {
+  // Load experiment and progress data
+  const loadExperiment = async (experimentId: string, isParticipantView = false) => {
     try {
-      // Add preview parameter to allow access without authentication
-      const response = await fetch(`/api/experiments/${experimentId}?preview=true`);
+      // Fetch the experiment data
+      const response = await fetch(`/api/experiments/${experimentId}?preview=true&t=${Date.now()}`);
       
       // Parse the data
       const data = await response.json();
@@ -67,8 +72,55 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       // Set the experiment data
       setExperiment({ ...data, stages: sortedStages });
       
-      // Reset to first stage
-      setCurrentStageIndex(0);
+      // For participant view, also fetch progress
+      if (isParticipantView) {
+        setIsRecordingProgress(true);
+        try {
+          const progressResponse = await fetch(
+            `/api/participant/experiments/${experimentId}/progress?t=${Date.now()}`,
+            { headers: { 'Cache-Control': 'no-cache' } }
+          );
+          
+          if (progressResponse.ok) {
+            const progressData = await progressResponse.json();
+            
+            // If we're starting a new experiment
+            if (progressData.status === 'not_started') {
+              // Update progress to in_progress
+              await updateParticipantProgress(experimentId, 'in_progress', sortedStages[0]?.id);
+              
+              // Start with first stage
+              setCurrentStageIndex(0);
+              
+              // Record start time for the first stage
+              if (sortedStages.length > 0) {
+                const startTimes = { [sortedStages[0].id]: new Date() };
+                setStageStartTimes(startTimes);
+              }
+            } 
+            // If we're resuming an in-progress experiment
+            else if (progressData.status === 'in_progress' && progressData.currentStageId) {
+              // Find the current stage index
+              const stageIndex = sortedStages.findIndex(
+                stage => stage.id === progressData.currentStageId
+              );
+              if (stageIndex !== -1) {
+                setCurrentStageIndex(stageIndex);
+                
+                // Record start time for the current stage
+                const currentStage = sortedStages[stageIndex];
+                const startTimes = { [currentStage.id]: new Date() };
+                setStageStartTimes(startTimes);
+              }
+            }
+          }
+        } catch (progressErr) {
+          console.error('Error fetching progress:', progressErr);
+        }
+      } else {
+        // Reset to first stage for preview
+        setCurrentStageIndex(0);
+      }
       
       // Set initial timer if there are stages
       if (sortedStages.length > 0) {
@@ -80,10 +132,52 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       console.error('Error loading experiment:', err);
     }
   };
+  
+  // Function to update progress in MongoDB
+  const updateParticipantProgress = async (
+    experimentId: string,
+    status?: 'in_progress' | 'completed',
+    currentStageId?: string,
+    completedStageId?: string
+  ) => {
+    if (!isRecordingProgress) return;
+    
+    try {
+      const payload: any = {};
+      if (status) payload.status = status;
+      if (currentStageId) payload.currentStageId = currentStageId;
+      if (completedStageId) payload.completedStageId = completedStageId;
+      
+      const response = await fetch(`/api/participant/experiments/${experimentId}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to update progress:', await response.text());
+      }
+    } catch (err) {
+      console.error('Error updating progress:', err);
+    }
+  };
 
-  // Go to next stage with smooth transition
+  // Go to next stage with smooth transition and record progress
   const goToNextStage = useCallback(() => {
     if (!experiment) return;
+    
+    const currentStage = experiment.stages[currentStageIndex];
+    
+    // Record stage completion time and duration
+    if (isRecordingProgress && currentStage) {
+      const stageStartTime = stageStartTimes[currentStage.id] || new Date();
+      const stageDuration = new Date().getTime() - stageStartTime.getTime();
+      
+      console.log(`Stage ${currentStage.id} completed. Duration: ${Math.round(stageDuration / 1000)}s`);
+      
+      // Mark the current stage as completed in MongoDB
+      updateParticipantProgress(experiment.id, undefined, undefined, currentStage.id);
+    }
     
     if (currentStageIndex < experiment.stages.length - 1) {
       // Start transition
@@ -92,8 +186,21 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       // Use setTimeout to create a smooth transition effect
       setTimeout(() => {
         const nextIndex = currentStageIndex + 1;
+        const nextStage = experiment.stages[nextIndex];
+        
+        // Record start time for the next stage
+        if (isRecordingProgress && nextStage) {
+          setStageStartTimes(prev => ({
+            ...prev,
+            [nextStage.id]: new Date()
+          }));
+          
+          // Update current stage in MongoDB
+          updateParticipantProgress(experiment.id, 'in_progress', nextStage.id);
+        }
+        
         setCurrentStageIndex(nextIndex);
-        setTimeRemaining(experiment.stages[nextIndex].durationSeconds);
+        setTimeRemaining(nextStage.durationSeconds);
         setTimerActive(true);
         
         // Complete transition after a small delay to prevent flickering
@@ -101,8 +208,11 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
           setIsStageTransitioning(false);
         }, 100);
       }, 50);
+    } else if (isRecordingProgress) {
+      // This was the last stage, complete the experiment
+      updateParticipantProgress(experiment.id, 'completed');
     }
-  }, [experiment, currentStageIndex]);
+  }, [experiment, currentStageIndex, isRecordingProgress, stageStartTimes]);
 
   // Go to previous stage with smooth transition, returns true if successful
   const goToPreviousStage = useCallback(() => {
@@ -191,7 +301,10 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         resetTimer,
         currentStage,
         progress,
-        isStageTransitioning
+        isStageTransitioning,
+        isRecordingProgress,
+        stageStartTimes,
+        updateParticipantProgress
       }}
     >
       {children}

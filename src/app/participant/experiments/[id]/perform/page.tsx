@@ -1032,7 +1032,7 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
 }
 
 function ExperimentContent() {
-  const { experiment, loadExperiment } = usePreview();
+  const { experiment, loadExperiment, updateParticipantProgress } = usePreview();
   const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
   const [currentStageNumber, setCurrentStageNumber] = useState(0);
   const params = useParams();
@@ -1042,12 +1042,18 @@ function ExperimentContent() {
   // Load the experiment data when the component mounts
   useEffect(() => {
     if (experimentId) {
-      loadExperiment(experimentId);
+      // Pass true to indicate this is the participant view
+      loadExperiment(experimentId, true);
     }
   }, [experimentId, loadExperiment]);
   
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
+    // Record that the user has started the experiment
+    if (experiment) {
+      // Ensure progress is updated when beginning the experiment
+      updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id);
+    }
     setViewMode('experiment');
   };
   
@@ -1111,6 +1117,14 @@ function ExperimentContent() {
   
   // Thank You screen view
   if (viewMode === 'thankyou') {
+    // Mark experiment as completed when showing thank you screen
+    useEffect(() => {
+      if (experiment) {
+        // Ensure the experiment is marked as completed in MongoDB
+        updateParticipantProgress(experiment.id, 'completed');
+      }
+    }, [experiment, updateParticipantProgress]);
+    
     return (
       <div className="p-4">
         <div className="w-full p-4 bg-white rounded border text-center">
