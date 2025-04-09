@@ -107,28 +107,45 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
   const [timeRemaining, setTimeRemaining] = useState(stage.durationSeconds || 0);
   const [timerComplete, setTimerComplete] = useState(false);
+  const isMountedRef = useRef(true);
+  
+  // Set up mount state tracking
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   // Handle countdown timer
   useEffect(() => {
     // Don't start timer if there's no duration
     if (!stage.durationSeconds || stage.durationSeconds <= 0) {
-      setTimerComplete(true);
+      if (isMountedRef.current) {
+        setTimerComplete(true);
+      }
       return;
     }
     
     // Set initial time
-    setTimeRemaining(stage.durationSeconds);
+    if (isMountedRef.current) {
+      setTimeRemaining(stage.durationSeconds);
+    }
     
     // Create interval to decrement timer
     const interval = setInterval(() => {
-      setTimeRemaining(prevTime => {
-        if (prevTime <= 1) {
-          clearInterval(interval);
-          setTimerComplete(true);
-          return 0;
-        }
-        return prevTime - 1;
-      });
+      if (isMountedRef.current) {
+        setTimeRemaining(prevTime => {
+          if (prevTime <= 1) {
+            clearInterval(interval);
+            if (isMountedRef.current) {
+              setTimerComplete(true);
+            }
+            return 0;
+          }
+          return prevTime - 1;
+        });
+      }
     }, 1000);
     
     // Cleanup interval on unmount
@@ -799,6 +816,9 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   
   // Handle round timer - only start if we have data 
   useEffect(() => {
+    // Reference to track if component is mounted
+    let isMounted = true;
+    
     // Don't start timer if we're still loading data
     if (isLoading) {
       return;
@@ -806,32 +826,43 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     
     // Don't start timer if no rounds or duration
     if (!totalRounds || !roundDuration) {
-      setScenarioComplete(true);
+      if (isMounted) {
+        setScenarioComplete(true);
+      }
       return;
     }
     
     // Create interval to decrement timer
     const interval = setInterval(() => {
-      setRoundTimeRemaining(prevTime => {
-        if (prevTime <= 1) {
-          // Time for this round is up
-          if (currentRound < totalRounds) {
-            // Move to next round
-            setCurrentRound(prev => prev + 1);
-            return roundDuration; // Reset timer for next round
-          } else {
-            // All rounds complete
-            clearInterval(interval);
-            setScenarioComplete(true);
-            return 0;
+      if (isMounted) {
+        setRoundTimeRemaining(prevTime => {
+          if (prevTime <= 1) {
+            // Time for this round is up
+            if (currentRound < totalRounds) {
+              // Move to next round
+              if (isMounted) {
+                setCurrentRound(prev => prev + 1);
+              }
+              return roundDuration; // Reset timer for next round
+            } else {
+              // All rounds complete
+              clearInterval(interval);
+              if (isMounted) {
+                setScenarioComplete(true);
+              }
+              return 0;
+            }
           }
-        }
-        return prevTime - 1;
-      });
+          return prevTime - 1;
+        });
+      }
     }, 1000);
     
     // Cleanup interval on unmount
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [totalRounds, roundDuration, currentRound, isLoading]);
   
   // Format time as MM:SS
@@ -1264,13 +1295,21 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                           {/* Action buttons with toast to simulate trading */}
                           <div className="flex gap-4 mt-4">
                             <button 
-                              onClick={() => toast.success(`Buy action for ${asset.symbol} (simulation only)`)}
+                              onClick={() => {
+                                if (isMountedRef && isMountedRef.current) {
+                                  toast.success(`Buy action for ${asset.symbol} (simulation only)`);
+                                }
+                              }}
                               className="flex-1 text-base bg-green-100 hover:bg-green-200 text-green-700 font-medium py-3 px-4 rounded-md transition-colors"
                             >
                               Buy
                             </button>
                             <button 
-                              onClick={() => toast.success(`Sell action for ${asset.symbol} (simulation only)`)}
+                              onClick={() => {
+                                if (isMountedRef && isMountedRef.current) {
+                                  toast.success(`Sell action for ${asset.symbol} (simulation only)`);
+                                }
+                              }}
                               className="flex-1 text-base bg-red-100 hover:bg-red-200 text-red-700 font-medium py-3 px-4 rounded-md transition-colors"
                             >
                               Sell
@@ -1318,6 +1357,15 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
   const [responses, setResponses] = useState<Record<string, any>>({});
+  const isMountedRef = useRef(true);
+  
+  // Set up mount state tracking
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   // Initialize responses if needed
   useEffect(() => {
@@ -1336,34 +1384,40 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       }
     });
     
-    setResponses(initialResponses);
+    if (isMountedRef.current) {
+      setResponses(initialResponses);
+    }
   }, [stage.questions]);
   
   const handleInputChange = (questionId: string, value: string | string[] | number) => {
-    setResponses(prev => ({
-      ...prev,
-      [questionId]: value
-    }));
+    if (isMountedRef.current) {
+      setResponses(prev => ({
+        ...prev,
+        [questionId]: value
+      }));
+    }
   };
   
   const handleCheckboxChange = (questionId: string, option: string, checked: boolean) => {
-    setResponses(prev => {
-      const currentSelections = Array.isArray(prev[questionId])
-        ? [...prev[questionId]]
-        : [];
-      
-      if (checked) {
-        return {
-          ...prev,
-          [questionId]: [...currentSelections, option]
-        };
-      } else {
-        return {
-          ...prev,
-          [questionId]: currentSelections.filter(item => item !== option)
-        };
-      }
-    });
+    if (isMountedRef.current) {
+      setResponses(prev => {
+        const currentSelections = Array.isArray(prev[questionId])
+          ? [...prev[questionId]]
+          : [];
+        
+        if (checked) {
+          return {
+            ...prev,
+            [questionId]: [...currentSelections, option]
+          };
+        } else {
+          return {
+            ...prev,
+            [questionId]: currentSelections.filter(item => item !== option)
+          };
+        }
+      });
+    }
   };
   
   return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParticipant } from '@/contexts/ParticipantContext';
 import InstructionsStage from './InstructionsStage';
 import BreakStage from './BreakStage';
@@ -28,24 +28,62 @@ export default function ExperimentRunner({ experimentId, onComplete }: Experimen
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Load experiment data
+  // Load experiment data with safety checks
   useEffect(() => {
+    // Abort controller for cleanup
+    const controller = new AbortController();
+    
     async function loadData() {
+      // Skip if component is already unmounted
+      if (!isMountedRef.current) return;
+      
       try {
-        setIsLoading(true);
-        setError(null);
-        await loadExperiment(experimentId);
-        setIsLoading(false);
-      } catch (err) {
-        console.error('Error loading experiment:', err);
-        setError('Failed to load experiment data. Please try again later.');
-        setIsLoading(false);
+        // Only update state if still mounted
+        if (isMountedRef.current) {
+          setIsLoading(true);
+          setError(null);
+        }
+        
+        try {
+          await loadExperiment(experimentId);
+          
+          // Only update state if still mounted
+          if (isMountedRef.current) {
+            setIsLoading(false);
+          }
+        } catch (err) {
+          console.error('Error loading experiment:', err);
+          
+          // Only update state if still mounted
+          if (isMountedRef.current) {
+            setError('Failed to load experiment data. Please try again later.');
+            setIsLoading(false);
+          }
+        }
+      } catch (unexpectedError) {
+        console.error('Unexpected error in loadData:', unexpectedError);
+        
+        // Only update state if still mounted
+        if (isMountedRef.current) {
+          setError('An unexpected error occurred. Please refresh the page.');
+          setIsLoading(false);
+        }
       }
     }
     
     if (experimentId) {
-      loadData();
+      // Small delay to ensure isMountedRef is properly initialized
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          loadData();
+        }
+      }, 0);
     }
+    
+    // Cleanup function
+    return () => {
+      controller.abort();
+    };
   }, [experimentId, loadExperiment]);
   
   // Handle the Next button click on the welcome screen
@@ -53,22 +91,53 @@ export default function ExperimentRunner({ experimentId, onComplete }: Experimen
     setViewMode('experiment');
   };
   
-  // Handle stage navigation
+  // Use ref to track component mount state
+  const isMountedRef = React.useRef(true);
+  
+  // Effect to set isMounted to false on unmount
+  useEffect(() => {
+    // Set to true on mount
+    isMountedRef.current = true;
+    
+    // Clean up function sets to false on unmount
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  
+  // Handle stage navigation with safety checks
   const handleStageNext = () => {
-    if (!experiment) return;
+    if (!experiment || !isMountedRef.current) return;
     
     // Check if this is the last stage
     if (currentStageIndex >= experiment.stages.length - 1) {
-      // Complete the experiment if this is the last stage
-      completeExperiment().then(() => {
-        setViewMode('thankyou');
-        toast.success('Experiment completed!');
-        
-        // If an onComplete callback was provided, call it
-        if (onComplete) {
-          onComplete();
+      // Immediately show thank you view for better UX
+      setViewMode('thankyou');
+      
+      // Then handle the completion in the background
+      setTimeout(() => {
+        // Only proceed if component is still mounted
+        if (isMountedRef.current) {
+          // Complete the experiment
+          completeExperiment()
+            .then(() => {
+              // Only update state if component is still mounted
+              if (isMountedRef.current) {
+                // Show success message - toast is separate from React state updates
+                toast.success('Experiment completed!');
+                
+                // If an onComplete callback was provided, call it
+                if (onComplete) {
+                  onComplete();
+                }
+              }
+            })
+            .catch(error => {
+              console.warn('Error during experiment completion (non-critical):', error);
+              // Don't try to update state or show error if component unmounted
+            });
         }
-      });
+      }, 100);
     } else {
       // Otherwise, go to the next stage
       goToNextStage();
