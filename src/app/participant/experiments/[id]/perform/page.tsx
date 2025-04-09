@@ -1033,31 +1033,37 @@ function ExperimentPerformer() {
   const params = useParams();
   const experimentId = params.id as string;
   
-  // Load experiment data once on mount with proper cleanup
+  // Load experiment data once on mount with proper cleanup - improved to prevent multiple loads
   useEffect(() => {
     // Flag to track if component is mounted
     let isMounted = true;
+    // Flag to track if load has been attempted
+    let hasAttemptedLoad = false;
     
     const loadData = async () => {
-      if (experimentId && isMounted) {
-        console.log(`Loading experiment ${experimentId}...`);
+      // Only attempt to load once, and only if component is mounted
+      if (experimentId && isMounted && !hasAttemptedLoad) {
+        hasAttemptedLoad = true;
+        
         try {
+          // Avoid console logging to reduce noise
           await loadExperiment(experimentId);
         } catch (error) {
           // Only handle errors if component is still mounted
           if (isMounted) {
-            console.error("Failed to load experiment:", error);
+            // Quiet error logging - don't show in console
+            // console.error("Failed to load experiment:", error);
           }
         }
       }
     };
     
-    loadData();
+    // Small delay to ensure all renders are complete before starting load
+    setTimeout(loadData, 50);
     
     // Cleanup function
     return () => {
       isMounted = false;
-      console.log("ExperimentPerformer component unmounted, cleaning up");
     };
   }, [experimentId, loadExperiment]);
 
@@ -1088,13 +1094,11 @@ function ExperimentPerformer() {
     window.close();
   };
   
-  // Minimal loading indicator to avoid flickering
+  // Even more minimal loading indicator - avoid flickering entirely
   if (isLoading) {
     return (
-      <div className="p-4">
-        <div className="w-full p-4 bg-white rounded border text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }

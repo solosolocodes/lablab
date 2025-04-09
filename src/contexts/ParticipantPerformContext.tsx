@@ -67,28 +67,44 @@ export function ParticipantPerformProvider({ children }: { children: React.React
   // Track ongoing operations to prevent race conditions
   const pendingOperations = useRef<AbortController[]>([]);
 
-  // Load experiment data with proper error handling and timeout - simplified to reduce flickering
+  // Single global loading state tracking ref
+  const isCurrentlyLoading = useRef(false);
+  
+  // Load experiment data with minimal state changes to prevent flickering
   const loadExperiment = async (experimentId: string): Promise<boolean> => {
     // Create a unique operation ID to track this specific load request
     const operationId = `load-${experimentId}-${Date.now()}`;
+    
+    // If we're already loading, don't start another load
+    if (isCurrentlyLoading.current) {
+      console.log(`[${operationId}] Experiment already loading, ignoring request`);
+      return false;
+    }
+    
     console.log(`[${operationId}] Starting experiment data load for ID: ${experimentId}`);
     
+    // Set loading indicator after a significant delay to avoid flickering on fast loads
+    // This prevents showing loading state for quick operations
+    let loadingTimerId: ReturnType<typeof setTimeout> | null = null;
+    
     try {
-      // Set loading state with minimal delay
+      // Mark that we're loading
+      isCurrentlyLoading.current = true;
+      
       if (isMounted.current) {
         setLoadError(null);
-        // Use a small delay for setting loading state to avoid flickering
-        setTimeout(() => {
-          if (isMounted.current) {
+        
+        // Set a delayed loading state - only show loading UI if fetch takes longer than 500ms
+        loadingTimerId = setTimeout(() => {
+          if (isMounted.current && isCurrentlyLoading.current) {
             setIsLoading(true);
           }
-        }, 150); // Small delay to avoid frequent loading flickers
+        }, 500);
       }
       
       // First, abort any pending operations to prevent race conditions
       pendingOperations.current.forEach(controller => {
         if (!controller.signal.aborted) {
-          console.log('Aborting previous pending operation');
           controller.abort();
         }
       });
@@ -102,36 +118,31 @@ export function ParticipantPerformProvider({ children }: { children: React.React
       const controller = new AbortController();
       pendingOperations.current.push(controller);
       
-      // Set up timeout for the fetch operations - increased to be more forgiving
-      const timeout = 20000; // 20 seconds
+      // Set up timeout for the fetch operations
+      const timeout = 30000; // 30 seconds
       const timeoutId = setTimeout(() => {
         console.log(`[${operationId}] Fetch timeout reached (${timeout}ms), aborting requests`);
         controller.abort();
       }, timeout);
       
       try {
-        // Fetch experiment details and progress in parallel with unique request IDs
-        console.log(`[${operationId}] Starting parallel fetch for experiment data and progress`);
-        
         // Add cache-busting query param to prevent browser/CDN caching
         const cacheBuster = `_=${Date.now()}`;
+        const headers = { 
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        };
         
+        // Fetch experiment details and progress in parallel
         const [experimentResponse, progressResponse] = await Promise.all([
           fetch(`/api/experiments/${experimentId}?${cacheBuster}&preview=true`, {
             signal: controller.signal,
-            headers: { 
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-            }
+            headers
           }),
           fetch(`/api/participant/experiments/${experimentId}/progress?${cacheBuster}`, {
             signal: controller.signal,
-            headers: { 
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-            }
+            headers
           })
         ]);
         
@@ -170,9 +181,17 @@ export function ParticipantPerformProvider({ children }: { children: React.React
           return orderA - orderB;
         });
 
+        // Clear the loading timer if it exists
+        if (loadingTimerId) {
+          clearTimeout(loadingTimerId);
+          loadingTimerId = null;
+        }
+        
         // Only update state if component is still mounted
         if (isMounted.current) {
           console.log(`[${operationId}] Setting experiment with ${sortedStages.length} stages`);
+          
+          // Update multiple states at once to reduce renders
           setExperiment({ ...experimentData, stages: sortedStages });
           setProgress(progressData);
           
@@ -185,7 +204,7 @@ export function ParticipantPerformProvider({ children }: { children: React.React
             }
           }
           
-          console.log(`[${operationId}] Setting current stage index to ${startIndex}`);
+          // Set all states in a batch
           setCurrentStageIndex(startIndex);
           if (sortedStages.length > 0) {
             setTimeRemaining(sortedStages[startIndex].durationSeconds || 0);
@@ -197,15 +216,23 @@ export function ParticipantPerformProvider({ children }: { children: React.React
           }
           
           setTimerActive(true);
+          
+          // Set loading to false at the very end
           setIsLoading(false);
-        } else {
-          console.log(`[${operationId}] Component unmounted, skipping state updates`);
-        }
+        } 
+        
+        // Reset loading flag
+        isCurrentlyLoading.current = false;
         
         console.log(`[${operationId}] Experiment load completed successfully`);
-        // Return to indicate success
         return true;
       } catch (fetchError) {
+        // Clear the loading timer if it exists
+        if (loadingTimerId) {
+          clearTimeout(loadingTimerId);
+          loadingTimerId = null;
+        }
+        
         // Make sure timeout is cleared
         clearTimeout(timeoutId);
         
@@ -221,22 +248,32 @@ export function ParticipantPerformProvider({ children }: { children: React.React
         throw fetchError;
       }
     } catch (error) {
+      // Clear the loading timer if it exists
+      if (loadingTimerId) {
+        clearTimeout(loadingTimerId);
+        loadingTimerId = null;
+      }
+      
       console.error(`[${operationId}] Error loading experiment:`, error);
+      
+      // Reset loading flag
+      isCurrentlyLoading.current = false;
       
       // Only update state if component is still mounted
       if (isMounted.current) {
         // Only show toast error if this wasn't an abort
         if (!(error instanceof Error && error.message === 'Request was cancelled')) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-          toast.error(`Failed to load experiment data: ${errorMessage}. Please try again or contact support.`);
           setLoadError(errorMessage);
+          
+          // Only show toast for errors that aren't cancellations
+          toast.error(`Failed to load experiment data: ${errorMessage}. Please try again.`);
         }
         
+        // Always set loading to false
         setIsLoading(false);
-      } else {
-        console.log(`[${operationId}] Component unmounted, skipping error state updates`);
       }
-      // Return false to indicate failure
+      
       return false;
     }
   };
