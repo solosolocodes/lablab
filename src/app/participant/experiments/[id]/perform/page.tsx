@@ -221,7 +221,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   const [error, setError] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   
-  // Function to fetch wallet assets by wallet ID with fallback data
+  // Function to fetch wallet assets by wallet ID with fallback data and retry logic
   const fetchWalletAssets = async (walletId: string) => {
     if (!walletId) {
       setWalletError("No wallet ID available in scenario data");
@@ -229,33 +229,85 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       return;
     }
     
+    // Maximum number of retry attempts
+    const MAX_RETRIES = 10;
+    // Reference to track retries for this specific request
+    const requestRef = useRef({
+      attempts: 0,
+      lastSuccess: false,
+      inProgress: false
+    });
+    
     try {
+      // Don't start a new request if one is already in progress
+      if (requestRef.current.inProgress) {
+        console.log('Asset fetch already in progress, skipping duplicate request');
+        return;
+      }
+      
+      // If we've already failed too many times, show error and use fallback
+      if (requestRef.current.attempts >= MAX_RETRIES) {
+        console.warn(`Exceeded maximum retry attempts (${MAX_RETRIES}), using fallback data`);
+        setWalletError(`Connection issues detected. Using offline data after ${MAX_RETRIES} attempts.`);
+        useFallbackAssets(walletId);
+        setIsLoadingWallet(false);
+        return;
+      }
+      
       setIsLoadingWallet(true);
+      requestRef.current.inProgress = true;
+      requestRef.current.attempts++;
+      
+      // Calculate timeout with exponential backoff (1s, 2s, 4s, 8s, etc. up to 10s max)
+      const baseTimeout = 1000; // Start with 1 second
+      const backoffFactor = Math.min(Math.pow(2, requestRef.current.attempts - 1), 10);
+      const timeout = baseTimeout * backoffFactor;
       
       // Use AbortController to add timeout to fetch request
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      console.log(`Fetching wallet assets (attempt ${requestRef.current.attempts}/${MAX_RETRIES}) with ${timeout}ms timeout`);
       
       try {
-        const response = await fetch(`/api/wallets/${walletId}/assets?preview=true&t=${Date.now()}`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Cache-Control': 'no-cache'
-          },
-          signal: controller.signal
-        });
+        // Add cache-busting and retry indicator to URL
+        const response = await fetch(
+          `/api/wallets/${walletId}/assets?preview=true&t=${Date.now()}&retry=${requestRef.current.attempts}`, 
+          {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
+            signal: controller.signal
+          }
+        );
         
         clearTimeout(timeoutId);
         
         if (!response.ok) {
           console.warn(`Failed to fetch wallet assets: ${response.status}`);
-          // Don't throw, use fallback data instead
-          useFallbackAssets(walletId);
+          
+          // Schedule retry after a delay if we haven't exceeded max retries
+          if (requestRef.current.attempts < MAX_RETRIES) {
+            requestRef.current.inProgress = false;
+            // Wait a bit longer between attempts (min 1.5s, max 5s)
+            const delayMs = Math.min(1500 * requestRef.current.attempts, 5000);
+            console.log(`Will retry asset fetch in ${delayMs}ms...`);
+            setTimeout(() => fetchWalletAssets(walletId), delayMs);
+          } else {
+            // Use fallback after max retries
+            useFallbackAssets(walletId);
+          }
           return;
         }
         
         const data = await response.json();
+        
+        // Reset retry counter on successful response
+        requestRef.current.attempts = 0;
+        requestRef.current.lastSuccess = true;
         
         if (Array.isArray(data)) {
           setWalletAssets(data);
@@ -268,17 +320,43 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       } catch (fetchErr) {
         clearTimeout(timeoutId);
         if (fetchErr.name === 'AbortError') {
-          console.warn('Wallet assets fetch timed out - using fallback data');
-          useFallbackAssets(walletId);
+          console.warn(`Wallet assets fetch timed out after ${timeout}ms (attempt ${requestRef.current.attempts}/${MAX_RETRIES})`);
+          
+          // If we haven't exceeded max retries, schedule another attempt
+          if (requestRef.current.attempts < MAX_RETRIES) {
+            requestRef.current.inProgress = false;
+            // Increase delay between retries
+            const delayMs = Math.min(1500 * requestRef.current.attempts, 5000);
+            console.log(`Will retry asset fetch in ${delayMs}ms...`);
+            setTimeout(() => fetchWalletAssets(walletId), delayMs);
+            return;
+          } else {
+            // Use fallback data after max retries
+            console.warn(`Max retries (${MAX_RETRIES}) reached, using fallback data`);
+            useFallbackAssets(walletId);
+          }
         } else {
-          throw fetchErr;
+          console.error("Network error fetching wallet assets:", fetchErr);
+          // For non-timeout errors, we might still retry
+          if (requestRef.current.attempts < MAX_RETRIES) {
+            requestRef.current.inProgress = false;
+            // Longer delay for network errors
+            const delayMs = Math.min(2000 * requestRef.current.attempts, 8000);
+            console.log(`Network error, will retry asset fetch in ${delayMs}ms...`);
+            setTimeout(() => fetchWalletAssets(walletId), delayMs);
+            return;
+          } else {
+            useFallbackAssets(walletId);
+          }
         }
+      } finally {
+        requestRef.current.inProgress = false;
+        setIsLoadingWallet(false);
       }
-      
-      setIsLoadingWallet(false);
     } catch (err) {
-      console.error("Error fetching wallet assets:", err);
-      setWalletError("Unable to load assets. Using sample data instead.");
+      console.error("Error in fetchWalletAssets:", err);
+      requestRef.current.inProgress = false;
+      setWalletError(`Unable to load assets after ${requestRef.current.attempts} attempts. Using sample data instead.`);
       useFallbackAssets(walletId);
       setIsLoadingWallet(false);
     }
@@ -317,9 +395,18 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     setWalletAssets(fallbackAssets);
   };
   
-  // Fetch scenario data with better error handling
+  // Fetch scenario data with robust error handling, retries and anti-flickering
   useEffect(() => {
     let isMounted = true;
+    
+    // Track fetch status
+    const fetchStatus = {
+      attempts: 0,
+      maxRetries: 10,
+      inProgress: false,
+      lastSuccess: false,
+      abortController: null as AbortController | null,
+    };
     
     // Generate fallback scenario data
     const generateFallbackScenario = () => {
@@ -350,60 +437,118 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       };
     };
     
+    // Helper function to apply fallback data
+    const applyFallbackData = () => {
+      if (!isMounted) return;
+      
+      console.log('Using fallback scenario data');
+      const fallbackData = generateFallbackScenario();
+      setScenarioData(fallbackData);
+      setCurrentRound(1);
+      setRoundTimeRemaining(fallbackData.roundDuration);
+      setScenarioComplete(false);
+      fetchWalletAssets(fallbackData.walletId);
+      setIsLoading(false);
+      
+      // Show gentle error message to user
+      if (fetchStatus.attempts >= fetchStatus.maxRetries) {
+        setError(`Connection issues detected. Using offline data after ${fetchStatus.maxRetries} attempts.`);
+      }
+    };
+    
+    // Fetch with retry logic
     async function fetchScenarioData() {
       if (!stage.scenarioId) {
         if (isMounted) {
           console.warn("No scenario ID provided, using fallback data");
-          const fallbackData = generateFallbackScenario();
-          setScenarioData(fallbackData);
-          setCurrentRound(1);
-          setRoundTimeRemaining(fallbackData.roundDuration);
-          setScenarioComplete(false);
-          fetchWalletAssets(fallbackData.walletId);
-          setIsLoading(false);
+          applyFallbackData();
         }
+        return;
+      }
+      
+      // Avoid duplicate requests
+      if (fetchStatus.inProgress) {
+        console.log('Scenario fetch already in progress, skipping duplicate request');
+        return;
+      }
+      
+      // If we've reached max retries, use fallback
+      if (fetchStatus.attempts >= fetchStatus.maxRetries) {
+        console.warn(`Exceeded maximum retry attempts (${fetchStatus.maxRetries}), using fallback data`);
+        applyFallbackData();
         return;
       }
       
       try {
         if (isMounted) {
-          setIsLoading(true);
+          // Only show loading UI after first attempt
+          if (fetchStatus.attempts === 0) {
+            setIsLoading(true);
+          }
         }
+        
+        fetchStatus.inProgress = true;
+        fetchStatus.attempts++;
+        
+        // Calculate timeout with exponential backoff (2s, 4s, 8s, etc. up to 20s max)
+        const baseTimeout = 2000; // Start with 2 seconds
+        const backoffFactor = Math.min(Math.pow(2, fetchStatus.attempts - 1), 10);
+        const timeout = baseTimeout * backoffFactor;
+        
+        console.log(`Fetching scenario data (attempt ${fetchStatus.attempts}/${fetchStatus.maxRetries}) with ${timeout}ms timeout`);
         
         // Use AbortController to add timeout to fetch request
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        fetchStatus.abortController = controller;
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
         
         try {
-          const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true&t=${Date.now()}`, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-              'Cache-Control': 'no-cache'
-            },
-            signal: controller.signal
-          });
+          // Add cache-busting and retry indicator to URL
+          const response = await fetch(
+            `/api/scenarios/${stage.scenarioId}?preview=true&t=${Date.now()}&retry=${fetchStatus.attempts}`, 
+            {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
+              },
+              signal: controller.signal
+            }
+          );
           
           clearTimeout(timeoutId);
           
           if (!response.ok) {
-            console.warn(`Failed to fetch scenario: ${response.status}, using fallback data`);
-            // Use fallback data instead of throwing
-            if (isMounted) {
-              const fallbackData = generateFallbackScenario();
-              setScenarioData(fallbackData);
-              setCurrentRound(1);
-              setRoundTimeRemaining(fallbackData.roundDuration);
-              setScenarioComplete(false);
-              fetchWalletAssets(fallbackData.walletId);
-              setIsLoading(false);
+            console.warn(`Failed to fetch scenario: ${response.status}`);
+            
+            // Schedule retry with exponential backoff if we haven't exceeded max retries
+            if (fetchStatus.attempts < fetchStatus.maxRetries && isMounted) {
+              fetchStatus.inProgress = false;
+              
+              // Longer delay between retries
+              const delayMs = Math.min(1500 * fetchStatus.attempts, 5000);
+              console.log(`Will retry scenario fetch in ${delayMs}ms...`);
+              
+              setTimeout(() => {
+                // Only retry if component is still mounted
+                if (isMounted) fetchScenarioData();
+              }, delayMs);
+              return;
+            } else {
+              // Use fallback after max retries
+              if (isMounted) applyFallbackData();
+              return;
             }
-            return;
           }
           
           const data = await response.json();
           
           if (isMounted) {
+            // Reset retry counter on success
+            fetchStatus.attempts = 0;
+            fetchStatus.lastSuccess = true;
+            
             setScenarioData(data);
             
             // Initialize with the data from MongoDB
@@ -423,42 +568,75 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
           }
         } catch (fetchErr) {
           clearTimeout(timeoutId);
+          
+          if (!isMounted) return;
+          
           if (fetchErr.name === 'AbortError') {
-            console.warn('Scenario fetch timed out - using fallback data');
-            if (isMounted) {
-              const fallbackData = generateFallbackScenario();
-              setScenarioData(fallbackData);
-              setCurrentRound(1);
-              setRoundTimeRemaining(fallbackData.roundDuration);
-              setScenarioComplete(false);
-              fetchWalletAssets(fallbackData.walletId);
-              setIsLoading(false);
+            console.warn(`Scenario fetch timed out after ${timeout}ms (attempt ${fetchStatus.attempts}/${fetchStatus.maxRetries})`);
+            
+            // If we haven't exceeded max retries, schedule another attempt
+            if (fetchStatus.attempts < fetchStatus.maxRetries) {
+              fetchStatus.inProgress = false;
+              
+              // Increase delay between retries
+              const delayMs = Math.min(2000 * fetchStatus.attempts, 8000);
+              console.log(`Will retry scenario fetch in ${delayMs}ms...`);
+              
+              setTimeout(() => {
+                // Only retry if component is still mounted
+                if (isMounted) fetchScenarioData();
+              }, delayMs);
+              return;
+            } else {
+              // Use fallback data after max retries
+              console.warn(`Max retries (${fetchStatus.maxRetries}) reached, using fallback scenario data`);
+              applyFallbackData();
             }
           } else {
-            throw fetchErr;
+            console.error("Network error fetching scenario data:", fetchErr);
+            
+            // For non-timeout errors, we might still retry
+            if (fetchStatus.attempts < fetchStatus.maxRetries) {
+              fetchStatus.inProgress = false;
+              
+              // Longer delay for network errors
+              const delayMs = Math.min(3000 * fetchStatus.attempts, 10000);
+              console.log(`Network error, will retry scenario fetch in ${delayMs}ms...`);
+              
+              setTimeout(() => {
+                // Only retry if component is still mounted
+                if (isMounted) fetchScenarioData();
+              }, delayMs);
+              return;
+            } else {
+              // Use fallback data after max retries
+              applyFallbackData();
+            }
           }
+        } finally {
+          fetchStatus.inProgress = false;
         }
       } catch (err) {
         if (isMounted) {
-          console.error("Error fetching scenario data:", err);
-          setError("Unable to load scenario data. Using fallback data instead.");
+          console.error("Error in fetchScenarioData:", err);
+          fetchStatus.inProgress = false;
           
-          // If we can't get data from MongoDB, use fallback data
-          const fallbackData = generateFallbackScenario();
-          setScenarioData(fallbackData);
-          setCurrentRound(1);
-          setRoundTimeRemaining(fallbackData.roundDuration);
-          setScenarioComplete(false);
-          fetchWalletAssets(fallbackData.walletId);
-          setIsLoading(false);
+          setError(`Unable to load scenario data after ${fetchStatus.attempts} attempts. Using offline data instead.`);
+          applyFallbackData();
         }
       }
     }
     
     fetchScenarioData();
     
+    // Clean up function
     return () => {
       isMounted = false;
+      
+      // Abort any in-flight requests when component unmounts
+      if (fetchStatus.abortController && !fetchStatus.abortController.signal.aborted) {
+        fetchStatus.abortController.abort();
+      }
     };
   }, [stage.scenarioId, stage.roundDuration, stage.title, stage.description, stage.rounds]);
   
@@ -522,27 +700,61 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     );
   }
   
-  // Error state with fallback
+  // Error state with fallback - more user friendly and with retry option
   if (error) {
+    // Track whether this is a fatal error (need to skip) or 
+    // a recoverable error (using fallback data but can continue)
+    const isFatalError = !scenarioData;
+    const isConnectionError = error.includes('Connection issues') || 
+                              error.includes('Unable to load');
+    
     return (
       <div className="w-full p-4 bg-white rounded border">
         <div className="mb-4 pb-3 border-b border-gray-200">
-          <h3 className="text-xl font-bold mb-2 text-red-600">Error Loading Scenario</h3>
+          <h3 className="text-xl font-bold mb-2 text-yellow-600">
+            {isConnectionError ? 'Connection Issues Detected' : 'Error Loading Scenario'}
+          </h3>
           <p className="text-gray-600">{error}</p>
         </div>
         
-        <div className="p-4 bg-red-50 rounded border mb-5">
-          <p className="text-red-700 mb-2">Could not fetch scenario data.</p>
-          <p className="text-gray-700">Using fallback data from experiment configuration.</p>
+        <div className={`p-4 ${isConnectionError ? 'bg-yellow-50' : 'bg-red-50'} rounded border mb-5`}>
+          {isConnectionError ? (
+            <>
+              <div className="flex items-center mb-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <p className="text-yellow-700 font-medium">We're experiencing some connection issues with our database</p>
+              </div>
+              <p className="text-gray-700 mb-2">The experiment will continue with offline data to ensure you can complete your session. Your experience will not be affected.</p>
+              <div className="text-sm text-gray-600 mt-2">
+                <span className="font-medium">Note:</span> If you continue to see this message, please inform the experiment administrator.
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-red-700 mb-2">Could not fetch scenario data.</p>
+              <p className="text-gray-700">Using fallback data from experiment configuration.</p>
+            </>
+          )}
         </div>
         
         <div className="flex justify-center">
-          <button 
-            onClick={onNext}
-            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Skip to Next Stage
-          </button>
+          {isFatalError ? (
+            <button 
+              onClick={onNext}
+              className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Skip to Next Stage
+            </button>
+          ) : (
+            <button 
+              onClick={() => setError(null)}
+              className="px-6 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+            >
+              Continue With Offline Data
+            </button>
+          )}
         </div>
       </div>
     );
@@ -697,11 +909,18 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                 </div>
               )}
               
-              {/* Error state */}
+              {/* Error state - but non-blocking with message to inform admin */}
               {walletError && (
                 <div className="p-4 text-center">
-                  <p className="text-red-500">Error loading assets</p>
-                  <p className="text-xs text-gray-500 mt-1">{walletError}</p>
+                  <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                    <div className="flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <p className="text-yellow-700 font-medium">Using sample data due to connection issues</p>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-2">Your experiment will continue normally. If this persists, please inform your administrator.</p>
+                  </div>
                 </div>
               )}
               
