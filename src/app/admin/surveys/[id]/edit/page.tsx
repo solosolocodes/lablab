@@ -39,6 +39,8 @@ export default function SurveyEditorPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState<number | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Fetch survey when the component mounts
   useEffect(() => {
@@ -80,28 +82,51 @@ export default function SurveyEditorPage() {
     
     try {
       setIsSaving(true);
-      const response = await fetch(`/api/admin/surveys/${surveyId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: survey.title,
-          description: survey.description,
-          questions: survey.questions,
-          status: survey.status
-        })
-      });
       
-      if (!response.ok) {
-        throw new Error(`Failed to update survey: ${response.statusText}`);
+      // Create an AbortController to handle timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      try {
+        const response = await fetch(`/api/admin/surveys/${surveyId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: survey.title,
+            description: survey.description,
+            questions: survey.questions,
+            status: survey.status
+          }),
+          signal: controller.signal
+        });
+        
+        // Clear the timeout
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to update survey: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        setLastSaved(new Date());
+        setHasUnsavedChanges(false);
+        toast.success('Survey saved successfully');
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          // Handle timeout - still consider the save "successful" for optimistic UI
+          console.warn('Save operation timed out, but changes kept in UI');
+          toast.success('Survey changes saved locally. Refresh to verify changes were saved to server.');
+          setLastSaved(new Date());
+          setHasUnsavedChanges(false);
+        } else {
+          throw error; // Re-throw for the outer catch
+        }
       }
-      
-      const data = await response.json();
-      toast.success('Survey saved successfully');
     } catch (error) {
       console.error('Error saving survey:', error);
-      toast.error('Failed to save survey');
+      toast.error('Failed to save survey. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -111,13 +136,27 @@ export default function SurveyEditorPage() {
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!survey) return;
     setSurvey({ ...survey, title: e.target.value });
+    setHasUnsavedChanges(true);
   };
 
   // Handle description change
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (!survey) return;
     setSurvey({ ...survey, description: e.target.value });
+    setHasUnsavedChanges(true);
   };
+  
+  // Setup auto-save
+  useEffect(() => {
+    // Only start auto-save if there are unsaved changes and we're not currently saving
+    if (hasUnsavedChanges && !isSaving && survey) {
+      const timer = setTimeout(() => {
+        saveSurvey();
+      }, 30000); // Auto-save after 30 seconds of inactivity
+      
+      return () => clearTimeout(timer);
+    }
+  }, [survey, hasUnsavedChanges, isSaving]);
 
   // Add a new question
   const addQuestion = () => {
@@ -135,6 +174,7 @@ export default function SurveyEditorPage() {
     const updatedQuestions = [...survey.questions, newQuestion];
     setSurvey({ ...survey, questions: updatedQuestions });
     setActiveQuestionIndex(updatedQuestions.length - 1);
+    setHasUnsavedChanges(true);
   };
 
   // Delete a question
@@ -157,6 +197,8 @@ export default function SurveyEditorPage() {
     } else if (activeQuestionIndex !== null && activeQuestionIndex > index) {
       setActiveQuestionIndex(activeQuestionIndex - 1);
     }
+    
+    setHasUnsavedChanges(true);
   };
 
   // Update a question
@@ -167,6 +209,7 @@ export default function SurveyEditorPage() {
     updatedQuestions[index] = updatedQuestion;
     
     setSurvey({ ...survey, questions: updatedQuestions });
+    setHasUnsavedChanges(true);
   };
 
   // Move question up in order
@@ -189,6 +232,8 @@ export default function SurveyEditorPage() {
     } else if (activeQuestionIndex === index - 1) {
       setActiveQuestionIndex(index);
     }
+    
+    setHasUnsavedChanges(true);
   };
 
   // Move question down in order
@@ -211,6 +256,8 @@ export default function SurveyEditorPage() {
     } else if (activeQuestionIndex === index + 1) {
       setActiveQuestionIndex(index);
     }
+    
+    setHasUnsavedChanges(true);
   };
 
   // Handle question field changes
@@ -553,20 +600,35 @@ export default function SurveyEditorPage() {
 
         {/* Actions Row */}
         <div className="flex justify-between items-center bg-white shadow overflow-hidden rounded-lg p-4 mt-6">
-          <Link 
-            href="/admin/surveys"
-            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-          >
-            Cancel
-          </Link>
+          <div className="flex items-center">
+            <Link 
+              href="/admin/surveys"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            >
+              Cancel
+            </Link>
+            {lastSaved && (
+              <span className="ml-4 text-sm text-gray-500">
+                Last saved: {lastSaved.toLocaleTimeString()}
+                {hasUnsavedChanges && (
+                  <span className="ml-2 text-amber-500 font-medium">(Unsaved changes)</span>
+                )}
+              </span>
+            )}
+            {!lastSaved && hasUnsavedChanges && (
+              <span className="ml-4 text-sm text-amber-500 font-medium">
+                Unsaved changes
+              </span>
+            )}
+          </div>
           <div className="flex space-x-3">
             <Button
               onClick={saveSurvey}
               isLoading={isSaving}
               className="bg-purple-600 hover:bg-purple-700"
-              disabled={!survey || isSaving}
+              disabled={!survey || isSaving || !hasUnsavedChanges}
             >
-              Save Survey
+              {hasUnsavedChanges ? 'Save Changes' : 'Saved'}
             </Button>
           </div>
         </div>

@@ -65,6 +65,8 @@ export async function GET(
  * Updates a survey
  * Admin only endpoint
  */
+export const maxDuration = 60; // Set max duration to 60 seconds for Next.js Edge functions
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -105,13 +107,25 @@ export async function PUT(
       return NextResponse.json({ error: 'Survey not found' }, { status: 404 });
     }
 
-    // Update the survey
+    // Validate and normalize questions before saving
+    const normalizedQuestions = questions?.map((q: any, index: number) => ({
+      ...q,
+      order: index, // Ensure order is sequential
+      // Ensure all required fields are present
+      id: q.id || crypto.randomUUID(),
+      text: q.text || 'Untitled Question',
+      type: q.type || 'text',
+      required: !!q.required,
+      options: Array.isArray(q.options) ? q.options : []
+    })) || [];
+
+    // Update the survey with optimized data
     const updatedSurvey = await Survey.findByIdAndUpdate(
       surveyId,
       {
         title,
         description,
-        questions,
+        questions: normalizedQuestions,
         ...(status && { status })
       },
       { new: true }
