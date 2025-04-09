@@ -966,8 +966,8 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
   );
 }
 
-function ExperimentContent() {
-  const { experiment, loadExperiment, updateParticipantProgress } = usePreview();
+function SimpleExperimentContent() {
+  const { experiment, loadExperiment } = usePreview();
   const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
   const [currentStageNumber, setCurrentStageNumber] = useState(0);
   const params = useParams();
@@ -975,7 +975,7 @@ function ExperimentContent() {
   const { data: session, status } = useSession();
   const [loadError, setLoadError] = useState<string | null>(null);
   
-  // Load the experiment data with proper UI state
+  // Load the experiment data with simplified approach
   useEffect(() => {
     // Only attempt to load if we have an experiment ID
     if (!experimentId) {
@@ -989,144 +989,42 @@ function ExperimentContent() {
       loadingMessage.textContent = 'Loading experiment data...';
     }
     
-    // Add slight delay before loading to avoid connection flood
-    setTimeout(() => {
-      // Pass true to indicate this is the participant view
-      loadExperiment(experimentId, true)
-        .then(() => {
-          setLoadError(null);
-          if (loadingMessage) {
-            loadingMessage.textContent = 'Experiment loaded successfully';
-          }
-        })
-        .catch(err => {
-          console.error('Error loading experiment:', err);
-          setLoadError(`Failed to load experiment: ${err instanceof Error ? err.message : String(err)}`);
-          if (loadingMessage) {
-            loadingMessage.textContent = 'Error loading experiment data';
-          }
-        });
-    }, 500); // 500ms delay to stagger requests
+    // Simple loading approach like in admin preview
+    loadExperiment(experimentId, true)
+      .then(() => {
+        setLoadError(null);
+        if (loadingMessage) {
+          loadingMessage.textContent = 'Experiment loaded successfully';
+        }
+      })
+      .catch(err => {
+        console.error('Error loading experiment:', err);
+        setLoadError(`Failed to load experiment: ${err instanceof Error ? err.message : String(err)}`);
+        if (loadingMessage) {
+          loadingMessage.textContent = 'Error loading experiment data';
+        }
+      });
   }, [experimentId, loadExperiment]);
   
-  // Handle the Next button click on the welcome screen
+  // Handle the Next button click on the welcome screen - simplified like admin preview
   const handleWelcomeNext = () => {
-    try {
-      // Add safety check before continuing
-      if (!experiment || !experiment.stages || experiment.stages.length === 0) {
-        console.warn('Cannot start experiment: No experiment data or empty stages');
-        
-        // Show error message to user
-        const loadingMessage = document.getElementById('loading-message');
-        if (loadingMessage) {
-          loadingMessage.textContent = 'Error: Cannot start experiment. Please refresh and try again.';
-          loadingMessage.classList.add('text-red-500');
-          // Make sure it's visible
-          loadingMessage.classList.remove('hidden', 'md:inline');
-          loadingMessage.classList.add('inline-block');
-        }
-        
-        return; // Prevent proceeding with invalid state
-      }
-      
-      // Proceed with transition - first update UI
-      setViewMode('experiment');
-      
-      // Then try to update progress in the background
-      if (experiment && experiment.id) {
-        const startingStageId = experiment.stages[0]?.id;
-        
-        // Only make the API call if we have a valid stage ID
-        if (startingStageId) {
-          // Use setTimeout with longer delay to avoid potential race conditions and server overload
-          setTimeout(() => {
-            updateParticipantProgress(experiment.id, 'in_progress', startingStageId)
-              .catch(err => {
-                console.warn('Error updating progress (non-critical):', err);
-              });
-          }, 1000); // Increased from 100ms to 1000ms
-        }
-      }
-    } catch (err) {
-      console.error('Error in handleWelcomeNext:', err);
-      
-      // Ensure user sees error message
-      const loadingMessage = document.getElementById('loading-message');
-      if (loadingMessage) {
-        loadingMessage.textContent = 'Error starting experiment. Please refresh and try again.';
-        loadingMessage.classList.add('text-red-500');
-        loadingMessage.classList.remove('hidden', 'md:inline');
-        loadingMessage.classList.add('inline-block');
-      }
-    }
-  };
-  
-  // Handle Next button click for stage navigation
-  const handleStageNext = () => {
-    // Validate experiment data first
-    if (!experiment || !experiment.stages) {
-      console.warn('Cannot navigate: Invalid experiment data');
+    if (!experiment || !experiment.stages || experiment.stages.length === 0) {
+      console.warn('Cannot start experiment: No experiment data or empty stages');
       return;
     }
     
-    try {
-      const currentIndex = currentStageNumber;
-      const stagesCount = experiment.stages.length;
-      
-      // Validate index boundaries
-      if (currentIndex < 0 || currentIndex >= stagesCount) {
-        console.warn(`Invalid stage index: ${currentIndex} (total stages: ${stagesCount})`);
-        return;
-      }
-      
-      // Case 1: More stages to go
-      if (currentIndex < stagesCount - 1) {
-        // Ensure we have a valid next stage before proceeding
-        const nextIndex = currentIndex + 1;
-        if (nextIndex >= stagesCount || !experiment.stages[nextIndex]) {
-          console.warn(`Cannot navigate to invalid stage index: ${nextIndex}`);
-          return;
-        }
-        
-        // Set the state for next stage
-        setCurrentStageNumber(nextIndex);
-        
-        // Optional: Update progress in the background
-        const nextStageId = experiment.stages[nextIndex].id;
-        if (nextStageId) {
-          // Use setTimeout with longer delay to decouple from the state update
-          setTimeout(() => {
-            updateParticipantProgress(experiment.id, 'in_progress', nextStageId)
-              .catch(err => {
-                console.warn('Error updating progress during navigation (non-critical):', err);
-              });
-          }, 1000); // Increased from 100ms to 1000ms
-        }
-      } 
-      // Case 2: Final stage completion
-      else {
-        // Transition UI first
-        setViewMode('thankyou');
-        
-        // Then update server status in the background with longer delay
-        setTimeout(() => {
-          updateParticipantProgress(experiment.id, 'completed')
-            .catch(error => {
-              console.warn('Error updating completion status (non-critical):', error);
-            });
-        }, 1000); // Increased from 100ms to 1000ms
-      }
-    } catch (error) {
-      console.error('Error in handleStageNext:', error);
-      
-      // Show error message to user
-      const loadingMessage = document.getElementById('loading-message');
-      if (loadingMessage) {
-        loadingMessage.textContent = 'Error navigating between stages';
-        loadingMessage.classList.add('text-red-500');
-        loadingMessage.classList.remove('hidden', 'md:inline');
-        loadingMessage.classList.add('inline-block');
-      }
+    // Simply update view mode without making additional API calls
+    setViewMode('experiment');
+  };
+  
+  // Handle Next button click for stage navigation - simplified like admin preview
+  const handleStageNext = () => {
+    if (!experiment) return;
+    
+    if (currentStageNumber < experiment.stages.length - 1) {
+      setCurrentStageNumber(prev => prev + 1);
+    } else {
+      setViewMode('thankyou');
     }
   };
   
@@ -1379,7 +1277,8 @@ function ExperimentContent() {
 }
 
 // Main component with header and footer
-export default function PerformExperimentPage() {
+// Create a wrapper with wider container for all components in preview mode
+function PreviewContainer({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <header className="bg-white shadow-sm py-3">
@@ -1401,9 +1300,7 @@ export default function PerformExperimentPage() {
 
       <main className="flex-grow container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto">
-          <PreviewProvider>
-            <ExperimentContent />
-          </PreviewProvider>
+          {children}
         </div>
       </main>
 
@@ -1415,5 +1312,15 @@ export default function PerformExperimentPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function SimplifiedPerformPage() {
+  return (
+    <PreviewProvider>
+      <PreviewContainer>
+        <SimpleExperimentContent />
+      </PreviewContainer>
+    </PreviewProvider>
   );
 }
