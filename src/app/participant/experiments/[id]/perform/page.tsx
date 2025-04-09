@@ -220,10 +220,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   const [error, setError] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   
-  // Import cache at the top of the file
-  const cache = require('@/lib/cache');
-  
-  // Function to fetch wallet assets by wallet ID with caching
+  // Simple function to fetch wallet assets by wallet ID without caching
   const fetchWalletAssets = async (walletId: string) => {
     if (!walletId) {
       setWalletError("No wallet ID available in scenario data");
@@ -235,26 +232,30 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       setIsLoadingWallet(true);
       console.log(`Fetching wallet assets for wallet ID: ${walletId}`);
       
-      // Try to get from cache first
-      const { assets, success, message } = await cache.getCachedWalletAssets(walletId);
+      // Use cache buster to prevent browser caching
+      const cacheBuster = Date.now();
+      const response = await fetch(`/api/wallets/${walletId}/assets?preview=true&t=${cacheBuster}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
       
-      if (message) {
-        console.log(`Wallet assets cache: ${message}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch wallet assets: ${response.status}`);
       }
       
-      // If we got assets, use them
-      if (assets && assets.length > 0) {
-        setWalletAssets(assets);
-        
-        // If it's fallback data, show a warning but don't block the UI
-        if (!success) {
-          setWalletError("Using cached or fallback wallet data due to connection issues");
-        }
+      const data = await response.json();
+      
+      if (Array.isArray(data)) {
+        setWalletAssets(data);
+      } else if (data.assets && Array.isArray(data.assets)) {
+        setWalletAssets(data.assets);
       } else {
-        // No assets from cache, show warning
-        setWalletError("No wallet assets found");
+        console.warn("Unexpected wallet data format:", data);
         
-        // Create some fallback assets
+        // Create fallback assets
         const fallbackAssets = [
           {
             id: `${walletId}-asset1`,
@@ -284,7 +285,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       console.error("Error fetching wallet assets:", err);
       setWalletError(err instanceof Error ? err.message : "Failed to load wallet assets");
       
-      // Create fallback assets even on error
+      // Create fallback assets on error
       const fallbackAssets = [
         {
           id: `${walletId}-fallback1`,
@@ -311,7 +312,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     }
   };
   
-  // Fetch scenario data with caching
+  // Fetch scenario data without caching
   useEffect(() => {
     async function fetchScenarioData() {
       if (!stage.scenarioId) {
@@ -324,52 +325,31 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         setIsLoading(true);
         console.log(`Loading scenario data for ID: ${stage.scenarioId}`);
         
-        // Try to get data from cache first
-        const { scenario, success, message } = await cache.getCachedScenarioData(stage.scenarioId);
-        
-        if (message) {
-          console.log(`Scenario cache: ${message}`);
-        }
-        
-        if (!success) {
-          // Show warning but continue with the data we have
-          console.warn(`Using potentially stale data for scenario ${stage.scenarioId}`);
-        }
-        
-        // Use the data we got (either from cache or fresh)
-        if (scenario && Object.keys(scenario).length > 0) {
-          console.log("Scenario data loaded successfully");
-          setScenarioData(scenario as ScenarioData);
-          
-          // Initialize with the data
-          setCurrentRound(1);
-          setRoundTimeRemaining(scenario.roundDuration || stage.roundDuration || 60);
-          setScenarioComplete(false);
-          
-          // Fetch wallet assets if we have a wallet ID
-          if (scenario.walletId) {
-            fetchWalletAssets(scenario.walletId);
+        // Use cache buster to prevent browser caching
+        const cacheBuster = Date.now();
+        const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true&t=${cacheBuster}`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
           }
-        } else {
-          // No data from cache or fetch, use fallback
-          console.warn("No scenario data available, using fallback");
-          
-          // Create minimal fallback data
-          const fallbackData: ScenarioData = {
-            id: stage.scenarioId,
-            name: stage.title || 'Investment Scenario',
-            description: stage.description || 'Simulated trading scenario',
-            rounds: stage.rounds || 3,
-            roundDuration: stage.roundDuration || 60,
-            walletId: 'fallback-wallet-id'
-          };
-          
-          setScenarioData(fallbackData);
-          setCurrentRound(1);
-          setRoundTimeRemaining(fallbackData.roundDuration);
-          
-          // Use fallback wallet
-          fetchWalletAssets('fallback-wallet-id');
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch scenario: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setScenarioData(data);
+        
+        // Initialize with the data
+        setCurrentRound(1);
+        setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
+        setScenarioComplete(false);
+        
+        // Fetch wallet assets if we have a wallet ID
+        if (data.walletId) {
+          fetchWalletAssets(data.walletId);
         }
         
         setIsLoading(false);
@@ -390,6 +370,10 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         setScenarioData(fallbackData);
         setCurrentRound(1);
         setRoundTimeRemaining(fallbackData.roundDuration);
+        
+        // Use fallback wallet
+        fetchWalletAssets('fallback-wallet-id');
+        
         setIsLoading(false);
       }
     }
@@ -969,36 +953,15 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
 }
 
 function ExperimentContent() {
-  const { experiment, loadExperiment, updateParticipantProgress, prefetchExperimentData } = usePreview();
+  const { experiment, loadExperiment, updateParticipantProgress } = usePreview();
   const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
   const [currentStageNumber, setCurrentStageNumber] = useState(0);
   const params = useParams();
   const experimentId = params.id as string;
   const { data: session, status } = useSession();
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   
-  // First, prefetch all experiment data when the component mounts
-  useEffect(() => {
-    if (!experimentId) return;
-    
-    // Only do this on initial mount
-    if (isInitialLoad) {
-      setIsInitialLoad(false);
-      
-      // Prefetch in the background
-      prefetchExperimentData(experimentId)
-        .then(() => {
-          console.log('Experiment data prefetched successfully');
-        })
-        .catch(err => {
-          console.warn('Error prefetching experiment data:', err);
-          // Continue anyway - this is just a prefetch
-        });
-    }
-  }, [experimentId, prefetchExperimentData, isInitialLoad]);
-  
-  // Then load the experiment data with proper UI state
+  // Load the experiment data with proper UI state
   useEffect(() => {
     // Only attempt to load if we have an experiment ID
     if (!experimentId) {
