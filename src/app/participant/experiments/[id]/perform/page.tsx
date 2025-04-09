@@ -989,98 +989,101 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   };
   
   return (
-    <div className="w-full p-4 bg-white rounded border relative">
-      <div className="mb-4 pb-3 border-b border-gray-200">
-        <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
-        <p className="text-gray-600">{stage.description}</p>
+    <div className="w-full bg-white rounded border relative" style={{ maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {/* Fixed header */}
+      <div className="p-4 border-b border-gray-200 bg-white">
+        <h3 className="text-xl font-bold">{stage.title}</h3>
+        <p className="text-gray-600 mt-1">{stage.description}</p>
       </div>
       
-      {/* Main survey container with forced height to ensure scrolling works */}
-      <div className="p-4 bg-gray-50 rounded border mb-5" style={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
-        <p className="font-medium mb-3">Survey Questions</p>
-        
-        {/* Explicit scrollable container - force overflow for large content */}
-        <div 
-          className="flex-grow overflow-y-scroll pr-4 pb-4" 
-          style={{ 
-            scrollbarWidth: 'auto',
-            scrollbarColor: '#CBD5E0 #EDF2F7',
-            WebkitOverflowScrolling: 'touch'
-          }} 
-          ref={containerRef}
-        >
-          {stage.questions && stage.questions.length > 0 ? (
-            <div className="space-y-4">
-              {stage.questions.map((q: Question, i: number) => (
-                <div 
-                  key={q.id || i} 
-                  className="mb-4 p-4 bg-white rounded border shadow-sm" 
-                  data-question-id={q.id}
-                >
-                  <p className="font-medium text-lg">
-                    {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
-                  </p>
-                  
-                  {/* Question input based on type */}
-                  {q.type === 'multipleChoice' && q.options && (
-                    <div className="mt-3 pl-4">
-                      {q.options.map((option: string, idx: number) => (
-                        <div key={idx} className="flex items-center mt-2">
-                          <button 
-                            type="button"
-                            onClick={() => handleMultipleChoiceSelect(q.id, option)}
-                            className={`w-5 h-5 border-2 ${answers[q.id] === option ? 'bg-blue-500 border-blue-500' : 'border-gray-300'} rounded-full mr-3 focus:outline-none focus:ring-2 focus:ring-blue-400`}
-                            aria-label={`Select option: ${option}`}
-                          ></button>
-                          <span className="text-gray-700">{option}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {q.type === 'text' && (
-                    <div className="mt-3">
-                      <textarea
-                        className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                        rows={3}
-                        value={answers[q.id] as string || ''}
-                        onChange={(e) => handleTextChange(q.id, e.target.value)}
-                        placeholder="Enter your answer here..."
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Show validation error if any */}
-                  {validationErrors[q.id] && (
-                    <p className="text-red-500 font-medium mt-2 pl-1">{validationErrors[q.id]}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-600">No questions defined for this survey.</p>
-          )}
-        </div>
-        
-        {/* Explicit scrolling indicator with arrow */}
-        {(stage.questions && stage.questions.length > 2) && (
-          <div className="text-center py-2 mt-2 border-t border-gray-200">
-            <p className="text-sm text-blue-600 font-medium flex items-center justify-center">
-              <svg className="w-5 h-5 mr-1 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-              Scroll to see all {stage.questions.length} questions
+      {/* Scrollable section that takes up remaining space */}
+      <div 
+        className="overflow-y-auto flex-1" 
+        style={{ 
+          overflowY: 'scroll',
+          scrollbarWidth: 'auto',
+          scrollbarColor: '#718096 #E2E8F0'
+        }} 
+        ref={containerRef}
+      >
+        <div className="p-4">
+          <div className="bg-gray-50 rounded-lg border p-4 mb-2">
+            <p className="font-medium mb-3 flex items-center">
+              <span>Survey Questions</span>
+              <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">{stage.questions ? stage.questions.length : 0} questions</span>
             </p>
+            
+            {/* Questions list */}
+            {stage.questions && stage.questions.length > 0 ? (
+              <div className="space-y-4">
+                {stage.questions.map((q: Question, i: number) => (
+                  <div 
+                    key={q.id || i} 
+                    className="mb-4 p-4 bg-white rounded-lg border shadow-sm" 
+                    data-question-id={q.id}
+                  >
+                    <p className="font-medium text-lg">
+                      {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
+                    </p>
+                    
+                    {/* Question input based on type */}
+                    {q.type === 'multipleChoice' && q.options && (
+                      <div className="mt-3 pl-4">
+                        {q.options.map((option: string, idx: number) => (
+                          <div key={idx} className="flex items-center mt-2">
+                            <button 
+                              type="button"
+                              onClick={() => handleMultipleChoiceSelect(q.id, option)}
+                              className={`w-5 h-5 border-2 ${answers[q.id] === option ? 'bg-blue-500 border-blue-500' : 'border-gray-300'} rounded-full mr-3 focus:outline-none focus:ring-2 focus:ring-blue-400`}
+                              aria-label={`Select option: ${option}`}
+                            ></button>
+                            <span className="text-gray-700">{option}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {q.type === 'text' && (
+                      <div className="mt-3">
+                        <textarea
+                          className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                          rows={3}
+                          value={answers[q.id] as string || ''}
+                          onChange={(e) => handleTextChange(q.id, e.target.value)}
+                          placeholder="Enter your answer here..."
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Show validation error if any */}
+                    {validationErrors[q.id] && (
+                      <p className="text-red-500 font-medium mt-2 pl-1">{validationErrors[q.id]}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-600">No questions defined for this survey.</p>
+            )}
+            
+            {/* Arrow indicator that floats on scroll */}
+            {(stage.questions && stage.questions.length > 3) && (
+              <div className="sticky bottom-4 right-4 float-right mt-4 bg-blue-500 text-white p-2 rounded-full shadow-lg animate-bounce">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
+                </svg>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
       
-      {/* Submit button container - made into part of the form */}
-      <div className="flex justify-center py-4 bg-white border-t border-gray-200 mt-2">
+      {/* Fixed submit button at bottom */}
+      <div className="p-4 border-t border-gray-200 bg-white">
         <button 
           onClick={submitSurveyAnswers}
           disabled={isStageTransitioning || isSubmitting}
-          className={`px-8 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-lg font-medium ${(isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-lg font-medium ${(isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           {isSubmitting ? 'Submitting...' : 'Submit Survey'}
         </button>
