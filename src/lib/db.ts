@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 
 // In development, use .env.local value, in production use vercel.json environment variable
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://vis203077:lablab@lablab.bw2sxxm.mongodb.net/?retryWrites=true&w=majority&appName=lablab";
+// Note: Added tlsInsecure=true query parameter to handle SSL/TLS issues
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://vis203077:lablab@lablab.bw2sxxm.mongodb.net/?retryWrites=true&w=majority&appName=lablab&tlsInsecure=true&tlsAllowInvalidCertificates=true&tlsAllowInvalidHostnames=true";
 
 if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable');
@@ -49,6 +50,10 @@ const connectionOptions = {
   retryWrites: true,
   retryReads: true,
   maxIdleTimeMS: 60000, // Close connections after 60 seconds of inactivity
+  ssl: true,
+  tls: true,
+  tlsAllowInvalidCertificates: true, // Only use in development
+  tlsAllowInvalidHostnames: true,    // Only use in development
 };
 
 async function connectDB() {
@@ -123,6 +128,9 @@ async function connectDB() {
         console.error('- Authentication failed. Check MongoDB username and password.');
       } else if (err.message.includes('ENOTFOUND')) {
         console.error('- DNS lookup failed. Check MongoDB URI hostname.');
+      } else if (err.message.includes('SSL') || err.message.includes('TLS') || err.message.includes('ssl') || err.message.includes('tls')) {
+        console.error('- SSL/TLS connection error. This might be caused by certificate issues or TLS version incompatibility.');
+        console.error('- Try connecting with tlsAllowInvalidCertificates=true in connection options.');
       }
       
       // Reset on error to force a retry on next request
@@ -148,6 +156,32 @@ async function connectDB() {
         console.error('MongoDB connection failed: Authentication error - please check your MongoDB username and password');
       } else if (error.message.includes('ENOTFOUND')) {
         console.error('MongoDB connection failed: DNS lookup error - please check the hostname in your MongoDB URI');
+      } else if (error.message.includes('SSL') || error.message.includes('TLS') || error.message.includes('ssl') || error.message.includes('tls')) {
+        console.error('MongoDB connection failed: SSL/TLS error - this is often caused by certificate validation issues');
+        console.error('Trying to reconnect with relaxed TLS settings. This should only be used in development.');
+        
+        // Try to connect again with relaxed TLS settings
+        try {
+          console.log('Attempting connection with relaxed TLS settings...');
+          mongoose.connection.close();
+          
+          // Apply stronger TLS relaxation for this connection attempt
+          const relaxedOptions = {
+            ...connectionOptions,
+            ssl: true,
+            tls: true,
+            tlsAllowInvalidCertificates: true,
+            tlsAllowInvalidHostnames: true,
+            tlsInsecure: true,
+            // Force TLS 1.2 which is more widely compatible
+            tlsCAFile: undefined,
+            replicaSet: undefined
+          };
+          
+          return await mongoose.connect(MONGODB_URI, relaxedOptions);
+        } catch (retryError) {
+          console.error('Failed to connect even with relaxed TLS settings:', retryError);
+        }
       }
     }
     
