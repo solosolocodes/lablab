@@ -1032,46 +1032,121 @@ function ExperimentContent() {
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
     try {
-      // Record that the user has started the experiment
-      if (experiment) {
-        setViewMode('experiment');
-        updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id)
-          .catch(err => {
-            console.warn('Error updating progress (non-critical):', err);
-          });
-      } else {
-        setViewMode('experiment');
+      // Add safety check before continuing
+      if (!experiment || !experiment.stages || experiment.stages.length === 0) {
+        console.warn('Cannot start experiment: No experiment data or empty stages');
+        
+        // Show error message to user
+        const loadingMessage = document.getElementById('loading-message');
+        if (loadingMessage) {
+          loadingMessage.textContent = 'Error: Cannot start experiment. Please refresh and try again.';
+          loadingMessage.classList.add('text-red-500');
+          // Make sure it's visible
+          loadingMessage.classList.remove('hidden', 'md:inline');
+          loadingMessage.classList.add('inline-block');
+        }
+        
+        return; // Prevent proceeding with invalid state
+      }
+      
+      // Proceed with transition - first update UI
+      setViewMode('experiment');
+      
+      // Then try to update progress in the background
+      if (experiment && experiment.id) {
+        const startingStageId = experiment.stages[0]?.id;
+        
+        // Only make the API call if we have a valid stage ID
+        if (startingStageId) {
+          // Use setTimeout to avoid potential race conditions
+          setTimeout(() => {
+            updateParticipantProgress(experiment.id, 'in_progress', startingStageId)
+              .catch(err => {
+                console.warn('Error updating progress (non-critical):', err);
+              });
+          }, 100);
+        }
       }
     } catch (err) {
       console.error('Error in handleWelcomeNext:', err);
+      
+      // Ensure user sees error message
+      const loadingMessage = document.getElementById('loading-message');
+      if (loadingMessage) {
+        loadingMessage.textContent = 'Error starting experiment. Please refresh and try again.';
+        loadingMessage.classList.add('text-red-500');
+        loadingMessage.classList.remove('hidden', 'md:inline');
+        loadingMessage.classList.add('inline-block');
+      }
     }
   };
   
   // Handle Next button click for stage navigation
   const handleStageNext = () => {
-    if (!experiment) return;
+    // Validate experiment data first
+    if (!experiment || !experiment.stages) {
+      console.warn('Cannot navigate: Invalid experiment data');
+      return;
+    }
     
     try {
       const currentIndex = currentStageNumber;
       const stagesCount = experiment.stages.length;
       
+      // Validate index boundaries
+      if (currentIndex < 0 || currentIndex >= stagesCount) {
+        console.warn(`Invalid stage index: ${currentIndex} (total stages: ${stagesCount})`);
+        return;
+      }
+      
       // Case 1: More stages to go
       if (currentIndex < stagesCount - 1) {
+        // Ensure we have a valid next stage before proceeding
         const nextIndex = currentIndex + 1;
+        if (nextIndex >= stagesCount || !experiment.stages[nextIndex]) {
+          console.warn(`Cannot navigate to invalid stage index: ${nextIndex}`);
+          return;
+        }
+        
+        // Set the state for next stage
         setCurrentStageNumber(nextIndex);
+        
+        // Optional: Update progress in the background
+        const nextStageId = experiment.stages[nextIndex].id;
+        if (nextStageId) {
+          // Use setTimeout to decouple from the state update
+          setTimeout(() => {
+            updateParticipantProgress(experiment.id, 'in_progress', nextStageId)
+              .catch(err => {
+                console.warn('Error updating progress during navigation (non-critical):', err);
+              });
+          }, 100);
+        }
       } 
       // Case 2: Final stage completion
       else {
-        // Final stage complete, show thank you screen
+        // Transition UI first
         setViewMode('thankyou');
-        // Mark the experiment as completed
-        updateParticipantProgress(experiment.id, 'completed')
-          .catch(error => {
-            console.warn('Error updating completion status:', error);
-          });
+        
+        // Then update server status in the background
+        setTimeout(() => {
+          updateParticipantProgress(experiment.id, 'completed')
+            .catch(error => {
+              console.warn('Error updating completion status (non-critical):', error);
+            });
+        }, 100);
       }
     } catch (error) {
       console.error('Error in handleStageNext:', error);
+      
+      // Show error message to user
+      const loadingMessage = document.getElementById('loading-message');
+      if (loadingMessage) {
+        loadingMessage.textContent = 'Error navigating between stages';
+        loadingMessage.classList.add('text-red-500');
+        loadingMessage.classList.remove('hidden', 'md:inline');
+        loadingMessage.classList.add('inline-block');
+      }
     }
   };
   
@@ -1166,49 +1241,99 @@ function ExperimentContent() {
   
   // Welcome screen view with stages overview
   if (viewMode === 'welcome') {
+    // Check if we have valid data before rendering the welcome screen
+    const hasValidData = experiment && experiment.stages && experiment.stages.length > 0;
+    
     return (
       <div className="p-4">
         <div className="w-full p-4 bg-white rounded border">
-          <div className="text-center mb-5">
-            <h3 className="text-xl font-bold mb-2">Welcome to {experiment.name}</h3>
-            <p className="text-gray-600 mb-2">{experiment.description || ''}</p>
-            <div className="text-gray-600">
-              <p>This experiment consists of {experiment.stages.length} stages.</p>
-            </div>
-          </div>
+          {hasValidData ? (
+            <>
+              <div className="text-center mb-5">
+                <h3 className="text-xl font-bold mb-2">Welcome to {experiment.name}</h3>
+                <p className="text-gray-600 mb-2">{experiment.description || ''}</p>
+                <div className="text-gray-600">
+                  <p>This experiment consists of {experiment.stages.length} stages.</p>
+                </div>
+              </div>
 
-          {experiment.stages.length > 0 && (
-            <div className="bg-gray-50 rounded border p-4 mb-5">
-              <h4 className="font-medium mb-2">Stages Overview:</h4>
-              <div className="space-y-1">
-                {[...experiment.stages]
-                  .sort((a, b) => (a.order || 0) - (b.order || 0))
-                  .map((stage, index) => (
-                    <div key={stage.id} className="flex items-center py-1 border-b border-gray-100 last:border-0">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 text-sm font-medium text-blue-700">
-                        {index + 1}
+              <div className="bg-gray-50 rounded border p-4 mb-5">
+                <h4 className="font-medium mb-2">Stages Overview:</h4>
+                <div className="space-y-1">
+                  {[...experiment.stages]
+                    .sort((a, b) => (a.order || 0) - (b.order || 0))
+                    .map((stage, index) => (
+                      <div key={stage.id || index} className="flex items-center py-1 border-b border-gray-100 last:border-0">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 text-sm font-medium text-blue-700">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium">{stage.title}</p>
+                          <p className="text-xs text-gray-500">{stage.type}</p>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {stage.durationSeconds > 0 ? `${stage.durationSeconds} sec` : 'No time limit'}
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <p className="font-medium">{stage.title}</p>
-                        <p className="text-xs text-gray-500">{stage.type}</p>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {stage.durationSeconds > 0 ? `${stage.durationSeconds} sec` : 'No time limit'}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                </div>
+              </div>
+              
+              <div className="text-center">
+                <button 
+                  onClick={handleWelcomeNext}
+                  className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                >
+                  Begin Experiment
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-6">
+              <div className="mb-4">
+                <svg className="w-16 h-16 text-yellow-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-yellow-800 mb-3">Experiment Data Loading</h3>
+              <p className="text-gray-600 mb-4">
+                The experiment data is still loading or couldn't be loaded properly. 
+                Please wait a moment or try refreshing the page.
+              </p>
+              
+              <div className="animate-pulse my-4">
+                <div className="h-3 bg-gray-200 rounded w-3/4 mx-auto mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2 mx-auto"></div>
+              </div>
+              
+              <div className="mt-6">
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors mx-2"
+                >
+                  Refresh Page
+                </button>
+                <button 
+                  onClick={() => {
+                    // Force a new attempt to load the experiment
+                    const loadingMessage = document.getElementById('loading-message');
+                    if (loadingMessage) {
+                      loadingMessage.textContent = 'Retrying experiment load...';
+                      loadingMessage.classList.remove('text-red-500');
+                      loadingMessage.classList.add('text-blue-500');
+                    }
+                    
+                    // Try to load again with force refresh
+                    loadExperiment(experimentId, true)
+                      .catch(err => console.warn('Retry load failed:', err));
+                  }}
+                  className="px-6 py-2 border border-blue-500 text-blue-600 rounded hover:bg-blue-50 transition-colors mx-2 mt-2 md:mt-0"
+                >
+                  Retry Loading
+                </button>
               </div>
             </div>
           )}
-          
-          <div className="text-center">
-            <button 
-              onClick={handleWelcomeNext}
-              className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            >
-              Begin Experiment
-            </button>
-          </div>
         </div>
       </div>
     );

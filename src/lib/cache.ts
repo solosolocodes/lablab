@@ -63,17 +63,47 @@ const persistCache = () => {
 
 // Clean expired items from cache
 const cleanExpiredItems = () => {
-  const now = Date.now();
-  let hasExpired = false;
+  // Safety check for SSR environment
+  if (typeof window === 'undefined') return false;
   
-  Object.keys(_cache).forEach(key => {
-    if (_cache[key].expiresAt < now) {
-      delete _cache[key];
-      hasExpired = true;
+  try {
+    const now = Date.now();
+    let hasExpired = false;
+    
+    // Use a safe approach to prevent crashes if _cache is corrupted
+    const keys = Object.keys(_cache || {});
+    
+    // Use a regular for loop for safety rather than forEach
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      // Add extra safety checks
+      if (key && _cache[key] && typeof _cache[key] === 'object' && 'expiresAt' in _cache[key]) {
+        if (_cache[key].expiresAt < now) {
+          try {
+            delete _cache[key];
+            hasExpired = true;
+          } catch (err) {
+            console.warn(`Failed to clean cached entry for key ${key}:`, err);
+          }
+        }
+      } else if (key) {
+        // Remove invalid entries
+        try {
+          delete _cache[key]; 
+          hasExpired = true;
+        } catch (err) {
+          console.warn(`Failed to clean invalid cached entry for key ${key}:`, err);
+        }
+      }
     }
-  });
-  
-  return hasExpired;
+    
+    return hasExpired;
+  } catch (err) {
+    console.error('Error cleaning expired cache items:', err);
+    // Try to recover by resetting the cache
+    _cache = {};
+    return true;
+  }
 };
 
 /**
@@ -96,37 +126,72 @@ export function set<T>(key: string, data: T, ttlMs: number = DEFAULT_TTL_MS): vo
  * Get an item from cache. Returns null if expired or not found.
  */
 export function get<T>(key: string): T | null {
-  ensureInitialized();
-  
-  const entry = _cache[key] as CacheEntry<T> | undefined;
-  if (!entry) return null;
-  
-  // Check if expired
-  if (entry.expiresAt < Date.now()) {
-    delete _cache[key];
-    persistCache();
+  try {
+    // Ensure cache is initialized
+    ensureInitialized();
+    
+    // Safely check for the entry
+    if (!key || !_cache || typeof _cache !== 'object') {
+      return null;
+    }
+    
+    const entry = _cache[key] as CacheEntry<T> | undefined;
+    if (!entry || typeof entry !== 'object') return null;
+    
+    // Check if expired
+    const now = Date.now();
+    if (!entry.expiresAt || entry.expiresAt < now) {
+      try {
+        delete _cache[key];
+        // Don't block with persistCache - do it async
+        setTimeout(() => persistCache(), 0);
+      } catch (err) {
+        console.warn(`Failed to delete expired cache key ${key}:`, err);
+      }
+      return null;
+    }
+    
+    // Return data if it exists
+    return entry.data !== undefined ? entry.data : null;
+  } catch (err) {
+    console.warn(`Error retrieving cache data for key ${key}:`, err);
     return null;
   }
-  
-  return entry.data;
 }
 
 /**
  * Check if a key exists and is not expired
  */
 export function has(key: string): boolean {
-  ensureInitialized();
-  
-  const entry = _cache[key];
-  if (!entry) return false;
-  
-  if (entry.expiresAt < Date.now()) {
-    delete _cache[key];
-    persistCache();
+  try {
+    // Ensure cache is initialized
+    ensureInitialized();
+    
+    // Safety checks
+    if (!key || !_cache || typeof _cache !== 'object') {
+      return false;
+    }
+    
+    const entry = _cache[key];
+    if (!entry || typeof entry !== 'object') return false;
+    
+    // Check for expiration
+    if (!entry.expiresAt || entry.expiresAt < Date.now()) {
+      try {
+        delete _cache[key];
+        // Don't block with persistCache - do it async
+        setTimeout(() => persistCache(), 0);
+      } catch (err) {
+        console.warn(`Failed to delete expired cache key ${key} during has() check:`, err);
+      }
+      return false;
+    }
+    
+    return true;
+  } catch (err) {
+    console.warn(`Error checking cache for key ${key}:`, err);
     return false;
   }
-  
-  return true;
 }
 
 /**
