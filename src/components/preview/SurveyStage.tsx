@@ -1,27 +1,50 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
 interface Question {
   id: string;
   text: string;
-  type: 'text' | 'multipleChoice' | 'checkboxes' | 'rating';
+  type: 'text' | 'multipleChoice' | 'checkboxes' | 'rating' | 'scale';
   required: boolean;
   options?: string[];
+  minValue?: number;
+  maxValue?: number;
+  maxRating?: number;
 }
 
 export default function SurveyStage() {
   const { currentStage, goToNextStage } = usePreview();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [formValues, setFormValues] = useState<Record<string, any>>({});
-  const [submitted, setSubmitted] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showThankYou, setShowThankYou] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   if (!currentStage || currentStage.type !== 'survey') {
     return <div>Invalid stage type</div>;
   }
 
   const questions = currentStage.questions || [];
+  const currentQuestion = questions[currentQuestionIndex] || null;
+  const isLastQuestion = currentQuestionIndex === questions.length - 1;
+  const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
+  
+  // Update validation as user makes changes
+  useEffect(() => {
+    if (!currentQuestion) return;
+    
+    // Clear error when user changes any value
+    if (formValues[currentQuestion.id]) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[currentQuestion.id];
+        return newErrors;
+      });
+    }
+  }, [formValues, currentQuestion]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleInputChange = (questionId: string, value: any) => {
@@ -31,101 +54,224 @@ export default function SurveyStage() {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Check if all required questions are answered
-    const requiredQuestions = questions.filter((q: Question) => q.required);
-    const allRequiredAnswered = requiredQuestions.every((q: Question) => formValues[q.id]);
+  const validateCurrentQuestion = (): boolean => {
+    if (!currentQuestion) return true;
     
-    if (!allRequiredAnswered) {
-      alert('Please answer all required questions before proceeding.');
-      return;
+    // Check if current question is required and has a value
+    if (currentQuestion.required && !formValues[currentQuestion.id]) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [currentQuestion.id]: 'This question requires an answer'
+      }));
+      return false;
     }
     
-    setSubmitted(true);
+    return true;
+  };
+
+  const handleNext = () => {
+    // Validate current question first
+    if (!validateCurrentQuestion()) return;
+    
+    // Move to next question if not the last one
+    if (!isLastQuestion) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      handleSubmit();
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+    }
+  };
+
+  const handleSubmit = () => {
+    // Check if all required questions are answered
+    const requiredQuestions = questions.filter((q: Question) => q.required);
+    const unansweredQuestions = requiredQuestions.filter((q: Question) => !formValues[q.id]);
+    
+    if (unansweredQuestions.length > 0) {
+      const newValidationErrors: Record<string, string> = {};
+      
+      unansweredQuestions.forEach(q => {
+        newValidationErrors[q.id] = 'This question requires an answer';
+      });
+      
+      setValidationErrors(newValidationErrors);
+      
+      // If current question is not answered, show error
+      // Otherwise, jump to the first unanswered question
+      if (newValidationErrors[currentQuestion?.id || '']) {
+        return;
+      } else {
+        const firstUnansweredIndex = questions.findIndex(q => 
+          q.id === unansweredQuestions[0].id
+        );
+        setCurrentQuestionIndex(firstUnansweredIndex);
+        return;
+      }
+    }
+    
+    // If all validations pass, show thank you message and proceed
+    setIsSubmitting(true);
+    setShowThankYou(true);
+    
+    // After a delay, go to the next stage
     setTimeout(() => {
       goToNextStage();
     }, 1500);
   };
 
   const renderQuestionInput = (question: Question) => {
+    const hasError = !!validationErrors[question.id];
+    
     switch (question.type) {
       case 'text':
         return (
-          <input
-            type="text"
-            className="w-full px-3 py-2 border rounded-md"
-            value={formValues[question.id] || ''}
-            onChange={e => handleInputChange(question.id, e.target.value)}
-            disabled={submitted}
-          />
+          <>
+            <input
+              type="text"
+              className={`w-full px-3 py-2 border rounded-md ${hasError ? 'border-red-500' : 'border-gray-300'}`}
+              value={formValues[question.id] || ''}
+              onChange={e => handleInputChange(question.id, e.target.value)}
+              disabled={isSubmitting}
+              placeholder="Type your answer here..."
+            />
+            {hasError && <p className="text-red-500 text-sm mt-1">{validationErrors[question.id]}</p>}
+          </>
         );
       
       case 'multipleChoice':
         return (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {(question.options || []).map((option: string, idx: number) => (
-              <div key={idx} className="flex items-center">
-                <input
-                  type="radio"
-                  id={`${question.id}-${idx}`}
-                  name={question.id}
-                  className="mr-2"
-                  checked={formValues[question.id] === option}
-                  onChange={() => handleInputChange(question.id, option)}
-                  disabled={submitted}
-                />
-                <label htmlFor={`${question.id}-${idx}`}>{option}</label>
+              <div 
+                key={idx} 
+                className={`flex items-center p-3 border rounded-md ${
+                  formValues[question.id] === option 
+                    ? 'bg-purple-50 border-purple-300' 
+                    : 'border-gray-200 hover:bg-gray-50'
+                } cursor-pointer transition-colors`}
+                onClick={() => handleInputChange(question.id, option)}
+              >
+                <div className={`w-5 h-5 rounded-full border ${
+                  formValues[question.id] === option 
+                    ? 'border-purple-500 bg-purple-500' 
+                    : 'border-gray-400'
+                } flex items-center justify-center mr-3`}>
+                  {formValues[question.id] === option && (
+                    <span className="text-white text-xs">✓</span>
+                  )}
+                </div>
+                <label className="cursor-pointer flex-1">{option}</label>
               </div>
             ))}
+            {hasError && <p className="text-red-500 text-sm mt-1">{validationErrors[question.id]}</p>}
           </div>
         );
       
       case 'checkboxes':
         return (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {(question.options || []).map((option: string, idx: number) => {
               const values = formValues[question.id] || [];
+              const isChecked = values.includes(option);
+              
               return (
-                <div key={idx} className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id={`${question.id}-${idx}`}
-                    className="mr-2"
-                    checked={values.includes(option)}
-                    onChange={(e) => {
-                      const updatedValues = e.target.checked
-                        ? [...(formValues[question.id] || []), option]
-                        : (formValues[question.id] || []).filter((v: string) => v !== option);
-                      handleInputChange(question.id, updatedValues);
-                    }}
-                    disabled={submitted}
-                  />
-                  <label htmlFor={`${question.id}-${idx}`}>{option}</label>
+                <div 
+                  key={idx} 
+                  className={`flex items-center p-3 border rounded-md ${
+                    isChecked 
+                      ? 'bg-purple-50 border-purple-300' 
+                      : 'border-gray-200 hover:bg-gray-50'
+                  } cursor-pointer transition-colors`}
+                  onClick={() => {
+                    const updatedValues = isChecked
+                      ? (formValues[question.id] || []).filter((v: string) => v !== option)
+                      : [...(formValues[question.id] || []), option];
+                    handleInputChange(question.id, updatedValues);
+                  }}
+                >
+                  <div className={`w-5 h-5 rounded border ${
+                    isChecked 
+                      ? 'border-purple-500 bg-purple-500' 
+                      : 'border-gray-400'
+                  } flex items-center justify-center mr-3`}>
+                    {isChecked && (
+                      <span className="text-white text-xs">✓</span>
+                    )}
+                  </div>
+                  <label className="cursor-pointer flex-1">{option}</label>
                 </div>
               );
             })}
+            {hasError && <p className="text-red-500 text-sm mt-1">{validationErrors[question.id]}</p>}
           </div>
         );
       
       case 'rating':
+        const maxRating = question.maxRating || 5;
         return (
-          <div className="flex space-x-2 justify-between">
-            {[1, 2, 3, 4, 5].map(rating => (
-              <button
-                key={rating}
-                type="button"
-                className={`w-12 h-12 rounded-full ${
-                  formValues[question.id] === rating
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 hover:bg-gray-200'
-                }`}
-                onClick={() => handleInputChange(question.id, rating)}
-                disabled={submitted}
-              >
-                {rating}
-              </button>
-            ))}
+          <div className="my-4">
+            <div className="flex space-x-2 justify-between">
+              {Array.from({length: maxRating}, (_, i) => i + 1).map(rating => (
+                <button
+                  key={rating}
+                  type="button"
+                  className={`w-12 h-12 rounded-full ${
+                    formValues[question.id] === rating
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  } transition-colors`}
+                  onClick={() => handleInputChange(question.id, rating)}
+                  disabled={isSubmitting}
+                >
+                  {rating}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-between mt-2 text-sm text-gray-500">
+              <span>Poor</span>
+              <span>Excellent</span>
+            </div>
+            {hasError && <p className="text-red-500 text-sm mt-1">{validationErrors[question.id]}</p>}
+          </div>
+        );
+        
+      case 'scale':
+        const minValue = question.minValue || 1;
+        const maxValue = question.maxValue || 10;
+        const scaleValues = Array.from(
+          {length: maxValue - minValue + 1}, 
+          (_, i) => i + minValue
+        );
+        
+        return (
+          <div className="my-4">
+            <div className="flex justify-between mb-2">
+              {scaleValues.map(value => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`w-8 h-8 rounded-full ${
+                    formValues[question.id] === value
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200'
+                  } text-sm transition-colors flex items-center justify-center`}
+                  onClick={() => handleInputChange(question.id, value)}
+                  disabled={isSubmitting}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-between mt-1 text-xs text-gray-500">
+              <span>{minValue}</span>
+              <span>{maxValue}</span>
+            </div>
+            {hasError && <p className="text-red-500 text-sm mt-1">{validationErrors[question.id]}</p>}
           </div>
         );
       
@@ -134,49 +280,113 @@ export default function SurveyStage() {
     }
   };
 
+  // Show thank you message
+  if (showThankYou) {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-3xl">
+        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Thank You!</h2>
+          <p className="text-gray-600 mb-6">Your responses have been recorded.</p>
+          <p className="text-purple-600">Proceeding to next stage...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No questions
+  if (questions.length === 0) {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-3xl">
+        <div className="bg-white rounded-lg shadow-lg p-6 text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">{currentStage.title}</h2>
+          <p className="text-gray-600 mb-6">{currentStage.description}</p>
+          <p className="text-gray-700 mb-6">This survey has no questions.</p>
+          <button
+            onClick={goToNextStage}
+            className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 font-medium shadow-md"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Question carousel
   return (
     <div className="container mx-auto py-8 px-4 max-w-3xl">
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-2">{currentStage.title}</h2>
         <p className="text-gray-600 mb-6">{currentStage.description}</p>
         
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-6 mb-8">
-            {questions.map((question: Question, index: number) => (
-              <div key={question.id} className="border-b border-gray-200 pb-4 last:border-b-0">
-                <div className="flex items-start mb-2">
-                  <span className="bg-gray-200 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center mr-2">
-                    {index + 1}
-                  </span>
-                  <div>
-                    <label className="block font-medium text-gray-800">
-                      {question.text}
-                      {question.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                  </div>
-                </div>
-                <div className="ml-8">
-                  {renderQuestionInput(question)}
-                </div>
+        {/* Progress bar */}
+        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+          <div 
+            className="bg-purple-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${progress}%` }}
+          ></div>
+        </div>
+        
+        {/* Question count */}
+        <div className="flex justify-between text-sm text-gray-500 mb-8">
+          <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
+          <span>{Math.round(progress)}% complete</span>
+        </div>
+        
+        {/* Current question */}
+        {currentQuestion && (
+          <div className="mb-8">
+            <div className="flex items-start mb-4">
+              <div className="bg-purple-100 text-purple-700 rounded-full w-8 h-8 flex items-center justify-center mr-3 font-medium">
+                {currentQuestionIndex + 1}
               </div>
-            ))}
+              <div className="flex-1">
+                <label className="block font-medium text-gray-800 text-lg">
+                  {currentQuestion.text}
+                  {currentQuestion.required && <span className="text-red-500 ml-1">*</span>}
+                </label>
+              </div>
+            </div>
+            
+            <div className="ml-11">
+              {renderQuestionInput(currentQuestion)}
+            </div>
           </div>
+        )}
+        
+        {/* Navigation buttons */}
+        <div className="flex justify-between mt-8 pt-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={handlePrevious}
+            disabled={currentQuestionIndex === 0 || isSubmitting}
+            className={`px-4 py-2 rounded ${
+              currentQuestionIndex === 0 || isSubmitting
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            } transition-colors`}
+          >
+            Previous
+          </button>
           
-          {!submitted ? (
-            <div className="flex justify-center">
-              <button
-                type="submit"
-                className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 font-medium shadow-md"
-              >
-                Submit
-              </button>
-            </div>
-          ) : (
-            <div className="text-center text-green-600">
-              <p>Thank you for your responses! Proceeding to next stage...</p>
-            </div>
-          )}
-        </form>
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={isSubmitting}
+            className={`px-6 py-2 rounded ${
+              isSubmitting
+                ? 'bg-purple-400 cursor-not-allowed'
+                : 'bg-purple-600 hover:bg-purple-700'
+            } text-white transition-colors`}
+          >
+            {isLastQuestion ? 'Submit' : 'Next'}
+          </button>
+        </div>
       </div>
     </div>
   );

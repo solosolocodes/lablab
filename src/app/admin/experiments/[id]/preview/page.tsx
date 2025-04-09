@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
+import SurveyStageComponent from '@/components/preview/SurveyStage';
 
 // Define basic interfaces for stage types
 // Question interface to replace any type
@@ -814,56 +815,10 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   );
 }
 
+
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
-  const { isStageTransitioning } = usePreview();
-  return (
-    <div className="w-full p-4 bg-white rounded border">
-      <div className="mb-4 pb-3 border-b border-gray-200">
-        <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
-        <p className="text-gray-600">{stage.description}</p>
-      </div>
-      
-      <div className="p-4 bg-gray-50 rounded border mb-5">
-        <p className="font-medium mb-3">Survey Questions</p>
-        
-        {stage.questions && stage.questions.length > 0 ? (
-          <div>
-            {stage.questions.map((q: Question, i: number) => (
-              <div key={q.id || i} className="mb-4 p-3 bg-white rounded border">
-                <p className="font-medium">
-                  {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">Type: {q.type}</p>
-                
-                {q.type === 'multipleChoice' && q.options && (
-                  <div className="mt-2 pl-4">
-                    {q.options.map((option: string, idx: number) => (
-                      <div key={idx} className="flex items-center mt-1">
-                        <span className="w-4 h-4 border border-gray-300 rounded-full mr-2"></span>
-                        <span className="text-gray-700">{option}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-600">No questions defined for this survey.</p>
-        )}
-      </div>
-      
-      <div className="flex justify-center">
-        <button 
-          onClick={onNext}
-          disabled={isStageTransitioning}
-          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          Submit
-        </button>
-      </div>
-    </div>
-  );
+  // We'll render our SurveyStageComponent directly
+  return <SurveyStageComponent />;
 }
 
 function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
