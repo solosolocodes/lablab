@@ -881,9 +881,99 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   
-  // Ref for scrolling to invalid questions
-  const containerRef = useRef<HTMLDivElement>(null);
+  // Calculate if we can navigate to previous/next questions
+  const hasQuestions = stage.questions && stage.questions.length > 0;
+  const totalQuestions = hasQuestions ? stage.questions.length : 0;
+  const canGoNext = currentQuestionIndex < totalQuestions - 1;
+  const canGoPrevious = currentQuestionIndex > 0;
+  const currentQuestion = hasQuestions ? stage.questions[currentQuestionIndex] : null;
+  
+  // Add keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle keyboard events if we're inside a textarea or input
+      if (
+        document.activeElement?.tagName === 'TEXTAREA' || 
+        document.activeElement?.tagName === 'INPUT'
+      ) {
+        if (e.key === 'Enter' && e.altKey) {
+          // Only handle Alt+Enter for submission while in a form field
+          if (!canGoNext && !isSubmitting && !isStageTransitioning) {
+            submitSurveyAnswers();
+          }
+        }
+        return;
+      }
+      
+      // Handle keyboard navigation
+      switch (e.key) {
+        case 'ArrowRight':
+          if (canGoNext) {
+            goToNextQuestion();
+          }
+          break;
+        case 'ArrowLeft':
+          if (canGoPrevious) {
+            goToPreviousQuestion();
+          }
+          break;
+        case 'Enter':
+          // Submit on enter if we're at the last question
+          if (!canGoNext && !isSubmitting && !isStageTransitioning) {
+            submitSurveyAnswers();
+          }
+          break;
+        default:
+          break;
+      }
+    };
+    
+    // Add event listener
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [canGoNext, canGoPrevious, isSubmitting, isStageTransitioning, submitSurveyAnswers, transitionToQuestion];
+  
+  // State to control question slide animations
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionDirection, setTransitionDirection] = useState<'next' | 'prev' | null>(null);
+  
+  // Helper for creating smooth transitions between questions
+  const transitionToQuestion = (direction: 'next' | 'prev', targetIndex: number) => {
+    // Start transition animation
+    setIsTransitioning(true);
+    setTransitionDirection(direction);
+    
+    // After a short delay, change the question
+    setTimeout(() => {
+      setCurrentQuestionIndex(targetIndex);
+      
+      // After changing question, finish transition
+      setTimeout(() => {
+        setIsTransitioning(false);
+        setTransitionDirection(null);
+      }, 150);
+    }, 150);
+  };
+  
+  // Navigate to next question with smooth transition
+  const goToNextQuestion = () => {
+    if (canGoNext) {
+      transitionToQuestion('next', currentQuestionIndex + 1);
+    }
+  };
+  
+  // Navigate to previous question with smooth transition
+  const goToPreviousQuestion = () => {
+    if (canGoPrevious) {
+      transitionToQuestion('prev', currentQuestionIndex - 1);
+    }
+  };
   
   // Handle answer changes
   const handleAnswerChange = (questionId: string, value: string | string[]) => {
@@ -926,20 +1016,18 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       });
     }
     
-    // Stop if there are validation errors and scroll to first error
+    // Stop if there are validation errors and navigate to the first error
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
       
-      // Find the first error element and scroll to it
-      setTimeout(() => {
-        if (containerRef.current) {
-          const firstErrorId = Object.keys(errors)[0];
-          const errorElement = containerRef.current.querySelector(`[data-question-id="${firstErrorId}"]`);
-          if (errorElement) {
-            errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
+      // Find the first error's index and navigate to it
+      if (stage.questions) {
+        const firstErrorId = Object.keys(errors)[0];
+        const errorIndex = stage.questions.findIndex(q => q.id === firstErrorId);
+        if (errorIndex !== -1) {
+          setCurrentQuestionIndex(errorIndex);
         }
-      }, 100);
+      }
       
       return;
     }
@@ -989,104 +1077,207 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   };
   
   return (
-    <div className="w-full bg-white rounded border relative" style={{ maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      {/* Fixed header */}
-      <div className="p-4 border-b border-gray-200 bg-white">
+    <div className="w-full bg-white rounded-lg border p-4">
+      {/* Survey header */}
+      <div className="mb-6 pb-3 border-b border-gray-200">
         <h3 className="text-xl font-bold">{stage.title}</h3>
         <p className="text-gray-600 mt-1">{stage.description}</p>
       </div>
       
-      {/* Scrollable section that takes up remaining space */}
-      <div 
-        className="overflow-y-auto flex-1" 
-        style={{ 
-          overflowY: 'scroll',
-          scrollbarWidth: 'auto',
-          scrollbarColor: '#718096 #E2E8F0'
-        }} 
-        ref={containerRef}
-      >
-        <div className="p-4">
-          <div className="bg-gray-50 rounded-lg border p-4 mb-2">
-            <p className="font-medium mb-3 flex items-center">
-              <span>Survey Questions</span>
-              <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">{stage.questions ? stage.questions.length : 0} questions</span>
-            </p>
-            
-            {/* Questions list */}
-            {stage.questions && stage.questions.length > 0 ? (
-              <div className="space-y-4">
-                {stage.questions.map((q: Question, i: number) => (
-                  <div 
-                    key={q.id || i} 
-                    className="mb-4 p-4 bg-white rounded-lg border shadow-sm" 
-                    data-question-id={q.id}
-                  >
-                    <p className="font-medium text-lg">
-                      {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
-                    </p>
-                    
-                    {/* Question input based on type */}
-                    {q.type === 'multipleChoice' && q.options && (
-                      <div className="mt-3 pl-4">
-                        {q.options.map((option: string, idx: number) => (
-                          <div key={idx} className="flex items-center mt-2">
-                            <button 
-                              type="button"
-                              onClick={() => handleMultipleChoiceSelect(q.id, option)}
-                              className={`w-5 h-5 border-2 ${answers[q.id] === option ? 'bg-blue-500 border-blue-500' : 'border-gray-300'} rounded-full mr-3 focus:outline-none focus:ring-2 focus:ring-blue-400`}
-                              aria-label={`Select option: ${option}`}
-                            ></button>
-                            <span className="text-gray-700">{option}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {q.type === 'text' && (
-                      <div className="mt-3">
-                        <textarea
-                          className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                          rows={3}
-                          value={answers[q.id] as string || ''}
-                          onChange={(e) => handleTextChange(q.id, e.target.value)}
-                          placeholder="Enter your answer here..."
-                        />
-                      </div>
-                    )}
-                    
-                    {/* Show validation error if any */}
-                    {validationErrors[q.id] && (
-                      <p className="text-red-500 font-medium mt-2 pl-1">{validationErrors[q.id]}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-600">No questions defined for this survey.</p>
-            )}
-            
-            {/* Arrow indicator that floats on scroll */}
-            {(stage.questions && stage.questions.length > 3) && (
-              <div className="sticky bottom-4 right-4 float-right mt-4 bg-blue-500 text-white p-2 rounded-full shadow-lg animate-bounce">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 13l-7 7-7-7m14-8l-7 7-7-7" />
-                </svg>
-              </div>
-            )}
-          </div>
+      {/* Progress bar */}
+      <div className="mb-6">
+        <div className="flex justify-between text-sm text-gray-500 mb-1">
+          <span>Question {currentQuestionIndex + 1} of {totalQuestions}</span>
+          <span>{Math.round(((currentQuestionIndex + 1) / totalQuestions) * 100)}% complete</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div 
+            className="bg-blue-500 h-2 rounded-full transition-all duration-300 ease-in-out" 
+            style={{ width: `${((currentQuestionIndex + 1) / totalQuestions) * 100}%` }}
+          ></div>
         </div>
       </div>
       
-      {/* Fixed submit button at bottom */}
-      <div className="p-4 border-t border-gray-200 bg-white">
-        <button 
-          onClick={submitSurveyAnswers}
-          disabled={isStageTransitioning || isSubmitting}
-          className={`w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-lg font-medium ${(isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+      {/* Question card with transition animations */}
+      {hasQuestions && currentQuestion ? (
+        <div 
+          className={`bg-gray-50 rounded-lg border p-5 shadow-sm mb-6 transition-all duration-300 ease-in-out ${isTransitioning ? 'opacity-0 transform ' + (transitionDirection === 'next' ? 'translate-x-10' : '-translate-x-10') : 'opacity-100'}`}
         >
-          {isSubmitting ? 'Submitting...' : 'Submit Survey'}
-        </button>
+          {/* Question number indicator */}
+          <div className="flex items-center mb-4">
+            <span className="w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-800 rounded-full font-bold text-lg">
+              {currentQuestionIndex + 1}
+            </span>
+            <span className="ml-3 font-medium text-lg flex-1">{currentQuestion.text}</span>
+            {currentQuestion.required && <span className="text-red-500 ml-1">*</span>}
+          </div>
+          
+          {/* Question input based on type */}
+          {currentQuestion.type === 'multipleChoice' && currentQuestion.options && (
+            <div className="mt-4 pl-2">
+              {currentQuestion.options.map((option: string, idx: number) => (
+                <div 
+                  key={idx} 
+                  className="flex items-center mb-3 p-2 hover:bg-gray-100 rounded-md cursor-pointer"
+                  onClick={() => handleMultipleChoiceSelect(currentQuestion.id, option)}
+                >
+                  <div
+                    className={`w-6 h-6 border-2 ${answers[currentQuestion.id] === option ? 'bg-blue-500 border-blue-500' : 'border-gray-300'} rounded-full mr-3 focus:outline-none focus:ring-2 focus:ring-blue-400 flex items-center justify-center`}
+                  >
+                    {answers[currentQuestion.id] === option && (
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                  <span className="text-gray-700 text-lg">{option}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {currentQuestion.type === 'text' && (
+            <div className="mt-4">
+              <textarea
+                className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                rows={5}
+                value={answers[currentQuestion.id] as string || ''}
+                onChange={(e) => handleTextChange(currentQuestion.id, e.target.value)}
+                placeholder="Enter your answer here..."
+                aria-label={`Answer for question: ${currentQuestion.text}`}
+                autoFocus
+              />
+            </div>
+          )}
+          
+          {/* Show validation error if any */}
+          {validationErrors[currentQuestion.id] && (
+            <div className="text-red-500 font-medium mt-3 p-2 bg-red-50 border border-red-200 rounded-md">
+              <div className="flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {validationErrors[currentQuestion.id]}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-gray-50 rounded-lg border p-5 mb-6 text-center">
+          <p className="text-gray-600">No questions defined for this survey.</p>
+        </div>
+      )}
+      
+      {/* Navigation buttons - Added keyboard shortcuts */}
+      <div className="flex justify-between">
+        <div>
+          {canGoPrevious && (
+            <button
+              onClick={goToPreviousQuestion}
+              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-100 flex items-center"
+              title="Previous Question (Alt+Left)"
+            >
+              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
+            </button>
+          )}
+        </div>
+        
+        <div>
+          {canGoNext ? (
+            <button
+              onClick={goToNextQuestion}
+              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center transition-colors"
+              title="Next Question (Alt+Right)"
+            >
+              Next
+              <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          ) : (
+            <button 
+              onClick={submitSurveyAnswers}
+              disabled={isStageTransitioning || isSubmitting}
+              className={`px-6 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center transition-colors ${(isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title="Submit Survey (Alt+Enter)"
+            >
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  Submit
+                  <svg className="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {/* Quick navigation dots with improved tooltip */}
+      {totalQuestions > 1 && (
+        <div className="flex justify-center mt-6">
+          <div className="flex flex-wrap gap-2 max-w-full p-2">
+            {Array.from({ length: totalQuestions }).map((_, index) => {
+              // Check answer status for this question
+              const questionId = stage.questions?.[index]?.id;
+              const question = stage.questions?.[index];
+              const isAnswered = questionId && answers[questionId] ? true : false;
+              const isRequired = question?.required;
+              const hasError = questionId && validationErrors[questionId] ? true : false;
+              const isCurrent = index === currentQuestionIndex;
+              
+              // Determine styling
+              let dotClasses = "w-3 h-3 rounded-full cursor-pointer transition-colors ";
+              if (isCurrent) {
+                dotClasses += "bg-blue-500 ring-2 ring-blue-300 transform scale-125 ";
+              } else if (hasError) {
+                dotClasses += "bg-red-500 ";
+              } else if (isAnswered) {
+                dotClasses += "bg-green-500 ";
+              } else if (isRequired) {
+                dotClasses += "bg-gray-300 border border-gray-400 ";
+              } else {
+                dotClasses += "bg-gray-300 ";
+              }
+              
+              // Create a short preview of the question text
+              const questionPreview = question?.text && question.text.length > 20 
+                ? question.text.substring(0, 20) + '...' 
+                : question?.text || `Question ${index + 1}`;
+              
+              return (
+                <button 
+                  key={index} 
+                  className={dotClasses}
+                  onClick={() => {
+                    if (index === currentQuestionIndex) return;
+                    const direction = index > currentQuestionIndex ? 'next' : 'prev';
+                    transitionToQuestion(direction, index);
+                  }}
+                  title={`${index + 1}. ${questionPreview}${isRequired ? ' (required)' : ''}${isAnswered ? ' ✓' : ''}`}
+                  aria-label={`Go to question ${index + 1}`}
+                ></button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      
+      {/* Keyboard shortcut listener for navigation */}
+      <div className="text-xs text-gray-400 text-center mt-4">
+        Keyboard shortcuts: Left/Right arrow keys to navigate, Enter to submit
       </div>
     </div>
   );
