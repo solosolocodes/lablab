@@ -875,6 +875,104 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
+  const { data: session } = useSession();
+  const params = useParams();
+  const experimentId = params.id as string;
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  
+  // Handle answer changes
+  const handleAnswerChange = (questionId: string, value: string | string[]) => {
+    setAnswers(prev => ({
+      ...prev,
+      [questionId]: value
+    }));
+    
+    // Clear validation error when answering
+    if (validationErrors[questionId]) {
+      setValidationErrors(prev => {
+        const updated = { ...prev };
+        delete updated[questionId];
+        return updated;
+      });
+    }
+  };
+  
+  // Handle multiple choice selection
+  const handleMultipleChoiceSelect = (questionId: string, option: string) => {
+    handleAnswerChange(questionId, option);
+  };
+  
+  // Handle text input change
+  const handleTextChange = (questionId: string, text: string) => {
+    handleAnswerChange(questionId, text);
+  };
+  
+  // Submit answers to the API
+  const submitSurveyAnswers = async () => {
+    // Validate required questions
+    const errors: Record<string, string> = {};
+    
+    if (stage.questions) {
+      stage.questions.forEach((q: Question) => {
+        if (q.required && (!answers[q.id] || answers[q.id] === '' || 
+            (Array.isArray(answers[q.id]) && answers[q.id].length === 0))) {
+          errors[q.id] = 'This question is required';
+        }
+      });
+    }
+    
+    // Stop if there are validation errors
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+    
+    // Prepare to submit
+    setIsSubmitting(true);
+    
+    try {
+      // Add timeout and abort controller for API call
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
+      // Only submit if user is authenticated
+      if (!session?.user) {
+        throw new Error('Authentication required to submit survey');
+      }
+      
+      const response = await fetch(`/api/participant/surveys/${stage.id}/responses`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        body: JSON.stringify({
+          experimentId: experimentId,
+          stageId: stage.id,
+          userId: session.user.id,
+          answers: answers
+        }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to submit survey: ${response.status}`);
+      }
+      
+      // Survey submitted successfully, move to next stage
+      onNext();
+    } catch (error) {
+      console.error('Error submitting survey:', error);
+      alert('There was a problem submitting your survey. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
   return (
     <div className="w-full p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
@@ -892,17 +990,38 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
                 <p className="font-medium">
                   {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
                 </p>
-                <p className="text-sm text-gray-500 mt-1">Type: {q.type}</p>
                 
+                {/* Question input based on type */}
                 {q.type === 'multipleChoice' && q.options && (
                   <div className="mt-2 pl-4">
                     {q.options.map((option: string, idx: number) => (
                       <div key={idx} className="flex items-center mt-1">
-                        <span className="w-4 h-4 border border-gray-300 rounded-full mr-2"></span>
+                        <button 
+                          type="button"
+                          onClick={() => handleMultipleChoiceSelect(q.id, option)}
+                          className={`w-4 h-4 border ${answers[q.id] === option ? 'bg-blue-500 border-blue-500' : 'border-gray-300'} rounded-full mr-2`}
+                        ></button>
                         <span className="text-gray-700">{option}</span>
                       </div>
                     ))}
                   </div>
+                )}
+                
+                {q.type === 'text' && (
+                  <div className="mt-2">
+                    <textarea
+                      className="w-full p-2 border border-gray-300 rounded"
+                      rows={3}
+                      value={answers[q.id] as string || ''}
+                      onChange={(e) => handleTextChange(q.id, e.target.value)}
+                      placeholder="Enter your answer here..."
+                    />
+                  </div>
+                )}
+                
+                {/* Show validation error if any */}
+                {validationErrors[q.id] && (
+                  <p className="text-red-500 text-sm mt-1">{validationErrors[q.id]}</p>
                 )}
               </div>
             ))}
@@ -914,11 +1033,11 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       
       <div className="flex justify-center">
         <button 
-          onClick={onNext}
-          disabled={isStageTransitioning}
-          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
+          onClick={submitSurveyAnswers}
+          disabled={isStageTransitioning || isSubmitting}
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${(isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          Submit
+          {isSubmitting ? 'Submitting...' : 'Submit'}
         </button>
       </div>
     </div>
@@ -1007,6 +1126,9 @@ function SimpleExperimentContent() {
     // Get the current stage that's being completed
     const currentStage = experiment.stages[currentStageNumber];
     if (!currentStage || !currentStage.id) return;
+    
+    // Record stage completion when button is pressed
+    // Note: For survey stages, this is called after survey submission, not directly on button click
     
     // Handle navigation based on whether there are more stages
     if (currentStageNumber < experiment.stages.length - 1) {
