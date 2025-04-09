@@ -6,6 +6,9 @@ export interface IQuestion extends Document {
   type: 'text' | 'multipleChoice' | 'checkboxes' | 'scale' | 'rating';
   required: boolean;
   options?: string[];
+  minValue?: number; // For scale questions (1-10)
+  maxValue?: number; // For scale questions
+  maxRating?: number; // For rating questions (1-5 stars)
   order: number;
 }
 
@@ -38,9 +41,25 @@ const QuestionSchema = new Schema({
     type: Boolean, 
     default: false 
   },
+  // Options for multiple choice/checkboxes
   options: { 
     type: [String] 
   },
+  // Fields for scale questions
+  minValue: {
+    type: Number,
+    default: 1
+  },
+  maxValue: {
+    type: Number,
+    default: 10
+  },
+  // Field for rating questions
+  maxRating: {
+    type: Number,
+    default: 5
+  },
+  // Order for display
   order: { 
     type: Number, 
     default: 0 

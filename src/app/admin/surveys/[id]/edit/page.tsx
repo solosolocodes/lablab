@@ -16,6 +16,9 @@ type Question = {
   type: QuestionType;
   required: boolean;
   options?: string[];
+  minValue?: number; // For scale questions (1-10)
+  maxValue?: number; // For scale questions
+  maxRating?: number; // For rating questions (1-5 stars)
   order: number;
 };
 
@@ -157,21 +160,49 @@ export default function SurveyEditorPage() {
       setIsSaving(true);
       console.log('Saving survey:', surveyId);
       
-      // Prepare extremely minimal data
-      const minimalSurveyData = {
-        title: survey.title,
-        description: survey.description, 
-        status: survey.status,
-        // Simplified question structure
-        questions: survey.questions.map(q => ({
+      // Prepare survey data with appropriate formatting by question type
+      const formattedQuestions = survey.questions.map(q => {
+        // Basic question properties
+        const questionBase = {
           id: q.id,
           text: q.text,
           type: q.type,
           required: q.required,
-          // Only include options for multiple choice/checkbox questions
-          options: (q.type === 'multipleChoice' || q.type === 'checkboxes') ? q.options : [],
           order: q.order
-        }))
+        };
+        
+        // Add type-specific properties
+        switch (q.type) {
+          case 'multipleChoice':
+          case 'checkboxes':
+            return {
+              ...questionBase,
+              options: Array.isArray(q.options) ? q.options.filter(opt => opt.trim() !== '') : []
+            };
+          case 'scale':
+            return {
+              ...questionBase,
+              // Scale questions don't need options
+              minValue: 1,
+              maxValue: 10
+            };
+          case 'rating':
+            return {
+              ...questionBase,
+              // Rating questions have fixed 1-5 stars
+              maxRating: 5
+            };
+          case 'text':
+          default:
+            return questionBase;
+        }
+      });
+      
+      const minimalSurveyData = {
+        title: survey.title,
+        description: survey.description, 
+        status: survey.status,
+        questions: formattedQuestions
       };
       
       // Use XMLHttpRequest instead of fetch for better timeout handling
@@ -224,16 +255,35 @@ export default function SurveyEditorPage() {
     setSurvey({ ...survey, description: e.target.value });
   };
 
-  // Add a new question
-  const addQuestion = () => {
+  // Add a new question with appropriate defaults based on type
+  const addQuestion = (type: QuestionType = 'text') => {
     if (!survey) return;
+    
+    // Create appropriate defaults based on question type
+    const defaults: Record<QuestionType, Partial<Question>> = {
+      'text': {
+        options: []
+      },
+      'multipleChoice': {
+        options: ['Option 1', 'Option 2', 'Option 3']
+      },
+      'checkboxes': {
+        options: ['Option 1', 'Option 2', 'Option 3']
+      },
+      'scale': {
+        options: []
+      },
+      'rating': {
+        options: []
+      }
+    };
     
     const newQuestion: Question = {
       id: crypto.randomUUID(),
       text: 'New Question',
-      type: 'text',
+      type: type,
       required: false,
-      options: [],
+      options: defaults[type].options || [],
       order: survey.questions.length
     };
     
@@ -403,12 +453,38 @@ export default function SurveyEditorPage() {
                 <div className="mt-1 mb-3 text-sm text-gray-500">
                   <p>For optimal performance, please limit surveys to 50 questions maximum, and 10 options per multiple choice question.</p>
                 </div>
-                <Button
-                  onClick={addQuestion}
-                  className="mt-2 bg-green-600 hover:bg-green-700"
-                >
-                  Add New Question
-                </Button>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => addQuestion('text')}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    Add Text Question
+                  </Button>
+                  <Button
+                    onClick={() => addQuestion('multipleChoice')}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Add Multiple Choice
+                  </Button>
+                  <Button
+                    onClick={() => addQuestion('checkboxes')}
+                    className="bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    Add Checkboxes
+                  </Button>
+                  <Button
+                    onClick={() => addQuestion('scale')}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    Add Scale (1-10)
+                  </Button>
+                  <Button
+                    onClick={() => addQuestion('rating')}
+                    className="bg-pink-600 hover:bg-pink-700"
+                  >
+                    Add Rating (⭐)
+                  </Button>
+                </div>
               </div>
               <div className="px-4 py-5 sm:p-6">
                 {survey.questions.length > 0 ? (
@@ -436,63 +512,149 @@ export default function SurveyEditorPage() {
                         />
                       </div>
                       
-                      <div className="mb-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Question Type
-                        </label>
-                        <select
-                          value={question.type}
-                          onChange={(e) => handleQuestionChange(index, 'type', e.target.value)}
-                          className="w-full border border-gray-300 rounded-md p-2"
-                        >
-                          <option value="text">Text (Short Answer)</option>
-                          <option value="multipleChoice">Multiple Choice (Select One)</option>
-                          <option value="checkboxes">Checkboxes (Select Multiple)</option>
-                          <option value="scale">Scale (1-10)</option>
-                          <option value="rating">Rating (1-5 Stars)</option>
-                        </select>
-                      </div>
-                      
-                      <div className="mb-4">
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={question.required}
-                            onChange={(e) => handleQuestionChange(index, 'required', e.target.checked)}
-                            className="mr-2"
-                          />
-                          <span className="text-sm text-gray-700">Required</span>
-                        </label>
-                      </div>
-                      
-                      {(question.type === 'multipleChoice' || question.type === 'checkboxes') && (
-                        <div className="mb-4">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Options
+                      <div className="mb-4 grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Question Type
                           </label>
+                          <select
+                            value={question.type}
+                            onChange={(e) => {
+                              // When type changes, setup default options if needed
+                              const newType = e.target.value as QuestionType;
+                              let newOptions = question.options || [];
+                              
+                              // Set default options for choice-based questions
+                              if ((newType === 'multipleChoice' || newType === 'checkboxes') && newOptions.length === 0) {
+                                newOptions = ['Option 1', 'Option 2', 'Option 3'];
+                              }
+                              
+                              // Update both type and options
+                              const updatedQuestion = { 
+                                ...question, 
+                                type: newType,
+                                options: newOptions
+                              };
+                              updateQuestion(index, updatedQuestion);
+                            }}
+                            className="w-full border border-gray-300 rounded-md p-2"
+                          >
+                            <option value="text">Text (Short Answer)</option>
+                            <option value="multipleChoice">Multiple Choice (Select One)</option>
+                            <option value="checkboxes">Checkboxes (Select Multiple)</option>
+                            <option value="scale">Scale (1-10)</option>
+                            <option value="rating">Rating (1-5 Stars)</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="flex items-center h-full pt-6">
+                            <input
+                              type="checkbox"
+                              checked={question.required}
+                              onChange={(e) => handleQuestionChange(index, 'required', e.target.checked)}
+                              className="mr-2 h-4 w-4"
+                            />
+                            <span className="text-sm text-gray-700">Required Question</span>
+                          </label>
+                        </div>
+                      </div>
+                      
+                      {/* Options for Multiple Choice and Checkboxes */}
+                      {(question.type === 'multipleChoice' || question.type === 'checkboxes') && (
+                        <div className="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <div className="flex justify-between items-center mb-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                              {question.type === 'multipleChoice' ? 'Multiple Choice Options' : 'Checkbox Options'}
+                            </label>
+                            <span className="text-xs text-gray-500">
+                              ({question.type === 'multipleChoice' ? 'Select one' : 'Select multiple'})
+                            </span>
+                          </div>
+                          
                           {(question.options || []).map((option, optionIndex) => (
                             <div key={optionIndex} className="flex items-center mb-2">
+                              <div className="w-6 text-gray-400 flex-shrink-0">
+                                {question.type === 'multipleChoice' ? (
+                                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+                                  </svg>
+                                ) : (
+                                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="2" fill="none" />
+                                  </svg>
+                                )}
+                              </div>
                               <input
                                 type="text"
                                 value={option}
                                 onChange={(e) => updateOption(index, optionIndex, e.target.value)}
-                                className="flex-1 border border-gray-300 rounded-md p-2 mr-2"
+                                className="flex-1 border border-gray-300 rounded-md p-2 mx-2"
                                 placeholder={`Option ${optionIndex + 1}`}
                               />
                               <button
                                 onClick={() => deleteOption(index, optionIndex)}
                                 className="text-red-500 hover:text-red-700"
+                                title="Remove option"
                               >
-                                Remove
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
                               </button>
                             </div>
                           ))}
-                          <button
-                            onClick={() => addOption(index)}
-                            className="text-blue-500 hover:text-blue-700"
-                          >
-                            + Add Option
-                          </button>
+                          
+                          {(question.options || []).length < 10 && (
+                            <button
+                              onClick={() => addOption(index)}
+                              className="mt-2 flex items-center text-blue-600 hover:text-blue-800"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                              </svg>
+                              Add Option
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Scale specific settings */}
+                      {question.type === 'scale' && (
+                        <div className="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Scale Options (1-10)
+                          </label>
+                          <div className="flex justify-between items-center">
+                            <div className="text-sm text-gray-500">Min (1)</div>
+                            <div className="flex-1 px-4">
+                              <div className="h-2 bg-gray-300 rounded-full">
+                                <div className="h-2 bg-purple-500 rounded-full w-1/2"></div>
+                              </div>
+                            </div>
+                            <div className="text-sm text-gray-500">Max (10)</div>
+                          </div>
+                          <p className="mt-2 text-xs text-gray-500">
+                            Participants will select a value from 1 to 10
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* Rating specific settings */}
+                      {question.type === 'rating' && (
+                        <div className="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Rating Options (Stars)
+                          </label>
+                          <div className="flex space-x-2">
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <svg key={star} className="w-6 h-6 text-yellow-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+                              </svg>
+                            ))}
+                          </div>
+                          <p className="mt-2 text-xs text-gray-500">
+                            Participants will rate from 1 to 5 stars
+                          </p>
                         </div>
                       )}
                     </div>
