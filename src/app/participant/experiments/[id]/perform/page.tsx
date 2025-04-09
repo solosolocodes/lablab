@@ -1049,12 +1049,18 @@ function ExperimentContent() {
   
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
-    // Record that the user has started the experiment
+    // Record that the user has started the experiment (non-blocking)
     if (experiment) {
-      // Ensure progress is updated when beginning the experiment
-      updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id);
+      // Immediately switch view for better UX
+      setViewMode('experiment');
+      
+      // Then update progress in the background
+      Promise.resolve().then(() => {
+        updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id);
+      });
+    } else {
+      setViewMode('experiment');
     }
-    setViewMode('experiment');
   };
   
   // Handle Next button click for stage navigation
@@ -1117,11 +1123,13 @@ function ExperimentContent() {
   
   // Thank You screen view
   if (viewMode === 'thankyou') {
-    // Mark experiment as completed when showing thank you screen
+    // Mark experiment as completed when showing thank you screen (non-blocking)
     useEffect(() => {
       if (experiment) {
-        // Ensure the experiment is marked as completed in MongoDB
-        updateParticipantProgress(experiment.id, 'completed');
+        // Ensure the experiment is marked as completed in MongoDB (background task)
+        Promise.resolve().then(() => {
+          updateParticipantProgress(experiment.id, 'completed');
+        });
       }
     }, [experiment, updateParticipantProgress]);
     

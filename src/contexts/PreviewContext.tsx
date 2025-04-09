@@ -133,7 +133,7 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     }
   };
   
-  // Function to update progress in MongoDB
+  // Function to update progress in MongoDB with timeout and error handling
   const updateParticipantProgress = async (
     experimentId: string,
     status?: 'in_progress' | 'completed',
@@ -148,35 +148,56 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       if (currentStageId) payload.currentStageId = currentStageId;
       if (completedStageId) payload.completedStageId = completedStageId;
       
-      const response = await fetch(`/api/participant/experiments/${experimentId}/progress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      // Use AbortController to add timeout to fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
-      if (!response.ok) {
-        console.error('Failed to update progress:', await response.text());
+      try {
+        const response = await fetch(`/api/participant/experiments/${experimentId}/progress`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          console.error('Failed to update progress:', await response.text());
+        }
+      } catch (fetchErr) {
+        if (fetchErr.name === 'AbortError') {
+          console.warn('Progress update timed out - will continue without waiting for server');
+        } else {
+          throw fetchErr;
+        }
       }
     } catch (err) {
+      // Log error but don't block the user experience
       console.error('Error updating progress:', err);
     }
   };
 
-  // Go to next stage with smooth transition and record progress
+  // Go to next stage with smooth transition and record progress (non-blocking)
   const goToNextStage = useCallback(() => {
     if (!experiment) return;
     
     const currentStage = experiment.stages[currentStageIndex];
     
-    // Record stage completion time and duration
+    // Record stage completion time and duration (non-blocking)
     if (isRecordingProgress && currentStage) {
       const stageStartTime = stageStartTimes[currentStage.id] || new Date();
       const stageDuration = new Date().getTime() - stageStartTime.getTime();
       
       console.log(`Stage ${currentStage.id} completed. Duration: ${Math.round(stageDuration / 1000)}s`);
       
-      // Mark the current stage as completed in MongoDB
-      updateParticipantProgress(experiment.id, undefined, undefined, currentStage.id);
+      // Mark the current stage as completed in MongoDB (don't await - non-blocking)
+      Promise.resolve().then(() => {
+        updateParticipantProgress(experiment.id, undefined, undefined, currentStage.id);
+      });
     }
     
     if (currentStageIndex < experiment.stages.length - 1) {
@@ -195,8 +216,10 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
             [nextStage.id]: new Date()
           }));
           
-          // Update current stage in MongoDB
-          updateParticipantProgress(experiment.id, 'in_progress', nextStage.id);
+          // Update current stage in MongoDB (don't await - non-blocking)
+          Promise.resolve().then(() => {
+            updateParticipantProgress(experiment.id, 'in_progress', nextStage.id);
+          });
         }
         
         setCurrentStageIndex(nextIndex);
@@ -209,8 +232,10 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         }, 100);
       }, 50);
     } else if (isRecordingProgress) {
-      // This was the last stage, complete the experiment
-      updateParticipantProgress(experiment.id, 'completed');
+      // This was the last stage, complete the experiment (non-blocking)
+      Promise.resolve().then(() => {
+        updateParticipantProgress(experiment.id, 'completed');
+      });
     }
   }, [experiment, currentStageIndex, isRecordingProgress, stageStartTimes]);
 
