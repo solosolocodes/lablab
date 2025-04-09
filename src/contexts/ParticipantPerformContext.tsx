@@ -119,7 +119,7 @@ export function ParticipantPerformProvider({ children }: { children: React.React
       pendingOperations.current.push(controller);
       
       // Set up timeout for the fetch operations
-      const timeout = 30000; // 30 seconds
+      const timeout = 45000; // 45 seconds - increased to match MongoDB socketTimeoutMS
       const timeoutId = setTimeout(() => {
         console.log(`[${operationId}] Fetch timeout reached (${timeout}ms), aborting requests`);
         controller.abort();
@@ -134,17 +134,22 @@ export function ParticipantPerformProvider({ children }: { children: React.React
           'Expires': '0'
         };
         
-        // Fetch experiment details and progress in parallel
-        const [experimentResponse, progressResponse] = await Promise.all([
-          fetch(`/api/experiments/${experimentId}?${cacheBuster}&preview=true`, {
-            signal: controller.signal,
-            headers
-          }),
-          fetch(`/api/participant/experiments/${experimentId}/progress?${cacheBuster}`, {
-            signal: controller.signal,
-            headers
-          })
-        ]);
+        // Fetch experiment details first, then progress 
+        // This staggers the requests to avoid overwhelming the connection pool
+        console.log(`[${operationId}] Fetching experiment data...`);
+        const experimentResponse = await fetch(`/api/experiments/${experimentId}?${cacheBuster}&preview=true`, {
+          signal: controller.signal,
+          headers
+        });
+        
+        // Small delay before second request
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log(`[${operationId}] Fetching progress data...`);
+        const progressResponse = await fetch(`/api/participant/experiments/${experimentId}/progress?${cacheBuster}`, {
+          signal: controller.signal,
+          headers
+        });
         
         // Clear timeout since requests completed
         clearTimeout(timeoutId);
@@ -210,8 +215,10 @@ export function ParticipantPerformProvider({ children }: { children: React.React
             setTimeRemaining(sortedStages[startIndex].durationSeconds || 0);
           }
           
-          // Update progress if it's the first time viewing
+          // Update progress if it's the first time viewing (with slight delay)
           if (progressData.status === 'not_started') {
+            // Small delay to avoid immediate follow-up request
+            await new Promise(resolve => setTimeout(resolve, 800));
             await updateProgress('in_progress', sortedStages[0]?.id);
           }
           
@@ -289,15 +296,26 @@ export function ParticipantPerformProvider({ children }: { children: React.React
     try {
       console.log(`Updating progress: status=${status}, currentStage=${currentStageId}, completedStage=${completedStageId}`);
       
+      // Add timeout and abort controller for progress updates
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch(`/api/participant/experiments/${experiment.id}/progress`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
         body: JSON.stringify({
           status,
           currentStageId,
           completedStageId
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error('Failed to update progress');
@@ -337,7 +355,20 @@ export function ParticipantPerformProvider({ children }: { children: React.React
     if (!experiment) return;
     
     try {
-      const response = await fetch(`/api/participant/experiments/${experiment.id}/progress`);
+      // Add timeout and cache control
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      
+      const cacheBuster = `_=${Date.now()}`;
+      const response = await fetch(`/api/participant/experiments/${experiment.id}/progress?${cacheBuster}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
       if (response.ok) {
         const progressData = await response.json();
         setProgress(progressData);
