@@ -36,7 +36,7 @@ export default function SurveyStage() {
   const [isPreparingQuestions, setIsPreparingQuestions] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Function to fetch survey data from MongoDB
+  // Function to fetch survey data from MongoDB - simplified with less delay
   const fetchSurveyData = useCallback(async (surveyId: string) => {
     if (!surveyId) {
       setLoadError('No survey ID provided');
@@ -65,19 +65,15 @@ export default function SurveyStage() {
       console.log('Survey data received:', data);
       
       if (data.success && data.survey) {
-        // Start preparation state with loading indicator
-        setIsPreparingQuestions(true);
-        setIsLoadingSurvey(false);
-        
-        // Use setTimeout to create a deliberate delay before showing questions
+        // Minimal delay - just enough for smooth transition
         setTimeout(() => {
           setSurveyData(data.survey);
           // Reset to first question
           setCurrentQuestionIndex(0);
           setFormValues({});
           setValidationErrors({});
-          setIsPreparingQuestions(false);
-        }, 3000); // 3 second delay before showing questions
+          setIsLoadingSurvey(false);
+        }, 300); // Minimal delay before showing questions
       } else {
         throw new Error('Invalid survey data format');
       }
@@ -144,23 +140,14 @@ export default function SurveyStage() {
     return true;
   };
 
-  // Add state for question transition
-  const [isQuestionTransitioning, setIsQuestionTransitioning] = useState(false);
-  
+  // Simplified question navigation without transitions to prevent flickering
   const handleNext = () => {
     // Validate current question first
     if (!validateCurrentQuestion()) return;
     
-    // Start transition animation
-    setIsQuestionTransitioning(true);
-    
-    // Move to next question if not the last one
+    // Move to next question if not the last one - direct with no animation
     if (!isLastQuestion) {
-      // Delay to create smooth transition effect
-      setTimeout(() => {
-        setCurrentQuestionIndex(prev => prev + 1);
-        setIsQuestionTransitioning(false);
-      }, 400); // Short delay for question transition
+      setCurrentQuestionIndex(prev => prev + 1);
     } else {
       handleSubmit();
     }
@@ -168,14 +155,7 @@ export default function SurveyStage() {
 
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
-      // Start transition animation
-      setIsQuestionTransitioning(true);
-      
-      // Delay to create smooth transition effect
-      setTimeout(() => {
-        setCurrentQuestionIndex(prev => prev - 1);
-        setIsQuestionTransitioning(false);
-      }, 400); // Short delay for question transition
+      setCurrentQuestionIndex(prev => prev - 1);
     }
   };
 
@@ -372,35 +352,28 @@ export default function SurveyStage() {
     }
   };
 
-  // Show thank you message
+  // Simplified thank you message
   if (showThankYou) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-3xl">
-        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-          <div className="w-16 h-16 mx-auto mb-4 bg-green-100 rounded-full flex items-center justify-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Thank You!</h2>
-          <p className="text-gray-600 mb-6">Your responses have been recorded.</p>
-          <p className="text-purple-600">Proceeding to next stage...</p>
+      <div className="container mx-auto py-4 px-3 max-w-2xl">
+        <div className="bg-white rounded p-4 text-center">
+          <p className="text-green-600 mb-2">✓ Thank you</p>
+          <p className="text-gray-600 text-sm">Proceeding to next stage...</p>
         </div>
       </div>
     );
   }
 
-  // No questions
+  // No questions - simplified
   if (questions.length === 0) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-3xl">
-        <div className="bg-white rounded-lg shadow-lg p-6 text-center">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">{currentStage.title}</h2>
-          <p className="text-gray-600 mb-6">{currentStage.description}</p>
-          <p className="text-gray-700 mb-6">This survey has no questions.</p>
+      <div className="container mx-auto py-4 px-3 max-w-2xl">
+        <div className="bg-white rounded p-4 text-center">
+          <h2 className="text-lg font-medium text-gray-800 mb-2">{currentStage.title}</h2>
+          <p className="text-gray-600 mb-4">No questions available.</p>
           <button
             onClick={goToNextStage}
-            className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 font-medium shadow-md"
+            className="bg-purple-600 text-white px-4 py-2 rounded"
           >
             Continue
           </button>
@@ -409,49 +382,26 @@ export default function SurveyStage() {
     );
   }
 
-  // Loading state - with different messages for fetching vs preparing
-  if (isLoadingSurvey || isPreparingQuestions) {
+  // Bare minimum loading state
+  if (isLoadingSurvey) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-3xl">
-        <div className="bg-white rounded-lg shadow-lg p-6 text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-purple-500 border-r-transparent mb-4"></div>
-          
-          {isLoadingSurvey ? (
-            <>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">Loading Survey Questions</h2>
-              <p className="text-gray-600">Please wait while we fetch the survey from the database...</p>
-            </>
-          ) : (
-            <>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">Preparing Your Questions</h2>
-              <p className="text-gray-600">Setting up your survey experience...</p>
-              
-              <div className="mt-6 max-w-md mx-auto">
-                <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-purple-500 rounded-full animate-pulse" style={{ width: '75%' }}></div>
-                </div>
-                <p className="text-sm text-gray-500 mt-2">Almost ready...</p>
-              </div>
-            </>
-          )}
+      <div className="container mx-auto py-4 px-3 max-w-2xl">
+        <div className="bg-white rounded p-4 text-center">
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     );
   }
 
-  // Error state
+  // Simplified error state
   if (loadError) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-3xl">
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <div className="bg-red-50 rounded-lg p-4 mb-4 border border-red-100">
-            <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Survey</h2>
-            <p className="text-gray-700">{loadError}</p>
-          </div>
-          <p className="text-gray-600 mb-4">Using fallback questions if available.</p>
+      <div className="container mx-auto py-4 px-3 max-w-2xl">
+        <div className="bg-white rounded p-4">
+          <p className="text-red-600 mb-2">Error loading survey</p>
           <button
-            onClick={() => goToNextStage()}
-            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
+            onClick={goToNextStage}
+            className="mt-2 px-4 py-2 bg-purple-600 text-white rounded"
           >
             Skip to Next Stage
           </button>
@@ -460,100 +410,70 @@ export default function SurveyStage() {
     );
   }
 
-  // Question carousel
+  // Question carousel - simplified UI to reduce flickering
   return (
-    <div className="container mx-auto py-8 px-4 max-w-3xl">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        {/* Use survey title/description from MongoDB if available, otherwise fall back to stage values */}
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+    <div className="container mx-auto py-4 px-3 max-w-2xl">
+      <div className="bg-white rounded p-4">
+        {/* Basic title and description */}
+        <h2 className="text-xl font-medium text-gray-800 mb-2">
           {surveyData?.title || currentStage.title}
         </h2>
-        <p className="text-gray-600 mb-4">
-          {surveyData?.description || currentStage.description}
-        </p>
         
-        {/* MongoDB source indicator */}
-        {surveyData && (
-          <p className="text-xs text-blue-600 mb-6">
-            Survey loaded from MongoDB (ID: {surveyData._id})
-          </p>
-        )}
-        
-        {/* Progress bar */}
-        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+        {/* Simple progress bar */}
+        <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
           <div 
-            className="bg-purple-600 h-2.5 rounded-full transition-all duration-300 ease-out"
+            className="bg-purple-600 h-2 rounded-full"
             style={{ width: `${progress}%` }}
           ></div>
         </div>
         
-        {/* Question count */}
-        <div className="flex justify-between text-sm text-gray-500 mb-8">
-          <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
-          <span>{Math.round(progress)}% complete</span>
+        {/* Simple question counter */}
+        <div className="text-sm text-gray-500 mb-4">
+          Question {currentQuestionIndex + 1} of {questions.length}
         </div>
         
-        {/* Current question with transition effect */}
+        {/* Current question - simplified without transitions */}
         {currentQuestion && (
-          <div 
-            className={`mb-8 transition-opacity duration-300 ${
-              isQuestionTransitioning ? 'opacity-0' : 'opacity-100'
-            }`}
-          >
-            <div className="flex items-start mb-4">
-              <div className="bg-purple-100 text-purple-700 rounded-full w-8 h-8 flex items-center justify-center mr-3 font-medium">
-                {currentQuestionIndex + 1}
-              </div>
-              <div className="flex-1">
-                <label className="block font-medium text-gray-800 text-lg">
-                  {currentQuestion.text}
-                  {currentQuestion.required && <span className="text-red-500 ml-1">*</span>}
-                </label>
-              </div>
+          <div className="mb-8">
+            <div className="mb-4">
+              <label className="block font-medium text-gray-800 text-lg">
+                {currentQuestion.text}
+                {currentQuestion.required && <span className="text-red-500">*</span>}
+              </label>
             </div>
             
-            <div className="ml-11">
+            <div>
               {renderQuestionInput(currentQuestion)}
             </div>
           </div>
         )}
         
-        {/* Navigation buttons */}
-        <div className="flex justify-between mt-8 pt-4 border-t border-gray-100">
+        {/* Simplified navigation buttons */}
+        <div className="flex justify-between mt-6 pt-3 border-t border-gray-100">
           <button
             type="button"
             onClick={handlePrevious}
-            disabled={currentQuestionIndex === 0 || isSubmitting || isQuestionTransitioning}
+            disabled={currentQuestionIndex === 0 || isSubmitting}
             className={`px-4 py-2 rounded ${
-              currentQuestionIndex === 0 || isSubmitting || isQuestionTransitioning
+              currentQuestionIndex === 0 || isSubmitting
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            } transition-colors flex items-center`}
+            }`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-            </svg>
             Previous
           </button>
           
           <button
             type="button"
             onClick={handleNext}
-            disabled={isSubmitting || isQuestionTransitioning}
+            disabled={isSubmitting}
             className={`px-6 py-2 rounded ${
-              isSubmitting || isQuestionTransitioning
+              isSubmitting
                 ? 'bg-purple-400 cursor-not-allowed'
                 : 'bg-purple-600 hover:bg-purple-700'
-            } text-white transition-colors flex items-center`}
+            } text-white`}
           >
-            {isLastQuestion ? 'Submit' : (
-              <>
-                Next
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
-              </>
-            )}
+            {isLastQuestion ? 'Submit' : 'Next'}
           </button>
         </div>
       </div>
