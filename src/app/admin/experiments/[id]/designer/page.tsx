@@ -1509,7 +1509,7 @@ export default function ExperimentDesignerPage() {
                         Select Survey
                       </label>
                       <select
-                        className="w-full px-3 py-2 border rounded-md text-sm mb-4"
+                        className="w-full px-3 py-2 border rounded-md text-sm"
                         value={(stageFormData as Partial<SurveyStage>).surveyId || ''}
                         onChange={(e) => handleStageFormChange('surveyId', e.target.value)}
                       >
@@ -1520,78 +1520,21 @@ export default function ExperimentDesignerPage() {
                           </option>
                         ))}
                       </select>
-
-                      {(stageFormData as Partial<SurveyStage>).surveyId ? (
-                        <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
-                          <h4 className="font-medium text-blue-800 mb-2">Selected Survey Information</h4>
-                          {(() => {
-                            const selectedSurvey = surveys.find(s => s._id === (stageFormData as Partial<SurveyStage>).surveyId);
-                            if (selectedSurvey) {
-                              return (
-                                <div>
-                                  <p className="text-sm text-blue-700 mb-1"><strong>Title:</strong> {selectedSurvey.title}</p>
-                                  {selectedSurvey.description && (
-                                    <p className="text-sm text-blue-700 mb-1"><strong>Description:</strong> {selectedSurvey.description}</p>
-                                  )}
-                                  <p className="text-sm text-blue-700 mb-1"><strong>Status:</strong> {selectedSurvey.status}</p>
-                                  {selectedSurvey.responsesCount !== undefined && (
-                                    <p className="text-sm text-blue-700"><strong>Responses:</strong> {selectedSurvey.responsesCount}</p>
-                                  )}
-                                  <div className="mt-3">
-                                    <Link 
-                                      href={`/admin/surveys/${selectedSurvey._id}/edit`} 
-                                      className="text-sm text-blue-600 hover:text-blue-800"
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      View/Edit Survey in New Tab
-                                    </Link>
-                                  </div>
-                                </div>
-                              );
-                            } else {
-                              return (
-                                <p className="text-sm text-blue-700">Loading survey details...</p>
-                              );
-                            }
-                          })()}
-                        </div>
-                      ) : (
-                        <div className="p-4 text-center text-amber-700 bg-amber-50 rounded-md border border-amber-200">
-                          Please select a survey from the dropdown above.
-                          {surveys.length === 0 && (
-                            <div className="mt-2">
-                              <p className="text-sm">No published surveys found. Please create a survey first.</p>
-                              <Link 
-                                href="/admin/surveys" 
-                                className="text-sm text-blue-600 hover:text-blue-800 mt-2 inline-block"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                Go to Survey Management
-                              </Link>
-                            </div>
-                          )}
+                      
+                      {surveys.length === 0 && (
+                        <div className="p-4 text-center text-amber-700 bg-amber-50 rounded-md border border-amber-200 mt-3">
+                          <p className="text-sm">No surveys found. Please create a survey first.</p>
+                          <Link 
+                            href="/admin/surveys" 
+                            className="text-sm text-blue-600 hover:text-blue-800 mt-2 inline-block"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Go to Survey Management
+                          </Link>
                         </div>
                       )}
                       
-                      <div className="mt-4">
-                        <div className="text-sm mb-2 text-gray-600 flex items-center">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Use the dropdown to select a survey created in the Surveys section.
-                        </div>
-                        <Link 
-                          href="/admin/surveys"
-                          className="text-sm text-purple-600 hover:text-purple-800 mt-2 inline-block"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Manage Surveys in New Tab
-                        </Link>
-                      </div>
-
                       <div className="mt-4">
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Duration (seconds)
@@ -1603,9 +1546,6 @@ export default function ExperimentDesignerPage() {
                           value={stageFormData.durationSeconds || 300}
                           onChange={(e) => handleStageFormChange('durationSeconds', parseInt(e.target.value) || 300)}
                         />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Estimated time participants will need to complete this survey.
-                        </p>
                       </div>
                     </div>
                   )}
