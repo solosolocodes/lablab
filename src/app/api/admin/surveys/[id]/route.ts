@@ -65,8 +65,6 @@ export async function GET(
  * Updates a survey
  * Admin only endpoint
  */
-export const maxDuration = 60; // Set max duration to 60 seconds for Next.js Edge functions
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -77,6 +75,8 @@ export async function PUT(
     if (!surveyId) {
       return NextResponse.json({ error: 'Survey ID is required' }, { status: 400 });
     }
+
+    console.log('Processing PUT request for survey:', surveyId);
 
     // Authenticate the user and check for admin role
     const session = await getServerSession(authOptions);
@@ -92,6 +92,7 @@ export async function PUT(
 
     // Connect to the database
     await dbConnect();
+    console.log('Database connected successfully');
 
     // Parse the request body
     const body = await request.json();
@@ -102,30 +103,33 @@ export async function PUT(
     }
 
     // Check if the survey exists
+    console.log('Looking up survey with ID:', surveyId);
     const survey = await Survey.findById(surveyId);
     if (!survey) {
+      console.error('Survey not found:', surveyId);
       return NextResponse.json({ error: 'Survey not found' }, { status: 404 });
     }
 
-    // Validate and normalize questions before saving
-    const normalizedQuestions = questions?.map((q: any, index: number) => ({
-      ...q,
-      order: index, // Ensure order is sequential
-      // Ensure all required fields are present
-      id: q.id || crypto.randomUUID(),
+    console.log('Found survey:', survey.title);
+    console.log('Updating with questions count:', questions?.length || 0);
+
+    // Simple validation of questions
+    const processedQuestions = questions?.map((q: any) => ({
+      id: q.id,
       text: q.text || 'Untitled Question',
       type: q.type || 'text',
       required: !!q.required,
-      options: Array.isArray(q.options) ? q.options : []
+      options: Array.isArray(q.options) ? q.options : [],
+      order: q.order || 0
     })) || [];
 
-    // Update the survey with optimized data
+    // Update the survey
     const updatedSurvey = await Survey.findByIdAndUpdate(
       surveyId,
       {
         title,
         description,
-        questions: normalizedQuestions,
+        questions: processedQuestions,
         ...(status && { status })
       },
       { new: true }
