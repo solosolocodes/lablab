@@ -221,6 +221,16 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   const [error, setError] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   
+  // Create a ref for wallet asset fetch state that persists across renders
+  const walletFetchStatusRef = useRef({
+    attempts: 0,
+    maxRetries: 10,
+    lastSuccess: false,
+    inProgress: false,
+    abortController: null as AbortController | null,
+    pendingTimeouts: [] as number[]
+  });
+  
   // Function to fetch wallet assets by wallet ID with fallback data and retry logic
   const fetchWalletAssets = async (walletId: string) => {
     if (!walletId) {
@@ -229,50 +239,53 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       return;
     }
     
-    // Maximum number of retry attempts
-    const MAX_RETRIES = 10;
-    // Reference to track retries for this specific request
-    const requestRef = useRef({
-      attempts: 0,
-      lastSuccess: false,
-      inProgress: false
+    // Clear all pending timeouts for this wallet on new request
+    walletFetchStatusRef.current.pendingTimeouts.forEach(timeoutId => {
+      clearTimeout(timeoutId);
     });
+    walletFetchStatusRef.current.pendingTimeouts = [];
     
     try {
       // Don't start a new request if one is already in progress
-      if (requestRef.current.inProgress) {
+      if (walletFetchStatusRef.current.inProgress) {
         console.log('Asset fetch already in progress, skipping duplicate request');
         return;
       }
       
       // If we've already failed too many times, show error and use fallback
-      if (requestRef.current.attempts >= MAX_RETRIES) {
-        console.warn(`Exceeded maximum retry attempts (${MAX_RETRIES}), using fallback data`);
-        setWalletError(`Connection issues detected. Using offline data after ${MAX_RETRIES} attempts.`);
+      if (walletFetchStatusRef.current.attempts >= walletFetchStatusRef.current.maxRetries) {
+        console.warn(`Exceeded maximum retry attempts (${walletFetchStatusRef.current.maxRetries}), using fallback data`);
+        setWalletError(`Connection issues detected. Using offline data after ${walletFetchStatusRef.current.maxRetries} attempts.`);
         useFallbackAssets(walletId);
         setIsLoadingWallet(false);
         return;
       }
       
       setIsLoadingWallet(true);
-      requestRef.current.inProgress = true;
-      requestRef.current.attempts++;
+      walletFetchStatusRef.current.inProgress = true;
+      walletFetchStatusRef.current.attempts++;
       
       // Calculate timeout with exponential backoff (1s, 2s, 4s, 8s, etc. up to 10s max)
       const baseTimeout = 1000; // Start with 1 second
-      const backoffFactor = Math.min(Math.pow(2, requestRef.current.attempts - 1), 10);
+      const backoffFactor = Math.min(Math.pow(2, walletFetchStatusRef.current.attempts - 1), 10);
       const timeout = baseTimeout * backoffFactor;
       
       // Use AbortController to add timeout to fetch request
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      walletFetchStatusRef.current.abortController = controller;
+      const timeoutId = setTimeout(() => {
+        if (controller && !controller.signal.aborted) {
+          controller.abort();
+        }
+      }, timeout);
       
-      console.log(`Fetching wallet assets (attempt ${requestRef.current.attempts}/${MAX_RETRIES}) with ${timeout}ms timeout`);
+      console.log(`Fetching wallet assets (attempt ${walletFetchStatusRef.current.attempts}/${walletFetchStatusRef.current.maxRetries}) with ${timeout}ms timeout`);
       
       try {
-        // Add cache-busting and retry indicator to URL
+        // Add cache-busting and retry indicator to URL with a unique token
+        const uniqueToken = Math.random().toString(36).substring(2, 15);
         const response = await fetch(
-          `/api/wallets/${walletId}/assets?preview=true&t=${Date.now()}&retry=${requestRef.current.attempts}`, 
+          `/api/wallets/${walletId}/assets?preview=true&t=${Date.now()}&retry=${walletFetchStatusRef.current.attempts}&token=${uniqueToken}`, 
           {
             method: 'GET',
             headers: {
@@ -286,16 +299,32 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         
         clearTimeout(timeoutId);
         
-        if (!response.ok) {
+        // Special handling for 503 Service Unavailable
+        if (response.status === 503) {
+          console.warn('Server is temporarily unavailable (503), using fallback wallet data immediately');
+          useFallbackAssets(walletId);
+          setWalletError('Server temporarily unavailable. Using sample wallet data to continue your experiment.');
+          setIsLoadingWallet(false);
+          return;
+        } else if (!response.ok) {
           console.warn(`Failed to fetch wallet assets: ${response.status}`);
           
           // Schedule retry after a delay if we haven't exceeded max retries
-          if (requestRef.current.attempts < MAX_RETRIES) {
-            requestRef.current.inProgress = false;
+          if (walletFetchStatusRef.current.attempts < walletFetchStatusRef.current.maxRetries) {
+            walletFetchStatusRef.current.inProgress = false;
+            
             // Wait a bit longer between attempts (min 1.5s, max 5s)
-            const delayMs = Math.min(1500 * requestRef.current.attempts, 5000);
+            const delayMs = Math.min(1500 * walletFetchStatusRef.current.attempts, 5000);
             console.log(`Will retry asset fetch in ${delayMs}ms...`);
-            setTimeout(() => fetchWalletAssets(walletId), delayMs);
+            
+            // Store timeout ID for cleanup
+            const retryTimeoutId = setTimeout(() => {
+              walletFetchStatusRef.current.pendingTimeouts = 
+                walletFetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
+              fetchWalletAssets(walletId);
+            }, delayMs);
+            
+            walletFetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
           } else {
             // Use fallback after max retries
             useFallbackAssets(walletId);
@@ -303,11 +332,37 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
           return;
         }
         
-        const data = await response.json();
+        // Parse JSON safely
+        let data;
+        try {
+          data = await response.json();
+        } catch (jsonError) {
+          console.error("Error parsing wallet JSON response:", jsonError);
+          
+          // If JSON parsing fails, retry or use fallback
+          if (walletFetchStatusRef.current.attempts < walletFetchStatusRef.current.maxRetries) {
+            walletFetchStatusRef.current.inProgress = false;
+            const delayMs = Math.min(2000 * walletFetchStatusRef.current.attempts, 8000);
+            console.log(`JSON parse error for wallet data, retrying in ${delayMs}ms...`);
+            
+            const retryTimeoutId = setTimeout(() => {
+              walletFetchStatusRef.current.pendingTimeouts = 
+                walletFetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
+              fetchWalletAssets(walletId);
+            }, delayMs);
+            
+            walletFetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
+            return;
+          } else {
+            // Use fallback if we've hit max retries
+            useFallbackAssets(walletId);
+            return;
+          }
+        }
         
         // Reset retry counter on successful response
-        requestRef.current.attempts = 0;
-        requestRef.current.lastSuccess = true;
+        walletFetchStatusRef.current.attempts = 0;
+        walletFetchStatusRef.current.lastSuccess = true;
         
         if (Array.isArray(data)) {
           setWalletAssets(data);
@@ -319,48 +374,83 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         }
       } catch (fetchErr) {
         clearTimeout(timeoutId);
+        
         if (fetchErr.name === 'AbortError') {
-          console.warn(`Wallet assets fetch timed out after ${timeout}ms (attempt ${requestRef.current.attempts}/${MAX_RETRIES})`);
+          console.warn(`Wallet assets fetch timed out after ${timeout}ms (attempt ${walletFetchStatusRef.current.attempts}/${walletFetchStatusRef.current.maxRetries})`);
           
           // If we haven't exceeded max retries, schedule another attempt
-          if (requestRef.current.attempts < MAX_RETRIES) {
-            requestRef.current.inProgress = false;
+          if (walletFetchStatusRef.current.attempts < walletFetchStatusRef.current.maxRetries) {
+            walletFetchStatusRef.current.inProgress = false;
+            
             // Increase delay between retries
-            const delayMs = Math.min(1500 * requestRef.current.attempts, 5000);
+            const delayMs = Math.min(1500 * walletFetchStatusRef.current.attempts, 5000);
             console.log(`Will retry asset fetch in ${delayMs}ms...`);
-            setTimeout(() => fetchWalletAssets(walletId), delayMs);
+            
+            const retryTimeoutId = setTimeout(() => {
+              walletFetchStatusRef.current.pendingTimeouts = 
+                walletFetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
+              fetchWalletAssets(walletId);
+            }, delayMs);
+            
+            walletFetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
             return;
           } else {
             // Use fallback data after max retries
-            console.warn(`Max retries (${MAX_RETRIES}) reached, using fallback data`);
+            console.warn(`Max retries (${walletFetchStatusRef.current.maxRetries}) reached, using fallback data`);
             useFallbackAssets(walletId);
           }
         } else {
           console.error("Network error fetching wallet assets:", fetchErr);
+          
           // For non-timeout errors, we might still retry
-          if (requestRef.current.attempts < MAX_RETRIES) {
-            requestRef.current.inProgress = false;
+          if (walletFetchStatusRef.current.attempts < walletFetchStatusRef.current.maxRetries) {
+            walletFetchStatusRef.current.inProgress = false;
+            
             // Longer delay for network errors
-            const delayMs = Math.min(2000 * requestRef.current.attempts, 8000);
+            const delayMs = Math.min(2000 * walletFetchStatusRef.current.attempts, 8000);
             console.log(`Network error, will retry asset fetch in ${delayMs}ms...`);
-            setTimeout(() => fetchWalletAssets(walletId), delayMs);
+            
+            const retryTimeoutId = setTimeout(() => {
+              walletFetchStatusRef.current.pendingTimeouts = 
+                walletFetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
+              fetchWalletAssets(walletId);
+            }, delayMs);
+            
+            walletFetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
             return;
           } else {
             useFallbackAssets(walletId);
           }
         }
       } finally {
-        requestRef.current.inProgress = false;
+        walletFetchStatusRef.current.inProgress = false;
         setIsLoadingWallet(false);
       }
     } catch (err) {
       console.error("Error in fetchWalletAssets:", err);
-      requestRef.current.inProgress = false;
-      setWalletError(`Unable to load assets after ${requestRef.current.attempts} attempts. Using sample data instead.`);
+      walletFetchStatusRef.current.inProgress = false;
+      setWalletError(`Unable to load assets after ${walletFetchStatusRef.current.attempts} attempts. Using sample data instead.`);
       useFallbackAssets(walletId);
       setIsLoadingWallet(false);
     }
   };
+  
+  // Add an effect to clean up wallet fetch timeouts and abort controllers on unmount
+  useEffect(() => {
+    return () => {
+      // Abort any in-flight wallet requests
+      if (walletFetchStatusRef.current.abortController && 
+          !walletFetchStatusRef.current.abortController.signal.aborted) {
+        walletFetchStatusRef.current.abortController.abort();
+      }
+      
+      // Clear all pending wallet fetch timeouts
+      walletFetchStatusRef.current.pendingTimeouts.forEach(timeoutId => {
+        clearTimeout(timeoutId);
+      });
+      walletFetchStatusRef.current.pendingTimeouts = [];
+    };
+  }, []);
   
   // Generate fallback wallet assets
   const useFallbackAssets = (walletId: string) => {
@@ -399,14 +489,15 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   useEffect(() => {
     let isMounted = true;
     
-    // Track fetch status
-    const fetchStatus = {
+    // Track fetch status with useRef to maintain state across renders
+    const fetchStatusRef = useRef({
       attempts: 0,
       maxRetries: 10,
       inProgress: false,
       lastSuccess: false,
       abortController: null as AbortController | null,
-    };
+      pendingTimeouts: [] as number[],
+    });
     
     // Generate fallback scenario data
     const generateFallbackScenario = () => {
@@ -451,8 +542,8 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       setIsLoading(false);
       
       // Show gentle error message to user
-      if (fetchStatus.attempts >= fetchStatus.maxRetries) {
-        setError(`Connection issues detected. Using offline data after ${fetchStatus.maxRetries} attempts.`);
+      if (fetchStatusRef.current.attempts >= fetchStatusRef.current.maxRetries) {
+        setError(`Connection issues detected. Using offline data after ${fetchStatusRef.current.maxRetries} attempts.`);
       }
     };
     
@@ -467,14 +558,14 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       }
       
       // Avoid duplicate requests
-      if (fetchStatus.inProgress) {
+      if (fetchStatusRef.current.inProgress) {
         console.log('Scenario fetch already in progress, skipping duplicate request');
         return;
       }
       
       // If we've reached max retries, use fallback
-      if (fetchStatus.attempts >= fetchStatus.maxRetries) {
-        console.warn(`Exceeded maximum retry attempts (${fetchStatus.maxRetries}), using fallback data`);
+      if (fetchStatusRef.current.attempts >= fetchStatusRef.current.maxRetries) {
+        console.warn(`Exceeded maximum retry attempts (${fetchStatusRef.current.maxRetries}), using fallback data`);
         applyFallbackData();
         return;
       }
@@ -482,30 +573,35 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       try {
         if (isMounted) {
           // Only show loading UI after first attempt
-          if (fetchStatus.attempts === 0) {
+          if (fetchStatusRef.current.attempts === 0) {
             setIsLoading(true);
           }
         }
         
-        fetchStatus.inProgress = true;
-        fetchStatus.attempts++;
+        fetchStatusRef.current.inProgress = true;
+        fetchStatusRef.current.attempts++;
         
         // Calculate timeout with exponential backoff (2s, 4s, 8s, etc. up to 20s max)
         const baseTimeout = 2000; // Start with 2 seconds
-        const backoffFactor = Math.min(Math.pow(2, fetchStatus.attempts - 1), 10);
+        const backoffFactor = Math.min(Math.pow(2, fetchStatusRef.current.attempts - 1), 10);
         const timeout = baseTimeout * backoffFactor;
         
-        console.log(`Fetching scenario data (attempt ${fetchStatus.attempts}/${fetchStatus.maxRetries}) with ${timeout}ms timeout`);
+        console.log(`Fetching scenario data (attempt ${fetchStatusRef.current.attempts}/${fetchStatusRef.current.maxRetries}) with ${timeout}ms timeout`);
         
         // Use AbortController to add timeout to fetch request
         const controller = new AbortController();
-        fetchStatus.abortController = controller;
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        fetchStatusRef.current.abortController = controller;
+        const timeoutId = setTimeout(() => {
+          if (controller && !controller.signal.aborted) {
+            controller.abort();
+          }
+        }, timeout);
         
         try {
-          // Add cache-busting and retry indicator to URL
+          // Add cache-busting and retry indicator to URL with a unique token each time
+          const uniqueToken = Math.random().toString(36).substring(2, 15);
           const response = await fetch(
-            `/api/scenarios/${stage.scenarioId}?preview=true&t=${Date.now()}&retry=${fetchStatus.attempts}`, 
+            `/api/scenarios/${stage.scenarioId}?preview=true&t=${Date.now()}&retry=${fetchStatusRef.current.attempts}&token=${uniqueToken}`, 
             {
               method: 'GET',
               headers: {
@@ -519,21 +615,39 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
           
           clearTimeout(timeoutId);
           
-          if (!response.ok) {
+          // Handle server errors (like 503 Service Unavailable)
+          if (response.status === 503) {
+            console.warn('Server is temporarily unavailable (503), using fallback data immediately');
+            
+            // For 503 errors, use fallback data immediately without further retries
+            if (isMounted) {
+              setError('The server is temporarily unavailable. Using offline data to continue your experiment.');
+              applyFallbackData();
+            }
+            return;
+          } else if (!response.ok) {
             console.warn(`Failed to fetch scenario: ${response.status}`);
             
             // Schedule retry with exponential backoff if we haven't exceeded max retries
-            if (fetchStatus.attempts < fetchStatus.maxRetries && isMounted) {
-              fetchStatus.inProgress = false;
+            if (fetchStatusRef.current.attempts < fetchStatusRef.current.maxRetries && isMounted) {
+              fetchStatusRef.current.inProgress = false;
               
               // Longer delay between retries
-              const delayMs = Math.min(1500 * fetchStatus.attempts, 5000);
+              const delayMs = Math.min(1500 * fetchStatusRef.current.attempts, 5000);
               console.log(`Will retry scenario fetch in ${delayMs}ms...`);
               
-              setTimeout(() => {
+              // Store the timeout id so we can clear it on unmount
+              const retryTimeoutId = setTimeout(() => {
+                // Remove this timeout from the list when it executes
+                fetchStatusRef.current.pendingTimeouts = 
+                  fetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
+                  
                 // Only retry if component is still mounted
                 if (isMounted) fetchScenarioData();
               }, delayMs);
+              
+              // Store the timeout ID for cleanup
+              fetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
               return;
             } else {
               // Use fallback after max retries
@@ -542,12 +656,37 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
             }
           }
           
-          const data = await response.json();
+          // Parse JSON safely
+          let data;
+          try {
+            data = await response.json();
+          } catch (jsonError) {
+            console.error("Error parsing JSON response:", jsonError);
+            // If JSON parsing fails and we're still under retry limit, retry
+            if (fetchStatusRef.current.attempts < fetchStatusRef.current.maxRetries && isMounted) {
+              fetchStatusRef.current.inProgress = false;
+              const delayMs = Math.min(2000 * fetchStatusRef.current.attempts, 8000);
+              console.log(`JSON parse error, retrying in ${delayMs}ms...`);
+              
+              const retryTimeoutId = setTimeout(() => {
+                fetchStatusRef.current.pendingTimeouts = 
+                  fetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
+                if (isMounted) fetchScenarioData();
+              }, delayMs);
+              
+              fetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
+              return;
+            } else {
+              // Use fallback if we've hit max retries
+              if (isMounted) applyFallbackData();
+              return;
+            }
+          }
           
           if (isMounted) {
             // Reset retry counter on success
-            fetchStatus.attempts = 0;
-            fetchStatus.lastSuccess = true;
+            fetchStatusRef.current.attempts = 0;
+            fetchStatusRef.current.lastSuccess = true;
             
             setScenarioData(data);
             
@@ -572,41 +711,49 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
           if (!isMounted) return;
           
           if (fetchErr.name === 'AbortError') {
-            console.warn(`Scenario fetch timed out after ${timeout}ms (attempt ${fetchStatus.attempts}/${fetchStatus.maxRetries})`);
+            console.warn(`Scenario fetch timed out after ${timeout}ms (attempt ${fetchStatusRef.current.attempts}/${fetchStatusRef.current.maxRetries})`);
             
             // If we haven't exceeded max retries, schedule another attempt
-            if (fetchStatus.attempts < fetchStatus.maxRetries) {
-              fetchStatus.inProgress = false;
+            if (fetchStatusRef.current.attempts < fetchStatusRef.current.maxRetries) {
+              fetchStatusRef.current.inProgress = false;
               
               // Increase delay between retries
-              const delayMs = Math.min(2000 * fetchStatus.attempts, 8000);
+              const delayMs = Math.min(2000 * fetchStatusRef.current.attempts, 8000);
               console.log(`Will retry scenario fetch in ${delayMs}ms...`);
               
-              setTimeout(() => {
+              const retryTimeoutId = setTimeout(() => {
+                fetchStatusRef.current.pendingTimeouts = 
+                  fetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
                 // Only retry if component is still mounted
                 if (isMounted) fetchScenarioData();
               }, delayMs);
+              
+              fetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
               return;
             } else {
               // Use fallback data after max retries
-              console.warn(`Max retries (${fetchStatus.maxRetries}) reached, using fallback scenario data`);
+              console.warn(`Max retries (${fetchStatusRef.current.maxRetries}) reached, using fallback scenario data`);
               applyFallbackData();
             }
           } else {
             console.error("Network error fetching scenario data:", fetchErr);
             
             // For non-timeout errors, we might still retry
-            if (fetchStatus.attempts < fetchStatus.maxRetries) {
-              fetchStatus.inProgress = false;
+            if (fetchStatusRef.current.attempts < fetchStatusRef.current.maxRetries) {
+              fetchStatusRef.current.inProgress = false;
               
               // Longer delay for network errors
-              const delayMs = Math.min(3000 * fetchStatus.attempts, 10000);
+              const delayMs = Math.min(3000 * fetchStatusRef.current.attempts, 10000);
               console.log(`Network error, will retry scenario fetch in ${delayMs}ms...`);
               
-              setTimeout(() => {
+              const retryTimeoutId = setTimeout(() => {
+                fetchStatusRef.current.pendingTimeouts = 
+                  fetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
                 // Only retry if component is still mounted
                 if (isMounted) fetchScenarioData();
               }, delayMs);
+              
+              fetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
               return;
             } else {
               // Use fallback data after max retries
@@ -614,14 +761,14 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
             }
           }
         } finally {
-          fetchStatus.inProgress = false;
+          fetchStatusRef.current.inProgress = false;
         }
       } catch (err) {
         if (isMounted) {
           console.error("Error in fetchScenarioData:", err);
-          fetchStatus.inProgress = false;
+          fetchStatusRef.current.inProgress = false;
           
-          setError(`Unable to load scenario data after ${fetchStatus.attempts} attempts. Using offline data instead.`);
+          setError(`Unable to load scenario data after ${fetchStatusRef.current.attempts} attempts. Using offline data instead.`);
           applyFallbackData();
         }
       }
@@ -634,9 +781,15 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       isMounted = false;
       
       // Abort any in-flight requests when component unmounts
-      if (fetchStatus.abortController && !fetchStatus.abortController.signal.aborted) {
-        fetchStatus.abortController.abort();
+      if (fetchStatusRef.current.abortController && !fetchStatusRef.current.abortController.signal.aborted) {
+        fetchStatusRef.current.abortController.abort();
       }
+      
+      // Clear all pending timeouts
+      fetchStatusRef.current.pendingTimeouts.forEach(timeoutId => {
+        clearTimeout(timeoutId);
+      });
+      fetchStatusRef.current.pendingTimeouts = [];
     };
   }, [stage.scenarioId, stage.roundDuration, stage.title, stage.description, stage.rounds]);
   
