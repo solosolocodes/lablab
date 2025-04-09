@@ -677,19 +677,30 @@ export default function UserGroupsPage() {
       <main className="flex-grow container mx-auto px-4 py-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-800">User Groups Management</h1>
-          <div className="flex space-x-2">
+          <div className="flex space-x-4">
             <Button 
-              className={`px-4 py-2 ${activeTab === 'groups' ? 'bg-purple-600' : 'bg-gray-200 text-gray-800'}`}
-              onClick={() => setActiveTab('groups')}
+              className="bg-green-600 hover:bg-green-700 px-4 py-2 flex items-center"
+              onClick={() => openModal('createUser')}
             >
-              Groups
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create User
             </Button>
-            <Button 
-              className={`px-4 py-2 ${activeTab === 'users' ? 'bg-purple-600' : 'bg-gray-200 text-gray-800'}`}
-              onClick={() => setActiveTab('users')}
-            >
-              Participants
-            </Button>
+            <div className="flex space-x-2">
+              <Button 
+                className={`px-4 py-2 ${activeTab === 'groups' ? 'bg-purple-600' : 'bg-gray-200 text-gray-800'}`}
+                onClick={() => setActiveTab('groups')}
+              >
+                Groups
+              </Button>
+              <Button 
+                className={`px-4 py-2 ${activeTab === 'users' ? 'bg-purple-600' : 'bg-gray-200 text-gray-800'}`}
+                onClick={() => setActiveTab('users')}
+              >
+                Participants
+              </Button>
+            </div>
           </div>
         </div>
         
@@ -712,19 +723,12 @@ export default function UserGroupsPage() {
             </div>
           </div>
           <div className="flex space-x-2">
-            {activeTab === 'groups' ? (
+            {activeTab === 'groups' && (
               <Button 
                 className="bg-purple-600 hover:bg-purple-700 px-4 py-2"
                 onClick={() => openModal('createGroup')}
               >
                 Create Group
-              </Button>
-            ) : (
-              <Button 
-                className="bg-purple-600 hover:bg-purple-700 px-4 py-2"
-                onClick={() => openModal('createUser')}
-              >
-                Create User
               </Button>
             )}
           </div>
