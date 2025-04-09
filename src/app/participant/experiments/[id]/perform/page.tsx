@@ -43,6 +43,15 @@ function isInstructionsStage(stage: Stage): stage is InstructionsStage {
 
 function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
+  const isMountedRef = useRef(true);
+  
+  // Set up mount state tracking
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   // Enhanced markdown-like rendering function
   const renderContent = (content: string) => {
@@ -92,7 +101,11 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
       
       <div className="flex justify-center">
         <button 
-          onClick={onNext}
+          onClick={() => {
+            if (isMountedRef.current) {
+              onNext();
+            }
+          }}
           disabled={isStageTransitioning}
           className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
@@ -189,7 +202,11 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       
       <div className="flex justify-center">
         <button 
-          onClick={onNext}
+          onClick={() => {
+            if (isMountedRef.current) {
+              onNext();
+            }
+          }}
           disabled={isStageTransitioning || !timerComplete}
           className={`px-6 py-2 ${timerComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
@@ -1343,7 +1360,11 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       
       <div className="flex justify-center">
         <button 
-          onClick={onNext}
+          onClick={() => {
+            if (isMountedRef && isMountedRef.current) {
+              onNext();
+            }
+          }}
           disabled={isStageTransitioning || !scenarioComplete}
           className={`px-6 py-2 ${scenarioComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
@@ -1534,7 +1555,11 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       
       <div className="flex justify-center">
         <button 
-          onClick={onNext}
+          onClick={() => {
+            if (isMountedRef.current) {
+              onNext();
+            }
+          }}
           disabled={isStageTransitioning}
           className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${
             isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''
@@ -1549,6 +1574,15 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
 
 function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
+  const isMountedRef = useRef(true);
+  
+  // Set up mount state tracking
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   // Render different stage types with appropriate placeholders
   if (stage.type === 'break') {
@@ -1578,7 +1612,11 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
       
       <div className="flex justify-center">
         <button 
-          onClick={onNext}
+          onClick={() => {
+            if (isMountedRef.current) {
+              onNext();
+            }
+          }}
           disabled={isStageTransitioning}
           className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
@@ -1653,50 +1691,70 @@ function ExperimentContent() {
     // Safety check - don't update state if unmounted
     if (!isMountedRef.current) return;
     
-    // Record that the user has started the experiment (non-blocking)
-    if (experiment) {
-      // Immediately switch view for better UX
-      setViewMode('experiment');
-      
-      // Then update progress in the background with AbortController
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        // Only attempt to update if still mounted
+    try {
+      // Record that the user has started the experiment (non-blocking)
+      if (experiment) {
+        // Use a callback pattern that allows for safer state updates
+        // This is a safer React update pattern as it queues the state update properly
         if (isMountedRef.current) {
-          updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id)
-            .catch(err => {
-              // Silently handle errors to prevent state updates after unmount
-              console.warn('Error updating progress (non-critical):', err);
-            });
+          // Queue the state update (this is actually processed by React after the function completes)
+          setViewMode('experiment');
         }
-      }, 0);
-      
-      // Clean up on unmount (though this won't be used directly, it's a pattern for safety)
-      if (!isMountedRef.current) {
-        clearTimeout(timeoutId);
-        controller.abort();
+        
+        // Then update progress in the background - after a small delay to ensure React had time
+        // to process the state update and re-render
+        setTimeout(() => {
+          // Double check we're still mounted before proceeding with the API call
+          if (isMountedRef.current) {
+            updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id)
+              .catch(err => {
+                // Silently handle errors to prevent state updates after unmount
+                console.warn('Error updating progress (non-critical):', err);
+              });
+          }
+        }, 100); // Use a small delay
+      } else {
+        // Only update state if still mounted
+        if (isMountedRef.current) {
+          setViewMode('experiment');
+        }
       }
-    } else {
-      setViewMode('experiment');
+    } catch (err) {
+      // Safety catch block to prevent unhandled exceptions
+      console.error('Error in handleWelcomeNext:', err);
     }
   };
   
   // Handle Next button click for stage navigation
   const handleStageNext = () => {
-    // Safety checks
+    // Safety checks - prevent any execution if component is unmounted
     if (!experiment || !isMountedRef.current) return;
     
     try {
+      // Create a local immutable copy of what we need, to ensure consistency
+      // even if React updates happen during our function
+      const currentExperiment = experiment;
+      const currentIndex = currentStageNumber;
+      const stagesCount = currentExperiment.stages.length;
+      
       // Case 1: More stages to go
-      if (currentStageNumber < experiment.stages.length - 1) {
-        setCurrentStageNumber(prev => prev + 1);
+      if (currentIndex < stagesCount - 1) {
+        // Queue the state update in a way that won't cause issues if component unmounts
+        // between the time the function is called and when React processes the update
+        const safeNextIndex = currentIndex + 1;
+        
+        if (isMountedRef.current) {
+          setCurrentStageNumber(safeNextIndex);
+        }
       } 
       // Case 2: Final stage completion
       else {
         // Final stage complete, show thank you screen only
         // We don't call updateParticipantProgress here anymore - it will be called 
         // in the thank you screen itself to avoid React error #321
-        setViewMode('thankyou');
+        if (isMountedRef.current) {
+          setViewMode('thankyou');
+        }
       }
     } catch (error) {
       // Catch any other errors that might occur
@@ -1856,7 +1914,11 @@ function ExperimentContent() {
           
           <div className="text-center">
             <button 
-              onClick={handleWelcomeNext}
+              onClick={() => {
+                if (isMountedRef.current) {
+                  handleWelcomeNext();
+                }
+              }}
               className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
               Begin Experiment
