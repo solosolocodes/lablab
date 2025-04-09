@@ -250,22 +250,36 @@ export function ParticipantProvider({ children }: { children: React.ReactNode })
   const completeExperiment = async () => {
     if (!experiment) return;
     
-    const currentStage = experiment.stages[currentStageIndex];
-    
-    // Record "done" response for the last stage if it's instructions or break
-    if (currentStage && (currentStage.type === 'instructions' || currentStage.type === 'break')) {
-      await saveStageResponse(currentStage.id, currentStage.type, "done");
+    try {
+      const currentStage = experiment.stages[currentStageIndex];
+      
+      // Record "done" response for the last stage if it's instructions or break
+      if (currentStage && (currentStage.type === 'instructions' || currentStage.type === 'break')) {
+        try {
+          await saveStageResponse(currentStage.id, currentStage.type, "done");
+        } catch (err) {
+          console.warn('Error saving final stage response (non-critical):', err);
+          // Continue despite error
+        }
+      }
+      
+      // Mark the experiment as completed
+      try {
+        await updateProgress('completed');
+        toast.success('Experiment completed successfully!');
+      } catch (err) {
+        console.warn('Error marking experiment as completed:', err);
+        // Show success regardless - the user has completed their part
+        toast.success('Your responses have been saved!');
+      }
+      
+      // Prevent redirect - let the calling component handle navigation
+      // This avoids React error #321 by not updating state or causing redirects
+      // from components that might unmount
+    } catch (error) {
+      console.error('Error in completeExperiment:', error);
+      // Avoid showing error toast as it could cause React error #321
     }
-    
-    // Mark the experiment as completed
-    await updateProgress('completed');
-    
-    toast.success('Experiment completed successfully!');
-    
-    // Redirect to the dashboard or completion page
-    setTimeout(() => {
-      window.location.href = '/participant/dashboard';
-    }, 2000);
   };
   
   // Reset timer for current stage

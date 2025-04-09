@@ -1633,28 +1633,16 @@ function ExperimentContent() {
     if (!experiment || !isMountedRef.current) return;
     
     try {
+      // Case 1: More stages to go
       if (currentStageNumber < experiment.stages.length - 1) {
         setCurrentStageNumber(prev => prev + 1);
-      } else {
-        // Final stage complete, show thank you and record completion
+      } 
+      // Case 2: Final stage completion
+      else {
+        // Final stage complete, show thank you screen only
+        // We don't call updateParticipantProgress here anymore - it will be called 
+        // in the thank you screen itself to avoid React error #321
         setViewMode('thankyou');
-        
-        // Record completion in background with safer approach
-        const timeoutId = setTimeout(() => {
-          // Only update if still mounted
-          if (isMountedRef.current) {
-            updateParticipantProgress(experiment.id, 'completed')
-              .catch(err => {
-                // Silently log errors but don't update state
-                console.warn('Error updating completion status (non-critical):', err);
-              });
-          }
-        }, 0);
-        
-        // Clean up on unmount
-        if (!isMountedRef.current) {
-          clearTimeout(timeoutId);
-        }
       }
     } catch (error) {
       // Catch any other errors that might occur
@@ -1730,18 +1718,19 @@ function ExperimentContent() {
   
   // Thank You screen view
   if (viewMode === 'thankyou') {
-    // Mark experiment as completed when showing thank you screen (non-blocking)
-    useEffect(() => {
-      // Safety check - don't run if already unmounted
-      if (!isMountedRef.current || !experiment) return;
+    // We're removing the useEffect here which was causing the React error #321
+    // Instead, we'll mark the completion with a one-time operation on the first render
+    
+    // Reference to track if we've already triggered completion to avoid duplicate calls
+    const hasMarkedCompletionRef = useRef(false);
+    
+    // Only mark completion once when the thank you screen first renders
+    if (experiment && !hasMarkedCompletionRef.current) {
+      hasMarkedCompletionRef.current = true; // Mark as done to prevent further calls
       
-      // Track pending operations for cleanup
-      let timeoutId: ReturnType<typeof setTimeout>;
-      const controller = new AbortController();
-      
-      // Ensure the experiment is marked as completed in MongoDB (background task)
-      timeoutId = setTimeout(() => {
-        // Only update if component is still mounted
+      // Run in the next tick to avoid React strict mode issues
+      setTimeout(() => {
+        // Only if the component is still mounted
         if (isMountedRef.current) {
           updateParticipantProgress(experiment.id, 'completed')
             .catch(error => {
@@ -1749,14 +1738,8 @@ function ExperimentContent() {
               console.warn('Error updating completion status on thank you screen:', error);
             });
         }
-      }, 100); // Small delay for better reliability
-      
-      // Cleanup function to prevent state updates after unmount
-      return () => {
-        clearTimeout(timeoutId);
-        controller.abort();
-      };
-    }, [experiment?.id, updateParticipantProgress]);
+      }, 100);
+    }
     
     return (
       <div className="p-4">
