@@ -585,6 +585,8 @@ export default function ExperimentDesignerPage() {
           // Set title and description from survey
           title: selectedSurvey.title,
           description: selectedSurvey.description || `Survey stage using "${selectedSurvey.title}"`,
+          // Set default duration if not already set
+          durationSeconds: stageFormData.durationSeconds || 300,
         });
         
         toast.success('Survey selected');
@@ -1509,7 +1511,7 @@ export default function ExperimentDesignerPage() {
                         Select Survey
                       </label>
                       <select
-                        className="w-full px-3 py-2 border rounded-md text-sm"
+                        className="w-full px-3 py-2 border rounded-md text-sm mb-4"
                         value={(stageFormData as Partial<SurveyStage>).surveyId || ''}
                         onChange={(e) => handleStageFormChange('surveyId', e.target.value)}
                       >
@@ -1520,33 +1522,61 @@ export default function ExperimentDesignerPage() {
                           </option>
                         ))}
                       </select>
-                      
-                      {surveys.length === 0 && (
-                        <div className="p-4 text-center text-amber-700 bg-amber-50 rounded-md border border-amber-200 mt-3">
-                          <p className="text-sm">No surveys found. Please create a survey first.</p>
-                          <Link 
-                            href="/admin/surveys" 
-                            className="text-sm text-blue-600 hover:text-blue-800 mt-2 inline-block"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Go to Survey Management
-                          </Link>
+
+                      {(stageFormData as Partial<SurveyStage>).surveyId ? (
+                        <div className="bg-blue-50 p-4 rounded-md border border-blue-200 mb-4">
+                          {(() => {
+                            const selectedSurvey = surveys.find(s => s._id === (stageFormData as Partial<SurveyStage>).surveyId);
+                            if (selectedSurvey) {
+                              return (
+                                <div>
+                                  <div className="flex justify-between items-center">
+                                    <h4 className="font-medium text-blue-800">{selectedSurvey.title}</h4>
+                                    <Link 
+                                      href={`/admin/surveys/${selectedSurvey._id}/edit`} 
+                                      className="text-xs text-blue-600 hover:text-blue-800 bg-white px-2 py-1 rounded border border-blue-200"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      Edit Survey
+                                    </Link>
+                                  </div>
+                                  {selectedSurvey.description && (
+                                    <p className="text-sm text-blue-700 mt-2">{selectedSurvey.description}</p>
+                                  )}
+                                  <div className="flex space-x-4 mt-3 text-xs text-blue-600">
+                                    <span>Status: {selectedSurvey.status}</span>
+                                    {selectedSurvey.responsesCount !== undefined && (
+                                      <span>Responses: {selectedSurvey.responsesCount}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <p className="text-sm text-blue-700">Loading survey details...</p>
+                              );
+                            }
+                          })()}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center text-amber-700 bg-amber-50 rounded-md border border-amber-200 mb-4">
+                          Please select a survey from the dropdown above.
+                          {surveys.length === 0 && (
+                            <div className="mt-2">
+                              <p className="text-sm">No published surveys found. Please create a survey first.</p>
+                              <Link 
+                                href="/admin/surveys" 
+                                className="text-sm text-blue-600 hover:text-blue-800 mt-2 inline-block"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Go to Survey Management
+                              </Link>
+                            </div>
+                          )}
                         </div>
                       )}
-                      
-                      <div className="mt-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Duration (seconds)
-                        </label>
-                        <input
-                          type="number"
-                          min="60"
-                          className="w-full px-3 py-2 border rounded-md text-sm"
-                          value={stageFormData.durationSeconds || 300}
-                          onChange={(e) => handleStageFormChange('durationSeconds', parseInt(e.target.value) || 300)}
-                        />
-                      </div>
                     </div>
                   )}
                   
