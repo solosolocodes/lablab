@@ -67,7 +67,7 @@ export async function GET(
  */
 // Set max duration to allow longer execution time for this route
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // 5 minutes
+export const maxDuration = 60; // 60 seconds - maximum allowed on Vercel Hobby plan
 
 export async function PUT(
   request: NextRequest,
@@ -100,22 +100,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Survey title is required' }, { status: 400 });
     }
 
-    // Simplified update operation
+    // Super simplified update operation
     console.log(`Updating survey ${surveyId} with ${questions?.length || 0} questions`);
     
-    // Create a minimal update object
+    // Create a minimal update object with only essential fields
     const updateData = {
       title,
       description,
-      // Keep questions structure minimal 
-      questions: questions?.map((q: any) => ({
-        id: q.id,
-        text: q.text || 'Untitled Question',
-        type: q.type || 'text',
-        required: Boolean(q.required),
-        options: q.options || [],
-        order: Number(q.order) || 0
-      })) || [],
     };
     
     // Add status if provided
@@ -123,10 +114,34 @@ export async function PUT(
       updateData.status = status;
     }
     
-    // Direct update without finding the document first
+    // Handle questions separately to minimize processing
+    if (questions && Array.isArray(questions)) {
+      // Limit number of questions to process (for performance)
+      const maxQuestions = 50;
+      const limitedQuestions = questions.slice(0, maxQuestions);
+      
+      // Process minimal question data
+      updateData.questions = limitedQuestions.map((q: any) => ({
+        id: q.id,
+        text: q.text || 'Untitled Question',
+        type: q.type || 'text',
+        required: Boolean(q.required),
+        options: (q.options && q.options.length > 0) ? q.options.slice(0, 10) : [], // Limit option count
+        order: Number(q.order) || 0
+      }));
+      
+      if (questions.length > maxQuestions) {
+        console.log(`Warning: Limited survey to ${maxQuestions} questions for performance`);
+      }
+    } else {
+      updateData.questions = [];
+    }
+    
+    // Fast direct update without any validation or complex operations
     const result = await Survey.updateOne(
       { _id: surveyId },
-      updateData
+      updateData,
+      { maxTimeMS: 45000 } // 45-second query timeout
     );
     
     console.log('Update result:', result);

@@ -86,17 +86,19 @@ export default function SurveyEditorPage() {
       setIsSaving(true);
       console.log('Saving survey:', surveyId);
       
-      // Prepare minimal data
+      // Prepare extremely minimal data
       const minimalSurveyData = {
         title: survey.title,
         description: survey.description, 
         status: survey.status,
+        // Simplified question structure
         questions: survey.questions.map(q => ({
           id: q.id,
           text: q.text,
           type: q.type,
           required: q.required,
-          options: q.options,
+          // Only include options for multiple choice/checkbox questions
+          options: (q.type === 'multipleChoice' || q.type === 'checkboxes') ? q.options : [],
           order: q.order
         }))
       };
@@ -105,7 +107,7 @@ export default function SurveyEditorPage() {
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', `/api/admin/surveys/${surveyId}`, true);
       xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.timeout = 60000; // 60 second timeout
+      xhr.timeout = 30000; // 30 second timeout to match server limits
       
       xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
@@ -327,6 +329,9 @@ export default function SurveyEditorPage() {
             <div className="bg-white shadow overflow-hidden rounded-lg mb-6">
               <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
                 <h3 className="text-lg font-medium leading-6 text-gray-900">Questions</h3>
+                <div className="mt-1 mb-3 text-sm text-gray-500">
+                  <p>For optimal performance, please limit surveys to 50 questions maximum, and 10 options per multiple choice question.</p>
+                </div>
                 <Button
                   onClick={addQuestion}
                   className="mt-2 bg-green-600 hover:bg-green-700"
