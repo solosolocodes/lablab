@@ -78,7 +78,7 @@ export default function SurveyEditorPage() {
     }
   };
 
-  // Save survey changes
+  // Save survey changes - simplified without auto-save
   const saveSurvey = async () => {
     if (!survey) return;
     
@@ -86,32 +86,55 @@ export default function SurveyEditorPage() {
       setIsSaving(true);
       console.log('Saving survey:', surveyId);
       
-      const response = await fetch(`/api/admin/surveys/${surveyId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: survey.title,
-          description: survey.description,
-          questions: survey.questions,
-          status: survey.status
-        })
-      });
+      // Prepare minimal data
+      const minimalSurveyData = {
+        title: survey.title,
+        description: survey.description, 
+        status: survey.status,
+        questions: survey.questions.map(q => ({
+          id: q.id,
+          text: q.text,
+          type: q.type,
+          required: q.required,
+          options: q.options,
+          order: q.order
+        }))
+      };
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Survey save error response:', errorText);
-        throw new Error(`Failed to update survey: ${response.status} ${response.statusText}`);
-      }
+      // Use XMLHttpRequest instead of fetch for better timeout handling
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', `/api/admin/surveys/${surveyId}`, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.timeout = 60000; // 60 second timeout
       
-      const data = await response.json();
-      console.log('Survey saved successfully:', data);
-      toast.success('Survey saved successfully');
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          console.log('Survey saved successfully:', xhr.responseText);
+          toast.success('Survey saved successfully');
+        } else {
+          console.error('Error saving survey:', xhr.status, xhr.statusText, xhr.responseText);
+          toast.error(`Failed to save survey: ${xhr.status} ${xhr.statusText}`);
+        }
+        setIsSaving(false);
+      };
+      
+      xhr.onerror = function() {
+        console.error('Request error when saving survey');
+        toast.error('Network error when saving survey');
+        setIsSaving(false);
+      };
+      
+      xhr.ontimeout = function() {
+        console.error('Request timeout when saving survey');
+        toast.error('Timeout when saving survey - the server took too long to respond');
+        setIsSaving(false);
+      };
+      
+      // Send the request
+      xhr.send(JSON.stringify(minimalSurveyData));
     } catch (error) {
-      console.error('Error saving survey:', error);
-      toast.error('Failed to save survey. Please try again.');
-    } finally {
+      console.error('Error in save survey function:', error);
+      toast.error('Failed to save survey');
       setIsSaving(false);
     }
   };
