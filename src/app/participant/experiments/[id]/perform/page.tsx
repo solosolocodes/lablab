@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
-import { toast } from 'react-hot-toast';
 
 // Define basic interfaces for stage types
+// Question interface to replace any type
 interface Question {
   id: string;
   text: string;
@@ -43,16 +43,6 @@ function isInstructionsStage(stage: Stage): stage is InstructionsStage {
 
 function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
-  const isMountedRef = useRef(true);
-  
-  // Set up mount state tracking
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-  
   // Enhanced markdown-like rendering function
   const renderContent = (content: string) => {
     if (!content) return '<p>No content available</p>';
@@ -101,11 +91,7 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
       
       <div className="flex justify-center">
         <button 
-          onClick={() => {
-            if (isMountedRef.current) {
-              onNext();
-            }
-          }}
+          onClick={onNext}
           disabled={isStageTransitioning}
           className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
@@ -120,45 +106,28 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
   const [timeRemaining, setTimeRemaining] = useState(stage.durationSeconds || 0);
   const [timerComplete, setTimerComplete] = useState(false);
-  const isMountedRef = useRef(true);
-  
-  // Set up mount state tracking
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
   
   // Handle countdown timer
   useEffect(() => {
     // Don't start timer if there's no duration
     if (!stage.durationSeconds || stage.durationSeconds <= 0) {
-      if (isMountedRef.current) {
-        setTimerComplete(true);
-      }
+      setTimerComplete(true);
       return;
     }
     
     // Set initial time
-    if (isMountedRef.current) {
-      setTimeRemaining(stage.durationSeconds);
-    }
+    setTimeRemaining(stage.durationSeconds);
     
     // Create interval to decrement timer
     const interval = setInterval(() => {
-      if (isMountedRef.current) {
-        setTimeRemaining(prevTime => {
-          if (prevTime <= 1) {
-            clearInterval(interval);
-            if (isMountedRef.current) {
-              setTimerComplete(true);
-            }
-            return 0;
-          }
-          return prevTime - 1;
-        });
-      }
+      setTimeRemaining(prevTime => {
+        if (prevTime <= 1) {
+          clearInterval(interval);
+          setTimerComplete(true);
+          return 0;
+        }
+        return prevTime - 1;
+      });
     }, 1000);
     
     // Cleanup interval on unmount
@@ -202,11 +171,7 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       
       <div className="flex justify-center">
         <button 
-          onClick={() => {
-            if (isMountedRef.current) {
-              onNext();
-            }
-          }}
+          onClick={onNext}
           disabled={isStageTransitioning || !timerComplete}
           className={`px-6 py-2 ${timerComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
@@ -255,17 +220,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   const [error, setError] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   
-  // Create a ref for wallet asset fetch state that persists across renders
-  const walletFetchStatusRef = useRef({
-    attempts: 0,
-    maxRetries: 10,
-    lastSuccess: false,
-    inProgress: false,
-    abortController: null as AbortController | null,
-    pendingTimeouts: [] as number[]
-  });
-  
-  // Function to fetch wallet assets by wallet ID with fallback data and retry logic
+  // Function to fetch wallet assets by wallet ID
   const fetchWalletAssets = async (walletId: string) => {
     if (!walletId) {
       setWalletError("No wallet ID available in scenario data");
@@ -273,569 +228,100 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       return;
     }
     
-    // Clear all pending timeouts for this wallet on new request
-    walletFetchStatusRef.current.pendingTimeouts.forEach(timeoutId => {
-      clearTimeout(timeoutId);
-    });
-    walletFetchStatusRef.current.pendingTimeouts = [];
-    
     try {
-      // Don't start a new request if one is already in progress
-      if (walletFetchStatusRef.current.inProgress) {
-        console.log('Asset fetch already in progress, skipping duplicate request');
-        return;
-      }
-      
-      // If we've already failed too many times, show error and use fallback
-      if (walletFetchStatusRef.current.attempts >= walletFetchStatusRef.current.maxRetries) {
-        console.warn(`Exceeded maximum retry attempts (${walletFetchStatusRef.current.maxRetries}), using fallback data`);
-        setWalletError(`Connection issues detected. Using offline data after ${walletFetchStatusRef.current.maxRetries} attempts.`);
-        useFallbackAssets(walletId);
-        setIsLoadingWallet(false);
-        return;
-      }
-      
       setIsLoadingWallet(true);
-      walletFetchStatusRef.current.inProgress = true;
-      walletFetchStatusRef.current.attempts++;
+      console.log(`Fetching wallet assets for wallet ID: ${walletId}`);
       
-      // Calculate timeout with exponential backoff (1s, 2s, 4s, 8s, etc. up to 10s max)
-      const baseTimeout = 1000; // Start with 1 second
-      const backoffFactor = Math.min(Math.pow(2, walletFetchStatusRef.current.attempts - 1), 10);
-      const timeout = baseTimeout * backoffFactor;
+      const response = await fetch(`/api/wallets/${walletId}/assets?preview=true`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
       
-      // Use AbortController to add timeout to fetch request
-      const controller = new AbortController();
-      walletFetchStatusRef.current.abortController = controller;
-      const timeoutId = setTimeout(() => {
-        if (controller && !controller.signal.aborted) {
-          controller.abort();
-        }
-      }, timeout);
-      
-      console.log(`Fetching wallet assets (attempt ${walletFetchStatusRef.current.attempts}/${walletFetchStatusRef.current.maxRetries}) with ${timeout}ms timeout`);
-      
-      try {
-        // Add cache-busting and retry indicator to URL with a unique token
-        const uniqueToken = Math.random().toString(36).substring(2, 15);
-        const response = await fetch(
-          `/api/wallets/${walletId}/assets?preview=true&t=${Date.now()}&retry=${walletFetchStatusRef.current.attempts}&token=${uniqueToken}`, 
-          {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache'
-            },
-            signal: controller.signal
-          }
-        );
-        
-        clearTimeout(timeoutId);
-        
-        // Special handling for 503 Service Unavailable
-        if (response.status === 503) {
-          console.warn('Server is temporarily unavailable (503), using fallback wallet data immediately');
-          useFallbackAssets(walletId);
-          setWalletError('Server temporarily unavailable. Using sample wallet data to continue your experiment.');
-          setIsLoadingWallet(false);
-          return;
-        } else if (!response.ok) {
-          console.warn(`Failed to fetch wallet assets: ${response.status}`);
-          
-          // Schedule retry after a delay if we haven't exceeded max retries
-          if (walletFetchStatusRef.current.attempts < walletFetchStatusRef.current.maxRetries) {
-            walletFetchStatusRef.current.inProgress = false;
-            
-            // Wait a bit longer between attempts (min 1.5s, max 5s)
-            const delayMs = Math.min(1500 * walletFetchStatusRef.current.attempts, 5000);
-            console.log(`Will retry asset fetch in ${delayMs}ms...`);
-            
-            // Store timeout ID for cleanup
-            const retryTimeoutId = setTimeout(() => {
-              walletFetchStatusRef.current.pendingTimeouts = 
-                walletFetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
-              fetchWalletAssets(walletId);
-            }, delayMs);
-            
-            walletFetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
-          } else {
-            // Use fallback after max retries
-            useFallbackAssets(walletId);
-          }
-          return;
-        }
-        
-        // Parse JSON safely
-        let data;
-        try {
-          data = await response.json();
-        } catch (jsonError) {
-          console.error("Error parsing wallet JSON response:", jsonError);
-          
-          // If JSON parsing fails, retry or use fallback
-          if (walletFetchStatusRef.current.attempts < walletFetchStatusRef.current.maxRetries) {
-            walletFetchStatusRef.current.inProgress = false;
-            const delayMs = Math.min(2000 * walletFetchStatusRef.current.attempts, 8000);
-            console.log(`JSON parse error for wallet data, retrying in ${delayMs}ms...`);
-            
-            const retryTimeoutId = setTimeout(() => {
-              walletFetchStatusRef.current.pendingTimeouts = 
-                walletFetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
-              fetchWalletAssets(walletId);
-            }, delayMs);
-            
-            walletFetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
-            return;
-          } else {
-            // Use fallback if we've hit max retries
-            useFallbackAssets(walletId);
-            return;
-          }
-        }
-        
-        // Reset retry counter on successful response
-        walletFetchStatusRef.current.attempts = 0;
-        walletFetchStatusRef.current.lastSuccess = true;
-        
-        if (Array.isArray(data)) {
-          setWalletAssets(data);
-        } else if (data.assets && Array.isArray(data.assets)) {
-          setWalletAssets(data.assets);
-        } else {
-          console.warn("Unexpected wallet data format:", data);
-          useFallbackAssets(walletId);
-        }
-      } catch (fetchErr) {
-        clearTimeout(timeoutId);
-        
-        if (fetchErr.name === 'AbortError') {
-          console.warn(`Wallet assets fetch timed out after ${timeout}ms (attempt ${walletFetchStatusRef.current.attempts}/${walletFetchStatusRef.current.maxRetries})`);
-          
-          // If we haven't exceeded max retries, schedule another attempt
-          if (walletFetchStatusRef.current.attempts < walletFetchStatusRef.current.maxRetries) {
-            walletFetchStatusRef.current.inProgress = false;
-            
-            // Increase delay between retries
-            const delayMs = Math.min(1500 * walletFetchStatusRef.current.attempts, 5000);
-            console.log(`Will retry asset fetch in ${delayMs}ms...`);
-            
-            const retryTimeoutId = setTimeout(() => {
-              walletFetchStatusRef.current.pendingTimeouts = 
-                walletFetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
-              fetchWalletAssets(walletId);
-            }, delayMs);
-            
-            walletFetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
-            return;
-          } else {
-            // Use fallback data after max retries
-            console.warn(`Max retries (${walletFetchStatusRef.current.maxRetries}) reached, using fallback data`);
-            useFallbackAssets(walletId);
-          }
-        } else {
-          console.error("Network error fetching wallet assets:", fetchErr);
-          
-          // For non-timeout errors, we might still retry
-          if (walletFetchStatusRef.current.attempts < walletFetchStatusRef.current.maxRetries) {
-            walletFetchStatusRef.current.inProgress = false;
-            
-            // Longer delay for network errors
-            const delayMs = Math.min(2000 * walletFetchStatusRef.current.attempts, 8000);
-            console.log(`Network error, will retry asset fetch in ${delayMs}ms...`);
-            
-            const retryTimeoutId = setTimeout(() => {
-              walletFetchStatusRef.current.pendingTimeouts = 
-                walletFetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
-              fetchWalletAssets(walletId);
-            }, delayMs);
-            
-            walletFetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
-            return;
-          } else {
-            useFallbackAssets(walletId);
-          }
-        }
-      } finally {
-        walletFetchStatusRef.current.inProgress = false;
-        setIsLoadingWallet(false);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch wallet assets: ${response.status}`);
       }
+      
+      const data = await response.json();
+      console.log("Wallet assets fetched:", data);
+      
+      if (Array.isArray(data)) {
+        setWalletAssets(data);
+      } else if (data.assets && Array.isArray(data.assets)) {
+        setWalletAssets(data.assets);
+      } else {
+        console.warn("Unexpected wallet data format:", data);
+        setWalletAssets([]);
+      }
+      
+      setIsLoadingWallet(false);
     } catch (err) {
-      console.error("Error in fetchWalletAssets:", err);
-      walletFetchStatusRef.current.inProgress = false;
-      setWalletError(`Unable to load assets after ${walletFetchStatusRef.current.attempts} attempts. Using sample data instead.`);
-      useFallbackAssets(walletId);
+      console.error("Error fetching wallet assets:", err);
+      setWalletError(err instanceof Error ? err.message : "Failed to load wallet assets");
       setIsLoadingWallet(false);
     }
   };
   
-  // Add an effect to clean up wallet fetch timeouts and abort controllers on unmount
+  // Fetch scenario data from MongoDB when the component mounts
   useEffect(() => {
-    return () => {
-      // Abort any in-flight wallet requests
-      if (walletFetchStatusRef.current.abortController && 
-          !walletFetchStatusRef.current.abortController.signal.aborted) {
-        walletFetchStatusRef.current.abortController.abort();
-      }
-      
-      // Clear all pending wallet fetch timeouts
-      walletFetchStatusRef.current.pendingTimeouts.forEach(timeoutId => {
-        clearTimeout(timeoutId);
-      });
-      walletFetchStatusRef.current.pendingTimeouts = [];
-    };
-  }, []);
-  
-  // Generate fallback wallet assets
-  const useFallbackAssets = (walletId: string) => {
-    // Use sample asset data as fallback
-    const fallbackAssets = [
-      {
-        id: `${walletId}-asset1`,
-        type: 'cryptocurrency',
-        name: 'Bitcoin',
-        symbol: 'BTC',
-        amount: 0.5,
-        initialAmount: 0.5
-      },
-      {
-        id: `${walletId}-asset2`,
-        type: 'stock',
-        name: 'Apple Inc.',
-        symbol: 'AAPL',
-        amount: 10,
-        initialAmount: 10
-      },
-      {
-        id: `${walletId}-asset3`,
-        type: 'cryptocurrency',
-        name: 'Ethereum',
-        symbol: 'ETH',
-        amount: 5,
-        initialAmount: 5
-      }
-    ];
-    
-    setWalletAssets(fallbackAssets);
-  };
-  
-  // Fetch scenario data with robust error handling, retries and anti-flickering
-  useEffect(() => {
-    let isMounted = true;
-    
-    // Track fetch status with useRef to maintain state across renders
-    const fetchStatusRef = useRef({
-      attempts: 0,
-      maxRetries: 10,
-      inProgress: false,
-      lastSuccess: false,
-      abortController: null as AbortController | null,
-      pendingTimeouts: [] as number[],
-    });
-    
-    // Generate fallback scenario data
-    const generateFallbackScenario = () => {
-      return {
-        id: stage.scenarioId || 'fallback-scenario',
-        name: stage.title || 'Investment Scenario',
-        description: stage.description || 'A simulated investment scenario',
-        rounds: stage.rounds || 3,
-        roundDuration: stage.roundDuration || 60,
-        walletId: 'fallback-wallet-id',
-        assetPrices: [
-          {
-            assetId: 'fallback-asset1',
-            symbol: 'BTC',
-            prices: [40000, 42000, 38000, 45000]
-          },
-          {
-            assetId: 'fallback-asset2',
-            symbol: 'AAPL',
-            prices: [150, 155, 145, 160]
-          },
-          {
-            assetId: 'fallback-asset3',
-            symbol: 'ETH',
-            prices: [2800, 3000, 2700, 3200]
-          }
-        ]
-      };
-    };
-    
-    // Helper function to apply fallback data
-    const applyFallbackData = () => {
-      if (!isMounted) return;
-      
-      console.log('Using fallback scenario data');
-      const fallbackData = generateFallbackScenario();
-      setScenarioData(fallbackData);
-      setCurrentRound(1);
-      setRoundTimeRemaining(fallbackData.roundDuration);
-      setScenarioComplete(false);
-      fetchWalletAssets(fallbackData.walletId);
-      setIsLoading(false);
-      
-      // Show gentle error message to user
-      if (fetchStatusRef.current.attempts >= fetchStatusRef.current.maxRetries) {
-        setError(`Connection issues detected. Using offline data after ${fetchStatusRef.current.maxRetries} attempts.`);
-      }
-    };
-    
-    // Fetch with retry logic
     async function fetchScenarioData() {
       if (!stage.scenarioId) {
-        if (isMounted) {
-          console.warn("No scenario ID provided, using fallback data");
-          applyFallbackData();
-        }
-        return;
-      }
-      
-      // Avoid duplicate requests
-      if (fetchStatusRef.current.inProgress) {
-        console.log('Scenario fetch already in progress, skipping duplicate request');
-        return;
-      }
-      
-      // If we've reached max retries, use fallback
-      if (fetchStatusRef.current.attempts >= fetchStatusRef.current.maxRetries) {
-        console.warn(`Exceeded maximum retry attempts (${fetchStatusRef.current.maxRetries}), using fallback data`);
-        applyFallbackData();
+        setError("No scenario ID provided");
+        setIsLoading(false);
         return;
       }
       
       try {
-        if (isMounted) {
-          // Only show loading UI after first attempt
-          if (fetchStatusRef.current.attempts === 0) {
-            setIsLoading(true);
+        setIsLoading(true);
+        console.log(`Fetching scenario data for ID: ${stage.scenarioId}`);
+        
+        const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
           }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch scenario: ${response.status}`);
         }
         
-        fetchStatusRef.current.inProgress = true;
-        fetchStatusRef.current.attempts++;
+        const data = await response.json();
+        console.log("Scenario data fetched:", data);
+        setScenarioData(data);
         
-        // Calculate timeout with exponential backoff (2s, 4s, 8s, etc. up to 20s max)
-        const baseTimeout = 2000; // Start with 2 seconds
-        const backoffFactor = Math.min(Math.pow(2, fetchStatusRef.current.attempts - 1), 10);
-        const timeout = baseTimeout * backoffFactor;
+        // Initialize with the data from MongoDB
+        setCurrentRound(1);
+        setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
+        setScenarioComplete(false);
         
-        console.log(`Fetching scenario data (attempt ${fetchStatusRef.current.attempts}/${fetchStatusRef.current.maxRetries}) with ${timeout}ms timeout`);
-        
-        // Use AbortController to add timeout to fetch request
-        const controller = new AbortController();
-        fetchStatusRef.current.abortController = controller;
-        const timeoutId = setTimeout(() => {
-          if (controller && !controller.signal.aborted) {
-            controller.abort();
-          }
-        }, timeout);
-        
-        try {
-          // Add cache-busting and retry indicator to URL with a unique token each time
-          const uniqueToken = Math.random().toString(36).substring(2, 15);
-          const response = await fetch(
-            `/api/scenarios/${stage.scenarioId}?preview=true&t=${Date.now()}&retry=${fetchStatusRef.current.attempts}&token=${uniqueToken}`, 
-            {
-              method: 'GET',
-              headers: {
-                'Accept': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache'
-              },
-              signal: controller.signal
-            }
-          );
-          
-          clearTimeout(timeoutId);
-          
-          // Handle server errors (like 503 Service Unavailable)
-          if (response.status === 503) {
-            console.warn('Server is temporarily unavailable (503), using fallback data immediately');
-            
-            // For 503 errors, use fallback data immediately without further retries
-            if (isMounted) {
-              setError('The server is temporarily unavailable. Using offline data to continue your experiment.');
-              applyFallbackData();
-            }
-            return;
-          } else if (!response.ok) {
-            console.warn(`Failed to fetch scenario: ${response.status}`);
-            
-            // Schedule retry with exponential backoff if we haven't exceeded max retries
-            if (fetchStatusRef.current.attempts < fetchStatusRef.current.maxRetries && isMounted) {
-              fetchStatusRef.current.inProgress = false;
-              
-              // Longer delay between retries
-              const delayMs = Math.min(1500 * fetchStatusRef.current.attempts, 5000);
-              console.log(`Will retry scenario fetch in ${delayMs}ms...`);
-              
-              // Store the timeout id so we can clear it on unmount
-              const retryTimeoutId = setTimeout(() => {
-                // Remove this timeout from the list when it executes
-                fetchStatusRef.current.pendingTimeouts = 
-                  fetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
-                  
-                // Only retry if component is still mounted
-                if (isMounted) fetchScenarioData();
-              }, delayMs);
-              
-              // Store the timeout ID for cleanup
-              fetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
-              return;
-            } else {
-              // Use fallback after max retries
-              if (isMounted) applyFallbackData();
-              return;
-            }
-          }
-          
-          // Parse JSON safely
-          let data;
-          try {
-            data = await response.json();
-          } catch (jsonError) {
-            console.error("Error parsing JSON response:", jsonError);
-            // If JSON parsing fails and we're still under retry limit, retry
-            if (fetchStatusRef.current.attempts < fetchStatusRef.current.maxRetries && isMounted) {
-              fetchStatusRef.current.inProgress = false;
-              const delayMs = Math.min(2000 * fetchStatusRef.current.attempts, 8000);
-              console.log(`JSON parse error, retrying in ${delayMs}ms...`);
-              
-              const retryTimeoutId = setTimeout(() => {
-                fetchStatusRef.current.pendingTimeouts = 
-                  fetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
-                if (isMounted) fetchScenarioData();
-              }, delayMs);
-              
-              fetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
-              return;
-            } else {
-              // Use fallback if we've hit max retries
-              if (isMounted) applyFallbackData();
-              return;
-            }
-          }
-          
-          if (isMounted) {
-            // Reset retry counter on success
-            fetchStatusRef.current.attempts = 0;
-            fetchStatusRef.current.lastSuccess = true;
-            
-            setScenarioData(data);
-            
-            // Initialize with the data from MongoDB
-            setCurrentRound(1);
-            setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
-            setScenarioComplete(false);
-            
-            // Fetch wallet assets if we have a wallet ID
-            if (data.walletId) {
-              fetchWalletAssets(data.walletId);
-            } else {
-              // Use fallback wallet ID if none in data
-              fetchWalletAssets('fallback-wallet-id');
-            }
-            
-            setIsLoading(false);
-          }
-        } catch (fetchErr) {
-          clearTimeout(timeoutId);
-          
-          if (!isMounted) return;
-          
-          if (fetchErr.name === 'AbortError') {
-            console.warn(`Scenario fetch timed out after ${timeout}ms (attempt ${fetchStatusRef.current.attempts}/${fetchStatusRef.current.maxRetries})`);
-            
-            // If we haven't exceeded max retries, schedule another attempt
-            if (fetchStatusRef.current.attempts < fetchStatusRef.current.maxRetries) {
-              fetchStatusRef.current.inProgress = false;
-              
-              // Increase delay between retries
-              const delayMs = Math.min(2000 * fetchStatusRef.current.attempts, 8000);
-              console.log(`Will retry scenario fetch in ${delayMs}ms...`);
-              
-              const retryTimeoutId = setTimeout(() => {
-                fetchStatusRef.current.pendingTimeouts = 
-                  fetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
-                // Only retry if component is still mounted
-                if (isMounted) fetchScenarioData();
-              }, delayMs);
-              
-              fetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
-              return;
-            } else {
-              // Use fallback data after max retries
-              console.warn(`Max retries (${fetchStatusRef.current.maxRetries}) reached, using fallback scenario data`);
-              applyFallbackData();
-            }
-          } else {
-            console.error("Network error fetching scenario data:", fetchErr);
-            
-            // For non-timeout errors, we might still retry
-            if (fetchStatusRef.current.attempts < fetchStatusRef.current.maxRetries) {
-              fetchStatusRef.current.inProgress = false;
-              
-              // Longer delay for network errors
-              const delayMs = Math.min(3000 * fetchStatusRef.current.attempts, 10000);
-              console.log(`Network error, will retry scenario fetch in ${delayMs}ms...`);
-              
-              const retryTimeoutId = setTimeout(() => {
-                fetchStatusRef.current.pendingTimeouts = 
-                  fetchStatusRef.current.pendingTimeouts.filter(id => id !== retryTimeoutId);
-                // Only retry if component is still mounted
-                if (isMounted) fetchScenarioData();
-              }, delayMs);
-              
-              fetchStatusRef.current.pendingTimeouts.push(retryTimeoutId);
-              return;
-            } else {
-              // Use fallback data after max retries
-              applyFallbackData();
-            }
-          }
-        } finally {
-          fetchStatusRef.current.inProgress = false;
+        // Fetch wallet assets if we have a wallet ID
+        if (data.walletId) {
+          fetchWalletAssets(data.walletId);
         }
+        
+        setIsLoading(false);
       } catch (err) {
-        if (isMounted) {
-          console.error("Error in fetchScenarioData:", err);
-          fetchStatusRef.current.inProgress = false;
-          
-          setError(`Unable to load scenario data after ${fetchStatusRef.current.attempts} attempts. Using offline data instead.`);
-          applyFallbackData();
-        }
+        console.error("Error fetching scenario data:", err);
+        setError(err instanceof Error ? err.message : "Failed to load scenario data");
+        setIsLoading(false);
+        
+        // If we can't get data from MongoDB, use the stage data as fallback
+        setCurrentRound(1);
+        setRoundTimeRemaining(stage.roundDuration || 60);
       }
     }
     
     fetchScenarioData();
-    
-    // Clean up function
-    return () => {
-      isMounted = false;
-      
-      // Abort any in-flight requests when component unmounts
-      if (fetchStatusRef.current.abortController && !fetchStatusRef.current.abortController.signal.aborted) {
-        fetchStatusRef.current.abortController.abort();
-      }
-      
-      // Clear all pending timeouts
-      fetchStatusRef.current.pendingTimeouts.forEach(timeoutId => {
-        clearTimeout(timeoutId);
-      });
-      fetchStatusRef.current.pendingTimeouts = [];
-    };
-  }, [stage.scenarioId, stage.roundDuration, stage.title, stage.description, stage.rounds]);
+  }, [stage.scenarioId, stage.roundDuration]);
   
   // Use the data from MongoDB, or fall back to the stage data
   const totalRounds = scenarioData?.rounds || stage.rounds || 1;
   const roundDuration = scenarioData?.roundDuration || stage.roundDuration || 60;
   
-  // Handle round timer - only start if we have data 
+  // Handle round timer - only start if we have data (from MongoDB or stage)
   useEffect(() => {
-    // Reference to track if component is mounted
-    let isMounted = true;
-    
     // Don't start timer if we're still loading data
     if (isLoading) {
       return;
@@ -843,43 +329,32 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     
     // Don't start timer if no rounds or duration
     if (!totalRounds || !roundDuration) {
-      if (isMounted) {
-        setScenarioComplete(true);
-      }
+      setScenarioComplete(true);
       return;
     }
     
     // Create interval to decrement timer
     const interval = setInterval(() => {
-      if (isMounted) {
-        setRoundTimeRemaining(prevTime => {
-          if (prevTime <= 1) {
-            // Time for this round is up
-            if (currentRound < totalRounds) {
-              // Move to next round
-              if (isMounted) {
-                setCurrentRound(prev => prev + 1);
-              }
-              return roundDuration; // Reset timer for next round
-            } else {
-              // All rounds complete
-              clearInterval(interval);
-              if (isMounted) {
-                setScenarioComplete(true);
-              }
-              return 0;
-            }
+      setRoundTimeRemaining(prevTime => {
+        if (prevTime <= 1) {
+          // Time for this round is up
+          if (currentRound < totalRounds) {
+            // Move to next round
+            setCurrentRound(prev => prev + 1);
+            return roundDuration; // Reset timer for next round
+          } else {
+            // All rounds complete
+            clearInterval(interval);
+            setScenarioComplete(true);
+            return 0;
           }
-          return prevTime - 1;
-        });
-      }
+        }
+        return prevTime - 1;
+      });
     }, 1000);
     
     // Cleanup interval on unmount
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [totalRounds, roundDuration, currentRound, isLoading]);
   
   // Format time as MM:SS
@@ -889,73 +364,42 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
   
-  // Simple loading state
+  // Progress calculations removed
+  
+  // Loading state
   if (isLoading) {
     return (
       <div className="w-full p-4 bg-white rounded border">
         <div className="text-center py-4">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600 mt-2">Loading scenario data...</p>
+          <h3 className="text-lg font-semibold">Loading Scenario Data...</h3>
+          <p className="text-gray-600 mt-2">Fetching scenario details from MongoDB</p>
         </div>
       </div>
     );
   }
   
-  // Error state with fallback - more user friendly and with retry option
+  // Error state with fallback
   if (error) {
-    // Track whether this is a fatal error (need to skip) or 
-    // a recoverable error (using fallback data but can continue)
-    const isFatalError = !scenarioData;
-    const isConnectionError = error.includes('Connection issues') || 
-                              error.includes('Unable to load');
-    
     return (
       <div className="w-full p-4 bg-white rounded border">
         <div className="mb-4 pb-3 border-b border-gray-200">
-          <h3 className="text-xl font-bold mb-2 text-yellow-600">
-            {isConnectionError ? 'Connection Issues Detected' : 'Error Loading Scenario'}
-          </h3>
+          <h3 className="text-xl font-bold mb-2 text-red-600">Error Loading Scenario</h3>
           <p className="text-gray-600">{error}</p>
         </div>
         
-        <div className={`p-4 ${isConnectionError ? 'bg-yellow-50' : 'bg-red-50'} rounded border mb-5`}>
-          {isConnectionError ? (
-            <>
-              <div className="flex items-center mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                <p className="text-yellow-700 font-medium">We're experiencing some connection issues with our database</p>
-              </div>
-              <p className="text-gray-700 mb-2">The experiment will continue with offline data to ensure you can complete your session. Your experience will not be affected.</p>
-              <div className="text-sm text-gray-600 mt-2">
-                <span className="font-medium">Note:</span> If you continue to see this message, please inform the experiment administrator.
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-red-700 mb-2">Could not fetch scenario data.</p>
-              <p className="text-gray-700">Using fallback data from experiment configuration.</p>
-            </>
-          )}
+        <div className="p-4 bg-red-50 rounded border mb-5">
+          <p className="text-red-700 mb-2">Could not fetch scenario data from MongoDB.</p>
+          <p className="text-gray-700">Using fallback data from experiment configuration.</p>
         </div>
         
         <div className="flex justify-center">
-          {isFatalError ? (
-            <button 
-              onClick={onNext}
-              className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Skip to Next Stage
-            </button>
-          ) : (
-            <button 
-              onClick={() => setError(null)}
-              className="px-6 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            >
-              Continue With Offline Data
-            </button>
-          )}
+          <button 
+            onClick={onNext}
+            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Skip to Next Stage
+          </button>
         </div>
       </div>
     );
@@ -1046,7 +490,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
             </div>
           </div>
           
-          {/* Rounds indicator */}
+          {/* Rounds indicator - No progress percentage */}
           <div className="mt-4 md:mt-0 w-full md:w-48">
             <div className="bg-white rounded-lg p-2 border border-gray-200 shadow-sm text-center">
               <p className="font-medium text-blue-700">
@@ -1110,18 +554,11 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                 </div>
               )}
               
-              {/* Error state - but non-blocking with message to inform admin */}
+              {/* Error state */}
               {walletError && (
                 <div className="p-4 text-center">
-                  <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-                    <div className="flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                      <p className="text-yellow-700 font-medium">Using sample data due to connection issues</p>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-2">Your experiment will continue normally. If this persists, please inform your administrator.</p>
-                  </div>
+                  <p className="text-red-500">Error loading assets</p>
+                  <p className="text-xs text-gray-500 mt-1">{walletError}</p>
                 </div>
               )}
               
@@ -1309,26 +746,12 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                             )}
                           </div>
                           
-                          {/* Action buttons with toast to simulate trading */}
+                          {/* Action buttons */}
                           <div className="flex gap-4 mt-4">
-                            <button 
-                              onClick={() => {
-                                if (isMountedRef && isMountedRef.current) {
-                                  toast.success(`Buy action for ${asset.symbol} (simulation only)`);
-                                }
-                              }}
-                              className="flex-1 text-base bg-green-100 hover:bg-green-200 text-green-700 font-medium py-3 px-4 rounded-md transition-colors"
-                            >
+                            <button className="flex-1 text-base bg-green-100 hover:bg-green-200 text-green-700 font-medium py-3 px-4 rounded-md transition-colors">
                               Buy
                             </button>
-                            <button 
-                              onClick={() => {
-                                if (isMountedRef && isMountedRef.current) {
-                                  toast.success(`Sell action for ${asset.symbol} (simulation only)`);
-                                }
-                              }}
-                              className="flex-1 text-base bg-red-100 hover:bg-red-200 text-red-700 font-medium py-3 px-4 rounded-md transition-colors"
-                            >
+                            <button className="flex-1 text-base bg-red-100 hover:bg-red-200 text-red-700 font-medium py-3 px-4 rounded-md transition-colors">
                               Sell
                             </button>
                           </div>
@@ -1360,11 +783,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       
       <div className="flex justify-center">
         <button 
-          onClick={() => {
-            if (isMountedRef && isMountedRef.current) {
-              onNext();
-            }
-          }}
+          onClick={onNext}
           disabled={isStageTransitioning || !scenarioComplete}
           className={`px-6 py-2 ${scenarioComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
@@ -1377,70 +796,6 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
-  const [responses, setResponses] = useState<Record<string, any>>({});
-  const isMountedRef = useRef(true);
-  
-  // Set up mount state tracking
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-  
-  // Initialize responses if needed
-  useEffect(() => {
-    if (!stage.questions || stage.questions.length === 0) return;
-    
-    const initialResponses: Record<string, any> = {};
-    stage.questions.forEach(question => {
-      if (question.type === 'multipleChoice') {
-        initialResponses[question.id] = '';
-      } else if (question.type === 'checkboxes') {
-        initialResponses[question.id] = [];
-      } else if (question.type === 'scale') {
-        initialResponses[question.id] = null;
-      } else {
-        initialResponses[question.id] = '';
-      }
-    });
-    
-    if (isMountedRef.current) {
-      setResponses(initialResponses);
-    }
-  }, [stage.questions]);
-  
-  const handleInputChange = (questionId: string, value: string | string[] | number) => {
-    if (isMountedRef.current) {
-      setResponses(prev => ({
-        ...prev,
-        [questionId]: value
-      }));
-    }
-  };
-  
-  const handleCheckboxChange = (questionId: string, option: string, checked: boolean) => {
-    if (isMountedRef.current) {
-      setResponses(prev => {
-        const currentSelections = Array.isArray(prev[questionId])
-          ? [...prev[questionId]]
-          : [];
-        
-        if (checked) {
-          return {
-            ...prev,
-            [questionId]: [...currentSelections, option]
-          };
-        } else {
-          return {
-            ...prev,
-            [questionId]: currentSelections.filter(item => item !== option)
-          };
-        }
-      });
-    }
-  };
-  
   return (
     <div className="w-full p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
@@ -1452,95 +807,20 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
         <p className="font-medium mb-3">Survey Questions</p>
         
         {stage.questions && stage.questions.length > 0 ? (
-          <div className="space-y-4">
-            {stage.questions.map((q, i) => (
-              <div key={q.id || i} className="p-4 bg-white rounded border">
-                <p className="font-medium mb-2">
+          <div>
+            {stage.questions.map((q: Question, i: number) => (
+              <div key={q.id || i} className="mb-4 p-3 bg-white rounded border">
+                <p className="font-medium">
                   {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
                 </p>
+                <p className="text-sm text-gray-500 mt-1">Type: {q.type}</p>
                 
-                {/* Text input for short answer questions */}
-                {q.type === 'text' && (
-                  <input
-                    type="text"
-                    className="w-full p-2 border border-gray-300 rounded"
-                    value={responses[q.id] || ''}
-                    onChange={(e) => handleInputChange(q.id, e.target.value)}
-                    required={q.required}
-                  />
-                )}
-                
-                {/* Textarea for long answer questions */}
-                {q.type === 'textarea' && (
-                  <textarea
-                    className="w-full p-2 border border-gray-300 rounded"
-                    rows={4}
-                    value={responses[q.id] || ''}
-                    onChange={(e) => handleInputChange(q.id, e.target.value)}
-                    required={q.required}
-                  />
-                )}
-                
-                {/* Radio buttons for multiple choice */}
                 {q.type === 'multipleChoice' && q.options && (
-                  <div className="space-y-2 mt-2">
-                    {q.options.map((option, idx) => (
-                      <div key={idx} className="flex items-center">
-                        <input
-                          type="radio"
-                          id={`${q.id}-option-${idx}`}
-                          name={q.id}
-                          className="mr-2"
-                          checked={responses[q.id] === option}
-                          onChange={() => handleInputChange(q.id, option)}
-                          required={q.required}
-                        />
-                        <label htmlFor={`${q.id}-option-${idx}`}>
-                          {option}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {/* Checkboxes for multiple selection */}
-                {q.type === 'checkboxes' && q.options && (
-                  <div className="space-y-2 mt-2">
-                    {q.options.map((option, idx) => (
-                      <div key={idx} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`${q.id}-option-${idx}`}
-                          className="mr-2"
-                          checked={(responses[q.id] || []).includes(option)}
-                          onChange={(e) => handleCheckboxChange(q.id, option, e.target.checked)}
-                        />
-                        <label htmlFor={`${q.id}-option-${idx}`}>
-                          {option}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {/* Scale (1-5, 1-10, etc.) */}
-                {q.type === 'scale' && (
-                  <div className="flex flex-wrap justify-between items-center mt-2">
-                    {[1, 2, 3, 4, 5].map((number) => (
-                      <div key={number} className="text-center mx-2 mb-2">
-                        <button
-                          type="button"
-                          className={`w-10 h-10 rounded-full ${
-                            responses[q.id] === number
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-gray-200 text-gray-800'
-                          }`}
-                          onClick={() => handleInputChange(q.id, number)}
-                        >
-                          {number}
-                        </button>
-                        {number === 1 && <div className="text-xs mt-1">Strongly Disagree</div>}
-                        {number === 5 && <div className="text-xs mt-1">Strongly Agree</div>}
+                  <div className="mt-2 pl-4">
+                    {q.options.map((option: string, idx: number) => (
+                      <div key={idx} className="flex items-center mt-1">
+                        <span className="w-4 h-4 border border-gray-300 rounded-full mr-2"></span>
+                        <span className="text-gray-700">{option}</span>
                       </div>
                     ))}
                   </div>
@@ -1549,21 +829,15 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
             ))}
           </div>
         ) : (
-          <p className="text-gray-600 text-center p-4">No questions defined for this survey.</p>
+          <p className="text-gray-600">No questions defined for this survey.</p>
         )}
       </div>
       
       <div className="flex justify-center">
         <button 
-          onClick={() => {
-            if (isMountedRef.current) {
-              onNext();
-            }
-          }}
+          onClick={onNext}
           disabled={isStageTransitioning}
-          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${
-            isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           Submit
         </button>
@@ -1574,16 +848,6 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
 
 function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const { isStageTransitioning } = usePreview();
-  const isMountedRef = useRef(true);
-  
-  // Set up mount state tracking
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-  
   // Render different stage types with appropriate placeholders
   if (stage.type === 'break') {
     return <BreakStage stage={stage} onNext={onNext} />;
@@ -1612,11 +876,7 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
       
       <div className="flex justify-center">
         <button 
-          onClick={() => {
-            if (isMountedRef.current) {
-              onNext();
-            }
-          }}
+          onClick={onNext}
           disabled={isStageTransitioning}
           className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
@@ -1636,130 +896,68 @@ function ExperimentContent() {
   const { data: session, status } = useSession();
   const [loadError, setLoadError] = useState<string | null>(null);
   
-  // Create a single mounted ref to use throughout the component
-  const isMountedRef = useRef(true);
-  
-  // Set isMounted to false when component unmounts
-  useEffect(() => {
-    // Set to true on mount
-    isMountedRef.current = true;
-    
-    // Clean up function sets to false on unmount
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-  
   // Load the experiment data when the component mounts
   useEffect(() => {
-    // Safety check - don't try to load if component is already unmounted
-    if (!isMountedRef.current) return;
-    
     // Only attempt to load if we have an experiment ID
     if (!experimentId) {
       setLoadError("No experiment ID provided");
       return;
     }
     
-    // Abort controller to cancel fetch requests if component unmounts
-    const controller = new AbortController();
-    
     // Pass true to indicate this is the participant view
     loadExperiment(experimentId, true)
       .then(() => {
-        // Only update state if component is still mounted
-        if (isMountedRef.current) {
-          setLoadError(null);
-        }
+        setLoadError(null);
       })
       .catch(err => {
-        // Only update state if component is still mounted
-        if (isMountedRef.current) {
-          console.error('Error loading experiment:', err);
-          setLoadError(`Failed to load experiment: ${err instanceof Error ? err.message : String(err)}`);
-        }
+        console.error('Error loading experiment:', err);
+        setLoadError(`Failed to load experiment: ${err instanceof Error ? err.message : String(err)}`);
       });
-    
-    // Cleanup function to abort any in-flight requests
-    return () => {
-      controller.abort();
-    };
   }, [experimentId, loadExperiment]);
   
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
-    // Safety check - don't update state if unmounted
-    if (!isMountedRef.current) return;
-    
     try {
-      // Record that the user has started the experiment (non-blocking)
+      // Record that the user has started the experiment
       if (experiment) {
-        // Use a callback pattern that allows for safer state updates
-        // This is a safer React update pattern as it queues the state update properly
-        if (isMountedRef.current) {
-          // Queue the state update (this is actually processed by React after the function completes)
-          setViewMode('experiment');
-        }
-        
-        // Then update progress in the background - after a small delay to ensure React had time
-        // to process the state update and re-render
-        setTimeout(() => {
-          // Double check we're still mounted before proceeding with the API call
-          if (isMountedRef.current) {
-            updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id)
-              .catch(err => {
-                // Silently handle errors to prevent state updates after unmount
-                console.warn('Error updating progress (non-critical):', err);
-              });
-          }
-        }, 100); // Use a small delay
+        setViewMode('experiment');
+        updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id)
+          .catch(err => {
+            console.warn('Error updating progress (non-critical):', err);
+          });
       } else {
-        // Only update state if still mounted
-        if (isMountedRef.current) {
-          setViewMode('experiment');
-        }
+        setViewMode('experiment');
       }
     } catch (err) {
-      // Safety catch block to prevent unhandled exceptions
       console.error('Error in handleWelcomeNext:', err);
     }
   };
   
   // Handle Next button click for stage navigation
   const handleStageNext = () => {
-    // Safety checks - prevent any execution if component is unmounted
-    if (!experiment || !isMountedRef.current) return;
+    if (!experiment) return;
     
     try {
-      // Create a local immutable copy of what we need, to ensure consistency
-      // even if React updates happen during our function
-      const currentExperiment = experiment;
       const currentIndex = currentStageNumber;
-      const stagesCount = currentExperiment.stages.length;
+      const stagesCount = experiment.stages.length;
       
       // Case 1: More stages to go
       if (currentIndex < stagesCount - 1) {
-        // Queue the state update in a way that won't cause issues if component unmounts
-        // between the time the function is called and when React processes the update
-        const safeNextIndex = currentIndex + 1;
-        
-        if (isMountedRef.current) {
-          setCurrentStageNumber(safeNextIndex);
-        }
+        const nextIndex = currentIndex + 1;
+        setCurrentStageNumber(nextIndex);
       } 
       // Case 2: Final stage completion
       else {
-        // Final stage complete, show thank you screen only
-        // We don't call updateParticipantProgress here anymore - it will be called 
-        // in the thank you screen itself to avoid React error #321
-        if (isMountedRef.current) {
-          setViewMode('thankyou');
-        }
+        // Final stage complete, show thank you screen
+        setViewMode('thankyou');
+        // Mark the experiment as completed
+        updateParticipantProgress(experiment.id, 'completed')
+          .catch(error => {
+            console.warn('Error updating completion status:', error);
+          });
       }
     } catch (error) {
-      // Catch any other errors that might occur
       console.error('Error in handleStageNext:', error);
-      // Don't attempt to update state with error message if unmounted
     }
   };
   
@@ -1830,29 +1028,6 @@ function ExperimentContent() {
   
   // Thank You screen view
   if (viewMode === 'thankyou') {
-    // We're removing the useEffect here which was causing the React error #321
-    // Instead, we'll mark the completion with a one-time operation on the first render
-    
-    // Reference to track if we've already triggered completion to avoid duplicate calls
-    const hasMarkedCompletionRef = useRef(false);
-    
-    // Only mark completion once when the thank you screen first renders
-    if (experiment && !hasMarkedCompletionRef.current) {
-      hasMarkedCompletionRef.current = true; // Mark as done to prevent further calls
-      
-      // Run in the next tick to avoid React strict mode issues
-      setTimeout(() => {
-        // Only if the component is still mounted
-        if (isMountedRef.current) {
-          updateParticipantProgress(experiment.id, 'completed')
-            .catch(error => {
-              // Silently log errors without updating state
-              console.warn('Error updating completion status on thank you screen:', error);
-            });
-        }
-      }, 100);
-    }
-    
     return (
       <div className="p-4">
         <div className="w-full p-4 bg-white rounded border text-center">
@@ -1914,11 +1089,7 @@ function ExperimentContent() {
           
           <div className="text-center">
             <button 
-              onClick={() => {
-                if (isMountedRef.current) {
-                  handleWelcomeNext();
-                }
-              }}
+              onClick={handleWelcomeNext}
               className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
               Begin Experiment
