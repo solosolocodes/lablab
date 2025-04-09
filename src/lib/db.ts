@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 
 // In development, use .env.local value, in production use vercel.json environment variable
-// Note: Added tlsInsecure=true query parameter to handle SSL/TLS issues
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://vis203077:lablab@lablab.bw2sxxm.mongodb.net/?retryWrites=true&w=majority&appName=lablab&tlsInsecure=true&tlsAllowInvalidCertificates=true&tlsAllowInvalidHostnames=true";
+// Note: Added TLS parameter to handle SSL/TLS issues (can't use both tlsInsecure and tlsAllowInvalidCertificates)
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://vis203077:lablab@lablab.bw2sxxm.mongodb.net/?retryWrites=true&w=majority&appName=lablab&tlsAllowInvalidCertificates=true";
 
 if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable');
@@ -53,7 +53,6 @@ const connectionOptions = {
   ssl: true,
   tls: true,
   tlsAllowInvalidCertificates: true, // Only use in development
-  tlsAllowInvalidHostnames: true,    // Only use in development
 };
 
 async function connectDB() {
@@ -165,14 +164,13 @@ async function connectDB() {
           console.log('Attempting connection with relaxed TLS settings...');
           mongoose.connection.close();
           
-          // Apply stronger TLS relaxation for this connection attempt
+          // Apply TLS relaxation for this connection attempt
+          // Note: tlsInsecure and tlsAllowInvalidCertificates can't be used together
           const relaxedOptions = {
             ...connectionOptions,
             ssl: true,
             tls: true,
             tlsAllowInvalidCertificates: true,
-            tlsAllowInvalidHostnames: true,
-            tlsInsecure: true,
             // Force TLS 1.2 which is more widely compatible
             tlsCAFile: undefined,
             replicaSet: undefined
