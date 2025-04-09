@@ -995,28 +995,42 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
         <p className="text-gray-600">{stage.description}</p>
       </div>
       
-      <div className="p-4 bg-gray-50 rounded border mb-5">
+      {/* Main survey container with forced height to ensure scrolling works */}
+      <div className="p-4 bg-gray-50 rounded border mb-5" style={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
         <p className="font-medium mb-3">Survey Questions</p>
         
-        {/* Scrollable container for questions with max height and scrollbar */}
-        <div className="max-h-[60vh] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin' }} ref={containerRef}>
+        {/* Explicit scrollable container - force overflow for large content */}
+        <div 
+          className="flex-grow overflow-y-scroll pr-4 pb-4" 
+          style={{ 
+            scrollbarWidth: 'auto',
+            scrollbarColor: '#CBD5E0 #EDF2F7',
+            WebkitOverflowScrolling: 'touch'
+          }} 
+          ref={containerRef}
+        >
           {stage.questions && stage.questions.length > 0 ? (
-            <div>
+            <div className="space-y-4">
               {stage.questions.map((q: Question, i: number) => (
-                <div key={q.id || i} className="mb-4 p-3 bg-white rounded border" data-question-id={q.id}>
-                  <p className="font-medium">
+                <div 
+                  key={q.id || i} 
+                  className="mb-4 p-4 bg-white rounded border shadow-sm" 
+                  data-question-id={q.id}
+                >
+                  <p className="font-medium text-lg">
                     {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
                   </p>
                   
                   {/* Question input based on type */}
                   {q.type === 'multipleChoice' && q.options && (
-                    <div className="mt-2 pl-4">
+                    <div className="mt-3 pl-4">
                       {q.options.map((option: string, idx: number) => (
-                        <div key={idx} className="flex items-center mt-1">
+                        <div key={idx} className="flex items-center mt-2">
                           <button 
                             type="button"
                             onClick={() => handleMultipleChoiceSelect(q.id, option)}
-                            className={`w-4 h-4 border ${answers[q.id] === option ? 'bg-blue-500 border-blue-500' : 'border-gray-300'} rounded-full mr-2`}
+                            className={`w-5 h-5 border-2 ${answers[q.id] === option ? 'bg-blue-500 border-blue-500' : 'border-gray-300'} rounded-full mr-3 focus:outline-none focus:ring-2 focus:ring-blue-400`}
+                            aria-label={`Select option: ${option}`}
                           ></button>
                           <span className="text-gray-700">{option}</span>
                         </div>
@@ -1025,9 +1039,9 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
                   )}
                   
                   {q.type === 'text' && (
-                    <div className="mt-2">
+                    <div className="mt-3">
                       <textarea
-                        className="w-full p-2 border border-gray-300 rounded"
+                        className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 focus:outline-none"
                         rows={3}
                         value={answers[q.id] as string || ''}
                         onChange={(e) => handleTextChange(q.id, e.target.value)}
@@ -1038,7 +1052,7 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
                   
                   {/* Show validation error if any */}
                   {validationErrors[q.id] && (
-                    <p className="text-red-500 text-sm mt-1">{validationErrors[q.id]}</p>
+                    <p className="text-red-500 font-medium mt-2 pl-1">{validationErrors[q.id]}</p>
                   )}
                 </div>
               ))}
@@ -1048,20 +1062,25 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
           )}
         </div>
         
-        {/* Scrolling indicator/instruction */}
-        {(stage.questions && stage.questions.length > 3) && (
-          <div className="text-center text-sm text-gray-500 mt-2 animate-pulse">
-            Scroll down to see all questions
+        {/* Explicit scrolling indicator with arrow */}
+        {(stage.questions && stage.questions.length > 2) && (
+          <div className="text-center py-2 mt-2 border-t border-gray-200">
+            <p className="text-sm text-blue-600 font-medium flex items-center justify-center">
+              <svg className="w-5 h-5 mr-1 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+              Scroll to see all {stage.questions.length} questions
+            </p>
           </div>
         )}
       </div>
       
-      {/* Fixed submit button container that stays at the bottom */}
-      <div className="sticky bottom-0 left-0 right-0 flex justify-center py-4 bg-white border-t border-gray-200 shadow-md">
+      {/* Submit button container - made into part of the form */}
+      <div className="flex justify-center py-4 bg-white border-t border-gray-200 mt-2">
         <button 
           onClick={submitSurveyAnswers}
           disabled={isStageTransitioning || isSubmitting}
-          className={`px-8 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors ${(isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`px-8 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-lg font-medium ${(isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           {isSubmitting ? 'Submitting...' : 'Submit Survey'}
         </button>
