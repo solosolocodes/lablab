@@ -136,15 +136,18 @@ export default function SurveysPage() {
       const survey = surveys.find(s => s._id === surveyId);
       if (!survey) return;
       
+      // Send only status update - the API will preserve existing questions
+      // We explicitly don't send questions from this view since we don't have the full question data here
       const response = await fetch(`/api/admin/surveys/${surveyId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          status: newStatus,
+          // Include these to keep compatibility with the API
           title: survey.title,
-          description: survey.description,
-          status: newStatus
+          description: survey.description
         })
       });
       

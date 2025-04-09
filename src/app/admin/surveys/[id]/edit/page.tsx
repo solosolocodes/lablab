@@ -43,33 +43,53 @@ export default function SurveyEditorPage() {
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState<number | null>(null);
 
-  // Fetch survey when the component mounts
+  // Fetch survey when the component mounts - only once
   useEffect(() => {
-    if (session && session.user.role === 'admin' && surveyId) {
-      fetchSurvey();
-      
-      // Fallback for new surveys if the fetch fails
-      const fallbackTimeout = setTimeout(() => {
-        if (isLoading && !survey) {
-          console.log('Creating fallback survey data');
-          // Create empty survey with the ID if not loaded yet
-          setSurvey({
-            _id: surveyId,
-            title: 'New Survey',
-            description: '',
-            questions: [],
-            status: 'draft',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          });
-          setIsLoading(false);
-          toast.info('Using default survey template. Changes will be saved.');
+    let mounted = true;
+
+    const initSurvey = async () => {
+      if (session && session.user.role === 'admin' && surveyId) {
+        try {
+          // Try to fetch existing survey
+          await fetchSurvey();
+          
+          // If after 15 seconds we're still loading and no survey, use fallback
+          if (mounted && isLoading && !survey) {
+            const fallbackTimer = setTimeout(() => {
+              console.log('Creating fallback survey data');
+              // Create empty survey with the ID if not loaded yet
+              if (mounted && isLoading && !survey) {
+                setSurvey({
+                  _id: surveyId,
+                  title: 'New Survey',
+                  description: '',
+                  questions: [],
+                  status: 'draft',
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString()
+                });
+                setIsLoading(false);
+                toast.info('Using default survey template. Changes will be saved.');
+              }
+            }, 15000);
+            
+            return () => clearTimeout(fallbackTimer);
+          }
+        } catch (error) {
+          console.error('Error initializing survey:', error);
+          if (mounted) {
+            setIsLoading(false);
+          }
         }
-      }, 15000); // Wait 15 seconds before applying fallback
-      
-      return () => clearTimeout(fallbackTimeout);
-    }
-  }, [session, surveyId]);
+      }
+    };
+    
+    initSurvey();
+    
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Redirect if not authenticated
   useEffect(() => {

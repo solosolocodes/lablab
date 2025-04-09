@@ -111,22 +111,34 @@ export async function PUT(
       return NextResponse.json({ error: 'Survey title is required' }, { status: 400 });
     }
 
-    // Super simplified update operation
-    console.log(`Updating survey ${surveyId} with ${questions?.length || 0} questions`);
+    // Find the existing survey document first 
+    const existingSurvey = await Survey.findById(surveyId).lean();
     
-    // Create a minimal update object with only essential fields
-    const updateData = {
-      title,
-      description,
-    };
-    
-    // Add status if provided
-    if (status) {
-      updateData.status = status;
+    if (!existingSurvey) {
+      return NextResponse.json({ error: 'Survey not found' }, { status: 404 });
     }
     
-    // Handle questions separately to minimize processing
-    if (questions && Array.isArray(questions)) {
+    console.log(`Updating survey ${surveyId} with ${questions?.length || 0} questions`);
+    console.log('Current survey status:', existingSurvey.status);
+    console.log('Requested status update:', status);
+    
+    // Create update object, preserving existing data if not provided
+    const updateData: any = {
+      title: title || existingSurvey.title,
+      description: description !== undefined ? description : existingSurvey.description,
+    };
+    
+    // Add status if provided, otherwise keep existing status
+    updateData.status = status || existingSurvey.status;
+    
+    // If no questions are provided, keep the existing questions
+    // This prevents data loss when only updating status
+    if (!questions && existingSurvey.questions && Array.isArray(existingSurvey.questions)) {
+      console.log('No questions provided, preserving existing questions');
+      updateData.questions = existingSurvey.questions;
+    } 
+    // Otherwise process new questions if they exist
+    else if (questions && Array.isArray(questions)) {
       // Limit number of questions to process (for performance)
       const maxQuestions = 50;
       const limitedQuestions = questions.slice(0, maxQuestions);
@@ -171,7 +183,9 @@ export async function PUT(
         console.log(`Warning: Limited survey to ${maxQuestions} questions for performance`);
       }
     } else {
-      updateData.questions = [];
+      // If we get here, questions was provided but isn't an array
+      console.warn('Invalid questions format provided, keeping existing questions');
+      updateData.questions = existingSurvey.questions || [];
     }
     
     // Fast direct update without any validation or complex operations
