@@ -234,13 +234,20 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       
       // Use cache buster to prevent browser caching
       const cacheBuster = Date.now();
+      // Use AbortController with reasonable timeout (15s)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
       const response = await fetch(`/api/wallets/${walletId}/assets?preview=true&t=${cacheBuster}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
           'Cache-Control': 'no-cache'
-        }
+        },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch wallet assets: ${response.status}`);
@@ -327,13 +334,20 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         
         // Use cache buster to prevent browser caching
         const cacheBuster = Date.now();
+        // Use AbortController with reasonable timeout (15s)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        
         const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true&t=${cacheBuster}`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
             'Cache-Control': 'no-cache'
-          }
+          },
+          signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
           throw new Error(`Failed to fetch scenario: ${response.status}`);
@@ -975,21 +989,24 @@ function ExperimentContent() {
       loadingMessage.textContent = 'Loading experiment data...';
     }
     
-    // Pass true to indicate this is the participant view
-    loadExperiment(experimentId, true)
-      .then(() => {
-        setLoadError(null);
-        if (loadingMessage) {
-          loadingMessage.textContent = 'Experiment loaded successfully';
-        }
-      })
-      .catch(err => {
-        console.error('Error loading experiment:', err);
-        setLoadError(`Failed to load experiment: ${err instanceof Error ? err.message : String(err)}`);
-        if (loadingMessage) {
-          loadingMessage.textContent = 'Error loading experiment data';
-        }
-      });
+    // Add slight delay before loading to avoid connection flood
+    setTimeout(() => {
+      // Pass true to indicate this is the participant view
+      loadExperiment(experimentId, true)
+        .then(() => {
+          setLoadError(null);
+          if (loadingMessage) {
+            loadingMessage.textContent = 'Experiment loaded successfully';
+          }
+        })
+        .catch(err => {
+          console.error('Error loading experiment:', err);
+          setLoadError(`Failed to load experiment: ${err instanceof Error ? err.message : String(err)}`);
+          if (loadingMessage) {
+            loadingMessage.textContent = 'Error loading experiment data';
+          }
+        });
+    }, 500); // 500ms delay to stagger requests
   }, [experimentId, loadExperiment]);
   
   // Handle the Next button click on the welcome screen
@@ -1021,13 +1038,13 @@ function ExperimentContent() {
         
         // Only make the API call if we have a valid stage ID
         if (startingStageId) {
-          // Use setTimeout to avoid potential race conditions
+          // Use setTimeout with longer delay to avoid potential race conditions and server overload
           setTimeout(() => {
             updateParticipantProgress(experiment.id, 'in_progress', startingStageId)
               .catch(err => {
                 console.warn('Error updating progress (non-critical):', err);
               });
-          }, 100);
+          }, 1000); // Increased from 100ms to 1000ms
         }
       }
     } catch (err) {
@@ -1077,13 +1094,13 @@ function ExperimentContent() {
         // Optional: Update progress in the background
         const nextStageId = experiment.stages[nextIndex].id;
         if (nextStageId) {
-          // Use setTimeout to decouple from the state update
+          // Use setTimeout with longer delay to decouple from the state update
           setTimeout(() => {
             updateParticipantProgress(experiment.id, 'in_progress', nextStageId)
               .catch(err => {
                 console.warn('Error updating progress during navigation (non-critical):', err);
               });
-          }, 100);
+          }, 1000); // Increased from 100ms to 1000ms
         }
       } 
       // Case 2: Final stage completion
@@ -1091,13 +1108,13 @@ function ExperimentContent() {
         // Transition UI first
         setViewMode('thankyou');
         
-        // Then update server status in the background
+        // Then update server status in the background with longer delay
         setTimeout(() => {
           updateParticipantProgress(experiment.id, 'completed')
             .catch(error => {
               console.warn('Error updating completion status (non-critical):', error);
             });
-        }, 100);
+        }, 1000); // Increased from 100ms to 1000ms
       }
     } catch (error) {
       console.error('Error in handleStageNext:', error);

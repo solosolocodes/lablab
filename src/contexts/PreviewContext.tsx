@@ -97,9 +97,9 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       if (isParticipantView) {
         setIsRecordingProgress(true);
         try {
-          // Use a timeout to ensure we don't wait too long
+          // Use a timeout to ensure we don't wait too long, but increase it to match server timeouts
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased from 5000 to 15000
           
           const progressResponse = await fetch(
             `/api/participant/experiments/${experimentId}/progress?t=${cacheBuster}`,
@@ -201,9 +201,9 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       if (currentStageId) payload.currentStageId = currentStageId;
       if (completedStageId) payload.completedStageId = completedStageId;
       
-      // Use AbortController to add timeout to fetch request
+      // Use AbortController to add timeout to fetch request, increased to match server timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout, increased from 5 seconds
       
       try {
         const response = await fetch(`/api/participant/experiments/${experimentId}/progress`, {
