@@ -67,15 +67,23 @@ export function ParticipantPerformProvider({ children }: { children: React.React
   // Track ongoing operations to prevent race conditions
   const pendingOperations = useRef<AbortController[]>([]);
 
-  // Load experiment data with proper error handling and timeout
+  // Load experiment data with proper error handling and timeout - simplified to reduce flickering
   const loadExperiment = async (experimentId: string): Promise<boolean> => {
     // Create a unique operation ID to track this specific load request
     const operationId = `load-${experimentId}-${Date.now()}`;
     console.log(`[${operationId}] Starting experiment data load for ID: ${experimentId}`);
     
     try {
-      setIsLoading(true);
-      setLoadError(null);
+      // Set loading state with minimal delay
+      if (isMounted.current) {
+        setLoadError(null);
+        // Use a small delay for setting loading state to avoid flickering
+        setTimeout(() => {
+          if (isMounted.current) {
+            setIsLoading(true);
+          }
+        }, 150); // Small delay to avoid frequent loading flickers
+      }
       
       // First, abort any pending operations to prevent race conditions
       pendingOperations.current.forEach(controller => {
@@ -94,8 +102,8 @@ export function ParticipantPerformProvider({ children }: { children: React.React
       const controller = new AbortController();
       pendingOperations.current.push(controller);
       
-      // Set up timeout for the fetch operations
-      const timeout = 15000; // 15 seconds
+      // Set up timeout for the fetch operations - increased to be more forgiving
+      const timeout = 20000; // 20 seconds
       const timeoutId = setTimeout(() => {
         console.log(`[${operationId}] Fetch timeout reached (${timeout}ms), aborting requests`);
         controller.abort();

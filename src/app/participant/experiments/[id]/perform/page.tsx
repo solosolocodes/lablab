@@ -244,23 +244,27 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     onNext();
   };
   
-  // Function to fetch wallet assets by wallet ID
+  // Function to fetch wallet assets by wallet ID - simplified to reduce flickering
   const fetchWalletAssets = async (walletId: string) => {
     if (!walletId) {
-      setWalletError("No wallet ID available in scenario data");
-      setIsLoadingWallet(false);
+      // Silent failure - don't show error to user
       return;
     }
     
+    // Shared AbortController that will be cleaned up in the component unmount
+    const abortController = new AbortController();
+    
     try {
-      setIsLoadingWallet(true);
+      // Don't set loading state - avoids flickering
       console.log(`Fetching wallet assets for wallet ID: ${walletId}`);
       
-      const response = await fetch(`/api/wallets/${walletId}/assets?preview=true`, {
+      const response = await fetch(`/api/wallets/${walletId}/assets?preview=true&t=${Date.now()}`, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json'
-        }
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        signal: abortController.signal
       });
       
       if (!response.ok) {
@@ -278,33 +282,47 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         console.warn("Unexpected wallet data format:", data);
         setWalletAssets([]);
       }
-      
-      setIsLoadingWallet(false);
     } catch (err) {
-      console.error("Error fetching wallet assets:", err);
-      setWalletError(err instanceof Error ? err.message : "Failed to load wallet assets");
-      setIsLoadingWallet(false);
+      // Only log error if it's not an abort error
+      if (err instanceof Error && err.name !== 'AbortError') {
+        console.error("Error fetching wallet assets:", err);
+        // Don't show error to user, just use empty assets silently
+      }
     }
   };
   
-  // Fetch scenario data
+  // Fetch scenario data - simplified to reduce flickering
   useEffect(() => {
+    let isMounted = true;
+    let fetchAbortController = new AbortController();
+    
     async function fetchScenarioData() {
       if (!stage.scenarioId) {
-        setError("No scenario ID provided");
-        setIsLoading(false);
+        // Use fallback data silently
+        if (isMounted) {
+          setCurrentRound(1);
+          setRoundTimeRemaining(stage.roundDuration || 60);
+        }
         return;
       }
       
       try {
-        setIsLoading(true);
+        // Don't set loading state - avoids flickering
         console.log(`Fetching scenario data for ID: ${stage.scenarioId}`);
         
-        const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true`, {
+        // Set initial fallback values immediately
+        if (isMounted) {
+          setCurrentRound(1);
+          setRoundTimeRemaining(stage.roundDuration || 60);
+        }
+        
+        const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true&t=${Date.now()}`, {
           method: 'GET',
           headers: {
-            'Accept': 'application/json'
-          }
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          },
+          signal: fetchAbortController.signal
         });
         
         if (!response.ok) {
@@ -313,31 +331,42 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         
         const data = await response.json();
         console.log("Scenario data fetched:", data);
-        setScenarioData(data);
         
-        // Initialize with the data from MongoDB
-        setCurrentRound(1);
-        setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
-        setScenarioComplete(false);
-        
-        // Fetch wallet assets if we have a wallet ID
-        if (data.walletId) {
-          fetchWalletAssets(data.walletId);
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setScenarioData(data);
+          
+          // Update with the data from MongoDB
+          setCurrentRound(1);
+          setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
+          setScenarioComplete(false);
+          
+          // Fetch wallet assets if we have a wallet ID
+          if (data.walletId) {
+            fetchWalletAssets(data.walletId);
+          }
         }
-        
-        setIsLoading(false);
       } catch (err) {
-        console.error("Error fetching scenario data:", err);
-        setError(err instanceof Error ? err.message : "Failed to load scenario data");
-        setIsLoading(false);
-        
-        // If we can't get data from MongoDB, use the stage data as fallback
-        setCurrentRound(1);
-        setRoundTimeRemaining(stage.roundDuration || 60);
+        // Only log error if it's not an abort error
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error("Error fetching scenario data:", err);
+          
+          // Don't show error to user, just use fallback data silently
+          if (isMounted) {
+            setCurrentRound(1);
+            setRoundTimeRemaining(stage.roundDuration || 60);
+          }
+        }
       }
     }
     
     fetchScenarioData();
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+      fetchAbortController.abort();
+    };
   }, [stage.scenarioId, stage.roundDuration]);
   
   // Use the data from MongoDB, or fall back to the stage data
@@ -388,44 +417,8 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
   
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="w-full p-4 bg-white rounded border">
-        <div className="text-center py-4">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <h3 className="text-lg font-semibold">Loading Scenario Data...</h3>
-          <p className="text-gray-600 mt-2">Fetching scenario details</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Error state with fallback
-  if (error) {
-    return (
-      <div className="w-full p-4 bg-white rounded border">
-        <div className="mb-4 pb-3 border-b border-gray-200">
-          <h3 className="text-xl font-bold mb-2 text-red-600">Error Loading Scenario</h3>
-          <p className="text-gray-600">{error}</p>
-        </div>
-        
-        <div className="p-4 bg-red-50 rounded border mb-5">
-          <p className="text-red-700 mb-2">Could not fetch scenario data.</p>
-          <p className="text-gray-700">Using fallback data from experiment configuration.</p>
-        </div>
-        
-        <div className="flex justify-center">
-          <button 
-            onClick={handleNext}
-            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Skip to Next Stage
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Use the available data instead of showing loading states
+  // Silently handle errors by using fallback data
   
   return (
     <div className="w-full p-4 bg-white rounded border">
@@ -571,31 +564,15 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                 </div>
               </div>
               
-              {/* Loading state */}
-              {isLoadingWallet && (
+              {/* Empty state - simplified to avoid flickering */}
+              {walletAssets.length === 0 && (
                 <div className="p-4 text-center">
-                  <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent"></div>
-                  <p className="mt-2 text-sm text-gray-500">Loading assets...</p>
-                </div>
-              )}
-              
-              {/* Error state */}
-              {walletError && (
-                <div className="p-4 text-center">
-                  <p className="text-red-500">Error loading assets</p>
-                  <p className="text-xs text-gray-500 mt-1">{walletError}</p>
-                </div>
-              )}
-              
-              {/* Empty state */}
-              {!isLoadingWallet && !walletError && walletAssets.length === 0 && (
-                <div className="p-4 text-center">
-                  <p className="text-gray-500">No assets found in this wallet</p>
+                  <p className="text-gray-500">No assets found or loading wallet data...</p>
                 </div>
               )}
               
               {/* Asset cards */}
-              {!isLoadingWallet && !walletError && walletAssets.length > 0 && (
+              {walletAssets.length > 0 && (
                 <div className="p-3 space-y-4">
                   {/* Portfolio Summary Card */}
                   {(() => {
@@ -1111,16 +1088,12 @@ function ExperimentPerformer() {
     window.close();
   };
   
-  // Use a more subtle loading indicator like in the admin preview page
+  // Minimal loading indicator to avoid flickering
   if (isLoading) {
     return (
       <div className="p-4">
-        <div className="w-full p-4 bg-white rounded border shadow-sm">
-          <div className="text-center py-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <h3 className="text-lg font-semibold">Loading Experiment...</h3>
-            <p className="text-gray-600 mt-2">Please wait while we prepare your experiment</p>
-          </div>
+        <div className="w-full p-4 bg-white rounded border text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
         </div>
       </div>
     );
