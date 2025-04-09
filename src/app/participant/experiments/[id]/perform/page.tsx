@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
 import { toast } from 'react-hot-toast';
-import { ParticipantPerformProvider, useParticipantPerform } from '@/contexts/ParticipantPerformContext';
 
 // Define basic interfaces for stage types
 interface Question {
@@ -27,7 +27,6 @@ interface Stage {
   rounds?: number;
   roundDuration?: number;
   questions?: Question[];
-  durationSeconds: number;
 }
 
 interface InstructionsStage extends Stage {
@@ -43,13 +42,7 @@ function isInstructionsStage(stage: Stage): stage is InstructionsStage {
 }
 
 function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext: () => void }) {
-  const { isStageTransitioning, saveStageResponse } = useParticipantPerform();
-  
-  const handleNext = async () => {
-    // Record that this stage was completed
-    await saveStageResponse(stage.id, 'instructions', 'done');
-    onNext();
-  };
+  const { isStageTransitioning } = usePreview();
   
   // Enhanced markdown-like rendering function
   const renderContent = (content: string) => {
@@ -99,7 +92,7 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
       
       <div className="flex justify-center">
         <button 
-          onClick={handleNext}
+          onClick={onNext}
           disabled={isStageTransitioning}
           className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
@@ -111,15 +104,9 @@ function InstructionsView({ stage, onNext }: { stage: InstructionsStage; onNext:
 }
 
 function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
-  const { isStageTransitioning, saveStageResponse } = useParticipantPerform();
+  const { isStageTransitioning } = usePreview();
   const [timeRemaining, setTimeRemaining] = useState(stage.durationSeconds || 0);
   const [timerComplete, setTimerComplete] = useState(false);
-  
-  const handleNext = async () => {
-    // Record that this break was completed
-    await saveStageResponse(stage.id, 'break', 'done');
-    onNext();
-  };
   
   // Handle countdown timer
   useEffect(() => {
@@ -185,7 +172,7 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       
       <div className="flex justify-center">
         <button 
-          onClick={handleNext}
+          onClick={onNext}
           disabled={isStageTransitioning || !timerComplete}
           className={`px-6 py-2 ${timerComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
@@ -196,7 +183,7 @@ function BreakStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   );
 }
 
-// Interface for Scenario data
+// Interface for Scenario data from MongoDB
 interface AssetPrice {
   assetId: string;
   symbol: string;
@@ -223,7 +210,7 @@ interface WalletAsset {
 }
 
 function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
-  const { isStageTransitioning, saveStageResponse } = useParticipantPerform();
+  const { isStageTransitioning } = usePreview();
   const [currentRound, setCurrentRound] = useState(1);
   const [roundTimeRemaining, setRoundTimeRemaining] = useState(0);
   const [scenarioComplete, setScenarioComplete] = useState(false);
@@ -234,37 +221,23 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   const [error, setError] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   
-  const handleNext = async () => {
-    // Record scenario completion
-    await saveStageResponse(stage.id, 'scenario', {
-      scenarioId: stage.scenarioId,
-      completed: true,
-      rounds: currentRound
-    });
-    onNext();
-  };
-  
-  // Function to fetch wallet assets by wallet ID - simplified to reduce flickering
+  // Function to fetch wallet assets by wallet ID
   const fetchWalletAssets = async (walletId: string) => {
     if (!walletId) {
-      // Silent failure - don't show error to user
+      setWalletError("No wallet ID available in scenario data");
+      setIsLoadingWallet(false);
       return;
     }
     
-    // Shared AbortController that will be cleaned up in the component unmount
-    const abortController = new AbortController();
-    
     try {
-      // Don't set loading state - avoids flickering
-      console.log(`Fetching wallet assets for wallet ID: ${walletId}`);
+      setIsLoadingWallet(true);
       
       const response = await fetch(`/api/wallets/${walletId}/assets?preview=true&t=${Date.now()}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
           'Cache-Control': 'no-cache'
-        },
-        signal: abortController.signal
+        }
       });
       
       if (!response.ok) {
@@ -272,7 +245,6 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       }
       
       const data = await response.json();
-      console.log("Wallet assets fetched:", data);
       
       if (Array.isArray(data)) {
         setWalletAssets(data);
@@ -282,38 +254,31 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         console.warn("Unexpected wallet data format:", data);
         setWalletAssets([]);
       }
+      
+      setIsLoadingWallet(false);
     } catch (err) {
-      // Only log error if it's not an abort error
-      if (err instanceof Error && err.name !== 'AbortError') {
-        console.error("Error fetching wallet assets:", err);
-        // Don't show error to user, just use empty assets silently
-      }
+      console.error("Error fetching wallet assets:", err);
+      setWalletError(err instanceof Error ? err.message : "Failed to load wallet assets");
+      setIsLoadingWallet(false);
     }
   };
   
-  // Fetch scenario data - simplified to reduce flickering
+  // Fetch scenario data
   useEffect(() => {
     let isMounted = true;
-    let fetchAbortController = new AbortController();
     
     async function fetchScenarioData() {
       if (!stage.scenarioId) {
-        // Use fallback data silently
         if (isMounted) {
-          setCurrentRound(1);
-          setRoundTimeRemaining(stage.roundDuration || 60);
+          setError("No scenario ID provided");
+          setIsLoading(false);
         }
         return;
       }
       
       try {
-        // Don't set loading state - avoids flickering
-        console.log(`Fetching scenario data for ID: ${stage.scenarioId}`);
-        
-        // Set initial fallback values immediately
         if (isMounted) {
-          setCurrentRound(1);
-          setRoundTimeRemaining(stage.roundDuration || 60);
+          setIsLoading(true);
         }
         
         const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true&t=${Date.now()}`, {
@@ -321,8 +286,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
           headers: {
             'Accept': 'application/json',
             'Cache-Control': 'no-cache'
-          },
-          signal: fetchAbortController.signal
+          }
         });
         
         if (!response.ok) {
@@ -330,13 +294,11 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         }
         
         const data = await response.json();
-        console.log("Scenario data fetched:", data);
         
-        // Only update state if component is still mounted
         if (isMounted) {
           setScenarioData(data);
           
-          // Update with the data from MongoDB
+          // Initialize with the data from MongoDB
           setCurrentRound(1);
           setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
           setScenarioComplete(false);
@@ -345,27 +307,26 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
           if (data.walletId) {
             fetchWalletAssets(data.walletId);
           }
+          
+          setIsLoading(false);
         }
       } catch (err) {
-        // Only log error if it's not an abort error
-        if (err instanceof Error && err.name !== 'AbortError') {
+        if (isMounted) {
           console.error("Error fetching scenario data:", err);
+          setError(err instanceof Error ? err.message : "Failed to load scenario data");
+          setIsLoading(false);
           
-          // Don't show error to user, just use fallback data silently
-          if (isMounted) {
-            setCurrentRound(1);
-            setRoundTimeRemaining(stage.roundDuration || 60);
-          }
+          // If we can't get data from MongoDB, use the stage data as fallback
+          setCurrentRound(1);
+          setRoundTimeRemaining(stage.roundDuration || 60);
         }
       }
     }
     
     fetchScenarioData();
     
-    // Cleanup function
     return () => {
       isMounted = false;
-      fetchAbortController.abort();
     };
   }, [stage.scenarioId, stage.roundDuration]);
   
@@ -373,7 +334,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   const totalRounds = scenarioData?.rounds || stage.rounds || 1;
   const roundDuration = scenarioData?.roundDuration || stage.roundDuration || 60;
   
-  // Handle round timer - only start if we have data
+  // Handle round timer - only start if we have data 
   useEffect(() => {
     // Don't start timer if we're still loading data
     if (isLoading) {
@@ -417,8 +378,43 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
     return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
   };
   
-  // Use the available data instead of showing loading states
-  // Silently handle errors by using fallback data
+  // Simple loading state
+  if (isLoading) {
+    return (
+      <div className="w-full p-4 bg-white rounded border">
+        <div className="text-center py-4">
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 mt-2">Loading scenario data...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Error state with fallback
+  if (error) {
+    return (
+      <div className="w-full p-4 bg-white rounded border">
+        <div className="mb-4 pb-3 border-b border-gray-200">
+          <h3 className="text-xl font-bold mb-2 text-red-600">Error Loading Scenario</h3>
+          <p className="text-gray-600">{error}</p>
+        </div>
+        
+        <div className="p-4 bg-red-50 rounded border mb-5">
+          <p className="text-red-700 mb-2">Could not fetch scenario data.</p>
+          <p className="text-gray-700">Using fallback data from experiment configuration.</p>
+        </div>
+        
+        <div className="flex justify-center">
+          <button 
+            onClick={onNext}
+            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Skip to Next Stage
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="w-full p-4 bg-white rounded border">
@@ -429,12 +425,9 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
         <p className="text-gray-600">
           {scenarioData?.description || stage.description}
         </p>
-        <div className="text-xs text-blue-600 mt-1">
-          Data loaded from MongoDB
-        </div>
       </div>
       
-      {/* Round and Timer display */}
+      {/* Round and Timer display with circular progress */}
       <div className="mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
         <div className="flex flex-col md:flex-row items-center justify-between">
           <div className="mb-4 md:mb-0">
@@ -564,15 +557,31 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                 </div>
               </div>
               
-              {/* Empty state - simplified to avoid flickering */}
-              {walletAssets.length === 0 && (
+              {/* Loading state */}
+              {isLoadingWallet && (
                 <div className="p-4 text-center">
-                  <p className="text-gray-500">No assets found or loading wallet data...</p>
+                  <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-solid border-blue-500 border-r-transparent"></div>
+                  <p className="mt-2 text-sm text-gray-500">Loading assets...</p>
+                </div>
+              )}
+              
+              {/* Error state */}
+              {walletError && (
+                <div className="p-4 text-center">
+                  <p className="text-red-500">Error loading assets</p>
+                  <p className="text-xs text-gray-500 mt-1">{walletError}</p>
+                </div>
+              )}
+              
+              {/* Empty state */}
+              {!isLoadingWallet && !walletError && walletAssets.length === 0 && (
+                <div className="p-4 text-center">
+                  <p className="text-gray-500">No assets found in this wallet</p>
                 </div>
               )}
               
               {/* Asset cards */}
-              {walletAssets.length > 0 && (
+              {!isLoadingWallet && !walletError && walletAssets.length > 0 && (
                 <div className="p-3 space-y-4">
                   {/* Portfolio Summary Card */}
                   {(() => {
@@ -748,15 +757,15 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
                             )}
                           </div>
                           
-                          {/* Action buttons */}
+                          {/* Action buttons with toast to simulate trading */}
                           <div className="flex gap-4 mt-4">
-                            <button
+                            <button 
                               onClick={() => toast.success(`Buy action for ${asset.symbol} (simulation only)`)}
                               className="flex-1 text-base bg-green-100 hover:bg-green-200 text-green-700 font-medium py-3 px-4 rounded-md transition-colors"
                             >
                               Buy
                             </button>
-                            <button
+                            <button 
                               onClick={() => toast.success(`Sell action for ${asset.symbol} (simulation only)`)}
                               className="flex-1 text-base bg-red-100 hover:bg-red-200 text-red-700 font-medium py-3 px-4 rounded-md transition-colors"
                             >
@@ -791,7 +800,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       
       <div className="flex justify-center">
         <button 
-          onClick={handleNext}
+          onClick={onNext}
           disabled={isStageTransitioning || !scenarioComplete}
           className={`px-6 py-2 ${scenarioComplete ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'} text-white rounded transition-colors ${isStageTransitioning ? 'opacity-50' : ''}`}
         >
@@ -803,9 +812,8 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 }
 
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
-  const { isStageTransitioning, saveStageResponse } = useParticipantPerform();
+  const { isStageTransitioning } = usePreview();
   const [responses, setResponses] = useState<Record<string, any>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Initialize responses if needed
   useEffect(() => {
@@ -854,40 +862,6 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
     });
   };
   
-  const handleSubmit = async () => {
-    // Validate required questions
-    let hasErrors = false;
-    
-    stage.questions?.forEach(question => {
-      if (question.required) {
-        const response = responses[question.id];
-        
-        if (response === '' || response === null || 
-            (Array.isArray(response) && response.length === 0)) {
-          toast.error(`Please answer question: ${question.text}`);
-          hasErrors = true;
-        }
-      }
-    });
-    
-    if (hasErrors) return;
-    
-    setIsSubmitting(true);
-    
-    try {
-      // Save survey responses
-      await saveStageResponse(stage.id, 'survey', responses);
-      
-      // Proceed to next stage
-      onNext();
-    } catch (error) {
-      console.error('Error submitting survey:', error);
-      toast.error('Failed to submit survey responses');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-  
   return (
     <div className="w-full p-4 bg-white rounded border">
       <div className="mb-4 pb-3 border-b border-gray-200">
@@ -896,53 +870,53 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       </div>
       
       <div className="p-4 bg-gray-50 rounded border mb-5">
-        <p className="font-medium mb-4">Please answer the following questions:</p>
+        <p className="font-medium mb-3">Survey Questions</p>
         
         {stage.questions && stage.questions.length > 0 ? (
-          <div className="space-y-6">
-            {stage.questions.map((question, index) => (
-              <div key={question.id} className="p-4 bg-white rounded border">
-                <label className="block mb-2 font-medium">
-                  {index + 1}. {question.text} {question.required && <span className="text-red-500">*</span>}
-                </label>
+          <div className="space-y-4">
+            {stage.questions.map((q, i) => (
+              <div key={q.id || i} className="p-4 bg-white rounded border">
+                <p className="font-medium mb-2">
+                  {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
+                </p>
                 
                 {/* Text input for short answer questions */}
-                {question.type === 'text' && (
+                {q.type === 'text' && (
                   <input
                     type="text"
                     className="w-full p-2 border border-gray-300 rounded"
-                    value={responses[question.id] || ''}
-                    onChange={(e) => handleInputChange(question.id, e.target.value)}
-                    required={question.required}
+                    value={responses[q.id] || ''}
+                    onChange={(e) => handleInputChange(q.id, e.target.value)}
+                    required={q.required}
                   />
                 )}
                 
                 {/* Textarea for long answer questions */}
-                {question.type === 'textarea' && (
+                {q.type === 'textarea' && (
                   <textarea
                     className="w-full p-2 border border-gray-300 rounded"
                     rows={4}
-                    value={responses[question.id] || ''}
-                    onChange={(e) => handleInputChange(question.id, e.target.value)}
-                    required={question.required}
+                    value={responses[q.id] || ''}
+                    onChange={(e) => handleInputChange(q.id, e.target.value)}
+                    required={q.required}
                   />
                 )}
                 
                 {/* Radio buttons for multiple choice */}
-                {question.type === 'multipleChoice' && question.options && (
+                {q.type === 'multipleChoice' && q.options && (
                   <div className="space-y-2 mt-2">
-                    {question.options.map((option, idx) => (
+                    {q.options.map((option, idx) => (
                       <div key={idx} className="flex items-center">
                         <input
                           type="radio"
-                          id={`${question.id}-option-${idx}`}
-                          name={question.id}
+                          id={`${q.id}-option-${idx}`}
+                          name={q.id}
                           className="mr-2"
-                          checked={responses[question.id] === option}
-                          onChange={() => handleInputChange(question.id, option)}
-                          required={question.required}
+                          checked={responses[q.id] === option}
+                          onChange={() => handleInputChange(q.id, option)}
+                          required={q.required}
                         />
-                        <label htmlFor={`${question.id}-option-${idx}`}>
+                        <label htmlFor={`${q.id}-option-${idx}`}>
                           {option}
                         </label>
                       </div>
@@ -951,18 +925,18 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
                 )}
                 
                 {/* Checkboxes for multiple selection */}
-                {question.type === 'checkboxes' && question.options && (
+                {q.type === 'checkboxes' && q.options && (
                   <div className="space-y-2 mt-2">
-                    {question.options.map((option, idx) => (
+                    {q.options.map((option, idx) => (
                       <div key={idx} className="flex items-center">
                         <input
                           type="checkbox"
-                          id={`${question.id}-option-${idx}`}
+                          id={`${q.id}-option-${idx}`}
                           className="mr-2"
-                          checked={(responses[question.id] || []).includes(option)}
-                          onChange={(e) => handleCheckboxChange(question.id, option, e.target.checked)}
+                          checked={(responses[q.id] || []).includes(option)}
+                          onChange={(e) => handleCheckboxChange(q.id, option, e.target.checked)}
                         />
-                        <label htmlFor={`${question.id}-option-${idx}`}>
+                        <label htmlFor={`${q.id}-option-${idx}`}>
                           {option}
                         </label>
                       </div>
@@ -971,18 +945,18 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
                 )}
                 
                 {/* Scale (1-5, 1-10, etc.) */}
-                {question.type === 'scale' && (
+                {q.type === 'scale' && (
                   <div className="flex flex-wrap justify-between items-center mt-2">
                     {[1, 2, 3, 4, 5].map((number) => (
                       <div key={number} className="text-center mx-2 mb-2">
                         <button
                           type="button"
                           className={`w-10 h-10 rounded-full ${
-                            responses[question.id] === number
+                            responses[q.id] === number
                               ? 'bg-blue-500 text-white'
                               : 'bg-gray-200 text-gray-800'
                           }`}
-                          onClick={() => handleInputChange(question.id, number)}
+                          onClick={() => handleInputChange(q.id, number)}
                         >
                           {number}
                         </button>
@@ -1002,90 +976,89 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       
       <div className="flex justify-center">
         <button 
-          onClick={handleSubmit}
-          disabled={isStageTransitioning || isSubmitting}
+          onClick={onNext}
+          disabled={isStageTransitioning}
           className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${
-            (isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''
+            isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
-          {isSubmitting ? 'Submitting...' : 'Submit'}
+          Submit
         </button>
       </div>
     </div>
   );
 }
 
-function ExperimentPerformer() {
-  const { 
-    experiment, 
-    progress, 
-    currentStageIndex, 
-    currentStage,
-    loadExperiment,
-    goToNextStage, 
-    completeExperiment,
-    isLoading,
-    loadError
-  } = useParticipantPerform();
+function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+  const { isStageTransitioning } = usePreview();
   
+  // Render different stage types with appropriate placeholders
+  if (stage.type === 'break') {
+    return <BreakStage stage={stage} onNext={onNext} />;
+  }
+  
+  if (stage.type === 'scenario') {
+    return <ScenarioStage stage={stage} onNext={onNext} />;
+  }
+  
+  if (stage.type === 'survey') {
+    return <SurveyStage stage={stage} onNext={onNext} />;
+  }
+  
+  // Default placeholder for unknown stage types
+  return (
+    <div className="w-full p-4 bg-white rounded border">
+      <div className="mb-4 pb-3 border-b border-gray-200">
+        <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
+        <p className="text-gray-600">{stage.description}</p>
+      </div>
+      
+      <div className="p-4 bg-gray-50 rounded border mb-5">
+        <p className="font-medium">Unknown stage type: {stage.type}</p>
+        <p className="mt-2 text-gray-600">This stage type is not recognized and is displayed as a placeholder.</p>
+      </div>
+      
+      <div className="flex justify-center">
+        <button 
+          onClick={onNext}
+          disabled={isStageTransitioning}
+          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${isStageTransitioning ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ExperimentContent() {
+  const { experiment, loadExperiment } = usePreview();
   const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
-  
+  const [currentStageNumber, setCurrentStageNumber] = useState(0);
   const params = useParams();
   const experimentId = params.id as string;
+  const { data: session, status } = useSession();
   
-  // Load experiment data once on mount with proper cleanup - improved to prevent multiple loads
+  // Load the experiment data when the component mounts
   useEffect(() => {
-    // Flag to track if component is mounted
-    let isMounted = true;
-    // Flag to track if load has been attempted
-    let hasAttemptedLoad = false;
-    
-    const loadData = async () => {
-      // Only attempt to load once, and only if component is mounted
-      if (experimentId && isMounted && !hasAttemptedLoad) {
-        hasAttemptedLoad = true;
-        
-        try {
-          // Avoid console logging to reduce noise
-          await loadExperiment(experimentId);
-        } catch (error) {
-          // Only handle errors if component is still mounted
-          if (isMounted) {
-            // Quiet error logging - don't show in console
-            // console.error("Failed to load experiment:", error);
-          }
-        }
-      }
-    };
-    
-    // Small delay to ensure all renders are complete before starting load
-    setTimeout(loadData, 50);
-    
-    // Cleanup function
-    return () => {
-      isMounted = false;
-    };
+    if (experimentId) {
+      loadExperiment(experimentId);
+    }
   }, [experimentId, loadExperiment]);
-
+  
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
     setViewMode('experiment');
   };
   
-  // Handle stage navigation
+  // Handle Next button click for stage navigation
   const handleStageNext = () => {
     if (!experiment) return;
     
-    // Check if this is the last stage
-    if (currentStageIndex >= experiment.stages.length - 1) {
-      // Complete the experiment if this is the last stage
-      completeExperiment().then(() => {
-        setViewMode('thankyou');
-        toast.success('Experiment completed!');
-      });
+    if (currentStageNumber < experiment.stages.length - 1) {
+      setCurrentStageNumber(prev => prev + 1);
     } else {
-      // Otherwise, go to the next stage
-      goToNextStage();
+      setViewMode('thankyou');
     }
   };
   
@@ -1094,75 +1067,53 @@ function ExperimentPerformer() {
     window.close();
   };
   
-  // Even more minimal loading indicator - avoid flickering entirely
-  if (isLoading) {
+  // Loading state
+  if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-  
-  // Error state - but don't show for cancellation errors
-  if (loadError && loadError !== 'Request was cancelled') {
-    return (
-      <div className="p-4">
-        <div className="bg-white p-8 rounded-lg shadow-md text-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="text-lg font-bold mb-2">Error Loading Experiment</h3>
-          <p className="text-gray-600 mb-4">{loadError}</p>
-          <div className="flex justify-center space-x-4">
-            <button 
-              onClick={() => {
-                // Clear error first
-                setLoadError(null);
-                // Then reload
-                setTimeout(() => loadExperiment(experimentId), 100);
-              }}
-              className="px-4 py-2 bg-blue-500 text-white rounded"
-            >
-              Retry
-            </button>
-            <button 
-              onClick={handleExit}
-              className="px-4 py-2 bg-gray-300 text-gray-700 rounded"
-            >
-              Close
-            </button>
-          </div>
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <h2 className="text-lg font-medium">Loading...</h2>
         </div>
       </div>
     );
   }
   
-  // No experiment data loaded
-  if (!experiment || !progress) {
+  // Authentication check
+  if (!session || session.user.role !== 'participant') {
     return (
-      <div className="p-4">
-        <div className="bg-white p-8 rounded-lg shadow-md text-center">
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="text-center bg-white p-8 rounded-lg shadow-md max-w-md">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h3 className="text-lg font-bold mb-2">Experiment Not Found</h3>
-          <p className="text-gray-600 mb-4">The experiment you're looking for does not exist or you do not have access to it.</p>
-          <button 
-            onClick={handleExit}
-            className="px-4 py-2 bg-blue-500 text-white rounded"
-          >
-            Close Window
-          </button>
+          <h2 className="text-xl font-bold mb-2">Access Denied</h2>
+          <p className="text-gray-600 mb-6">You must be logged in as a participant to access this experiment.</p>
+          <a href="/participant/login" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+            Login as Participant
+          </a>
+        </div>
+      </div>
+    );
+  }
+  
+  // No experiment loaded yet
+  if (!experiment) {
+    return (
+      <div className="p-4">
+        <div className="w-full p-4 bg-white rounded border text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p>Loading experiment...</p>
         </div>
       </div>
     );
   }
   
   // Thank You screen view
-  if (viewMode === 'thankyou' || progress.status === 'completed') {
+  if (viewMode === 'thankyou') {
     return (
       <div className="p-4">
-        <div className="w-full p-8 bg-white rounded shadow text-center">
+        <div className="w-full p-4 bg-white rounded border text-center">
           <div className="text-green-500 mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1186,34 +1137,32 @@ function ExperimentPerformer() {
   if (viewMode === 'welcome') {
     return (
       <div className="p-4">
-        <div className="w-full p-6 bg-white rounded shadow">
-          <div className="text-center mb-6">
-            <h3 className="text-2xl font-bold mb-3">{experiment.name}</h3>
+        <div className="w-full p-4 bg-white rounded border">
+          <div className="text-center mb-5">
+            <h3 className="text-xl font-bold mb-2">Welcome to {experiment.name}</h3>
             <p className="text-gray-600 mb-2">{experiment.description || ''}</p>
-            <div className="text-gray-600 bg-blue-50 p-2 rounded-md inline-block">
+            <div className="text-gray-600">
               <p>This experiment consists of {experiment.stages.length} stages.</p>
             </div>
           </div>
 
           {experiment.stages.length > 0 && (
-            <div className="bg-gray-50 rounded border p-6 mb-6">
-              <h4 className="font-medium mb-4 text-lg">What to expect:</h4>
-              <div className="space-y-2">
+            <div className="bg-gray-50 rounded border p-4 mb-5">
+              <h4 className="font-medium mb-2">Stages Overview:</h4>
+              <div className="space-y-1">
                 {[...experiment.stages]
                   .sort((a, b) => (a.order || 0) - (b.order || 0))
                   .map((stage, index) => (
-                    <div key={stage.id} className="flex items-center py-2 border-b border-gray-100 last:border-0">
+                    <div key={stage.id} className="flex items-center py-1 border-b border-gray-100 last:border-0">
                       <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3 text-sm font-medium text-blue-700">
                         {index + 1}
                       </div>
                       <div className="flex-1">
                         <p className="font-medium">{stage.title}</p>
-                        <p className="text-sm text-gray-500">{stage.type}</p>
+                        <p className="text-xs text-gray-500">{stage.type}</p>
                       </div>
-                      <div className="text-sm px-2 py-1 rounded bg-gray-100 text-gray-700">
-                        {stage.durationSeconds && stage.durationSeconds > 0 
-                          ? `${Math.ceil(stage.durationSeconds / 60)} min` 
-                          : 'No time limit'}
+                      <div className="text-sm text-gray-500">
+                        {stage.durationSeconds > 0 ? `${stage.durationSeconds} sec` : 'No time limit'}
                       </div>
                     </div>
                   ))}
@@ -1221,22 +1170,10 @@ function ExperimentPerformer() {
             </div>
           )}
           
-          <div className="text-center p-4 bg-blue-50 rounded mb-6">
-            <p className="text-gray-700 mb-3">
-              Your progress will be automatically saved as you complete each stage.
-              You can return to this experiment later if you need to take a break.
-            </p>
-            {progress.status === 'in_progress' && (
-              <p className="text-blue-700 font-medium">
-                You've already started this experiment. You'll continue from where you left off.
-              </p>
-            )}
-          </div>
-          
           <div className="text-center">
             <button 
               onClick={handleWelcomeNext}
-              className="px-8 py-3 bg-blue-500 text-white rounded text-lg font-medium hover:bg-blue-600 transition-colors"
+              className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
               Begin Experiment
             </button>
@@ -1248,80 +1185,54 @@ function ExperimentPerformer() {
   
   // Experiment stage view
   if (viewMode === 'experiment' && experiment.stages.length > 0) {
-    if (!currentStage) return (
-      <div className="p-4 text-center">
-        <p>No current stage found. Please try refreshing the page.</p>
-      </div>
-    );
+    const stage = experiment.stages[currentStageNumber];
+    if (!stage) return null;
     
     return (
       <div className="p-4">
-        {/* Simple header with stage info */}
-        <div className="flex justify-between items-center w-full mb-4 bg-white px-4 py-2 rounded shadow-sm">
+        <div className="flex justify-between items-center w-full mb-4">
           <div>
-            <p className="text-sm text-gray-500">Stage {currentStageIndex + 1} of {experiment.stages.length}</p>
+            <p className="text-sm text-gray-500">Stage {currentStageNumber + 1} of {experiment.stages.length}</p>
           </div>
           <div>
-            <p className="text-sm font-medium">{experiment.name}</p>
-          </div>
-          <div>
-            <span className="text-xs text-gray-600">
-              {Math.round(((currentStageIndex + 1) / experiment.stages.length) * 100)}% complete
-            </span>
+            <p className="text-sm text-gray-500">Experiment: {experiment.name}</p>
           </div>
         </div>
         
-        {/* Render the appropriate stage component */}
         <div className="w-full">
-          {currentStage.type === 'instructions' && 'content' in currentStage && (
+          {stage.type === 'instructions' && 'content' in stage && (
             <InstructionsView 
-              stage={currentStage as InstructionsStage} 
+              stage={stage as InstructionsStage} 
               onNext={handleStageNext} 
             />
           )}
           
-          {currentStage.type === 'break' && (
+          {stage.type === 'break' && (
             <BreakStage 
-              stage={currentStage} 
+              stage={stage} 
               onNext={handleStageNext} 
             />
           )}
           
-          {currentStage.type === 'scenario' && (
+          {stage.type === 'scenario' && (
             <ScenarioStage 
-              stage={currentStage} 
+              stage={stage} 
               onNext={handleStageNext} 
             />
           )}
           
-          {currentStage.type === 'survey' && (
+          {stage.type === 'survey' && (
             <SurveyStage 
-              stage={currentStage} 
+              stage={stage} 
               onNext={handleStageNext} 
             />
           )}
           
-          {!['instructions', 'break', 'scenario', 'survey'].includes(currentStage.type) && (
-            <div className="w-full p-4 bg-white rounded border">
-              <div className="mb-4 pb-3 border-b border-gray-200">
-                <h3 className="text-xl font-bold mb-2">{currentStage.title}</h3>
-                <p className="text-gray-600">{currentStage.description}</p>
-              </div>
-              
-              <div className="p-4 bg-gray-50 rounded border mb-5">
-                <p className="font-medium">Unknown stage type: {currentStage.type}</p>
-                <p className="mt-2 text-gray-600">This stage type is not recognized and is displayed as a placeholder.</p>
-              </div>
-              
-              <div className="flex justify-center">
-                <button 
-                  onClick={handleStageNext}
-                  className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
+          {!['instructions', 'break', 'scenario', 'survey'].includes(stage.type) && (
+            <PlaceholderStage 
+              stage={stage} 
+              onNext={handleStageNext} 
+            />
           )}
         </div>
       </div>
@@ -1331,40 +1242,8 @@ function ExperimentPerformer() {
   return null;
 }
 
+// Main component with header and footer
 export default function PerformExperimentPage() {
-  const { data: session, status } = useSession();
-  const params = useParams();
-  const experimentId = params.id as string;
-  
-  // Check if user is authenticated as a participant
-  if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <h2 className="text-lg font-medium">Loading...</h2>
-        </div>
-      </div>
-    );
-  }
-  
-  if (!session || session.user.role !== 'participant') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
-        <div className="text-center bg-white p-8 rounded-lg shadow-md max-w-md">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h2 className="text-xl font-bold mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-6">You must be logged in as a participant to access this experiment.</p>
-          <a href="/participant/login" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
-            Login as Participant
-          </a>
-        </div>
-      </div>
-    );
-  }
-  
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <header className="bg-white shadow-sm py-3">
@@ -1381,9 +1260,9 @@ export default function PerformExperimentPage() {
 
       <main className="flex-grow container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto">
-          <ParticipantPerformProvider>
-            <ExperimentPerformer />
-          </ParticipantPerformProvider>
+          <PreviewProvider>
+            <ExperimentContent />
+          </PreviewProvider>
         </div>
       </main>
 
