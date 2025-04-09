@@ -22,6 +22,7 @@ export default function AdminDashboard() {
       scenarios: number;
       completionRate: number;
       averageParticipantsPerExperiment: number;
+      surveyResponses: number;
     };
     activeExperiments: Array<{
       id: string;
@@ -106,7 +107,8 @@ export default function AdminDashboard() {
     userGroups: 0,
     scenarios: 0,
     completionRate: 0,
-    averageParticipantsPerExperiment: 0
+    averageParticipantsPerExperiment: 0,
+    surveyResponses: 0
   };
 
   // Use real experiments data if available
@@ -124,6 +126,7 @@ export default function AdminDashboard() {
                 <Link href="/admin/dashboard" className="px-3 py-2 rounded bg-purple-600">Dashboard</Link>
                 <Link href="/admin/experiments" className="px-3 py-2 rounded hover:bg-purple-600">Experiments</Link>
                 <Link href="/admin/scenarios" className="px-3 py-2 rounded hover:bg-purple-600">Scenarios</Link>
+                <Link href="/admin/surveys" className="px-3 py-2 rounded hover:bg-purple-600">Surveys</Link>
                 <Link href="/admin/wallets" className="px-3 py-2 rounded hover:bg-purple-600">Wallets</Link>
                 <Link href="/admin/user-groups" className="px-3 py-2 rounded hover:bg-purple-600">User Groups</Link>
                 <Link href="#" className="px-3 py-2 rounded hover:bg-purple-600">Reporting</Link>
@@ -169,7 +172,7 @@ export default function AdminDashboard() {
           </div>
           
           {/* Additional Analytics in single row */}
-          <div className="grid grid-cols-3 md:grid-cols-5 gap-3 mt-3">
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mt-3">
             <div className="bg-white rounded-lg shadow p-3">
               <div className="text-indigo-500 text-xl font-bold">{analyticsData.experimentsRun}</div>
               <div className="text-gray-500 text-xs">Total Experiments</div>
@@ -177,6 +180,10 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-lg shadow p-3">
               <div className="text-teal-500 text-xl font-bold">{analyticsData.completedExperiments}</div>
               <div className="text-gray-500 text-xs">Completed</div>
+            </div>
+            <div className="bg-white rounded-lg shadow p-3">
+              <div className="text-pink-500 text-xl font-bold">{analyticsData.surveyResponses}</div>
+              <div className="text-gray-500 text-xs">Survey Responses</div>
             </div>
             <div className="bg-white rounded-lg shadow p-3">
               <div className="text-cyan-500 text-xl font-bold">{analyticsData.totalUsers}</div>
@@ -342,21 +349,39 @@ export default function AdminDashboard() {
           </Link>
         </div>
         
-        {/* Reporting Card - Now Below the Main Cards */}
-        <div className="mb-6">
-          <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <div className="p-3 rounded-full bg-indigo-100 mr-4">
-                <svg className="h-6 w-6 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Reporting</h3>
-                <p className="text-gray-500 text-sm">Export and analyze experiment data</p>
+        {/* Surveys and Reporting Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <Link href="/admin/surveys" className="block">
+            <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-center">
+                <div className="p-3 rounded-full bg-pink-100 mr-4">
+                  <svg className="h-6 w-6 text-pink-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Surveys</h3>
+                  <p className="text-gray-500 text-sm">View participant survey responses</p>
+                </div>
               </div>
             </div>
-          </div>
+          </Link>
+          
+          <Link href="#" className="block">
+            <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-center">
+                <div className="p-3 rounded-full bg-indigo-100 mr-4">
+                  <svg className="h-6 w-6 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Reporting</h3>
+                  <p className="text-gray-500 text-sm">Export and analyze experiment data</p>
+                </div>
+              </div>
+            </div>
+          </Link>
         </div>
       </main>
 
