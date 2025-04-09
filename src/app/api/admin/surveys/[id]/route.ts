@@ -131,15 +131,41 @@ export async function PUT(
       const maxQuestions = 50;
       const limitedQuestions = questions.slice(0, maxQuestions);
       
-      // Process minimal question data
-      updateData.questions = limitedQuestions.map((q: any) => ({
-        id: q.id,
-        text: q.text || 'Untitled Question',
-        type: q.type || 'text',
-        required: Boolean(q.required),
-        options: (q.options && q.options.length > 0) ? q.options.slice(0, 10) : [], // Limit option count
-        order: Number(q.order) || 0
-      }));
+      // Process question data with all properties based on question type
+      updateData.questions = limitedQuestions.map((q: any) => {
+        // Base question properties
+        const questionData = {
+          id: q.id,
+          text: q.text || 'Untitled Question',
+          type: q.type || 'text',
+          required: Boolean(q.required),
+          order: Number(q.order) || 0
+        };
+        
+        // Add specific properties based on question type
+        switch (q.type) {
+          case 'multipleChoice':
+          case 'checkboxes':
+            return {
+              ...questionData,
+              options: (q.options && q.options.length > 0) ? q.options.slice(0, 10) : [] // Limit option count
+            };
+          case 'scale':
+            return {
+              ...questionData,
+              minValue: Number(q.minValue) || 1,
+              maxValue: Number(q.maxValue) || 10
+            };
+          case 'rating':
+            return {
+              ...questionData,
+              maxRating: Number(q.maxRating) || 5
+            };
+          case 'text':
+          default:
+            return questionData;
+        }
+      });
       
       if (questions.length > maxQuestions) {
         console.log(`Warning: Limited survey to ${maxQuestions} questions for performance`);
