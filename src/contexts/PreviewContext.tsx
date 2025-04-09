@@ -93,83 +93,9 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       // Set the experiment data
       setExperiment({ ...experimentData, stages: sortedStages } as ExperimentData);
       
-      // For participant view, also fetch progress
-      if (isParticipantView) {
-        setIsRecordingProgress(true);
-        try {
-          // Use a timeout to ensure we don't wait too long, but increase it to match server timeouts
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased from 5000 to 15000
-          
-          const progressResponse = await fetch(
-            `/api/participant/experiments/${experimentId}/progress?t=${cacheBuster}`,
-            { 
-              headers: { 'Cache-Control': 'no-cache' },
-              signal: controller.signal 
-            }
-          );
-          
-          clearTimeout(timeoutId);
-          
-          // Check if component is still mounted
-          if (!isMountedRef.current) return;
-          
-          if (progressResponse.ok) {
-            const progressData = await progressResponse.json();
-            
-            // If we're starting a new experiment
-            if (progressData.status === 'not_started') {
-              // Update progress to in_progress (non-blocking)
-              Promise.resolve().then(() => {
-                if (isMountedRef.current) {
-                  updateParticipantProgress(experimentId, 'in_progress', sortedStages[0]?.id);
-                }
-              });
-              
-              // Only update state if still mounted
-              if (isMountedRef.current) {
-                // Start with first stage
-                setCurrentStageIndex(0);
-                
-                // Record start time for the first stage
-                if (sortedStages.length > 0) {
-                  const startTimes = { [sortedStages[0].id]: new Date() };
-                  setStageStartTimes(startTimes);
-                }
-              }
-            } 
-            // If we're resuming an in-progress experiment
-            else if (progressData.status === 'in_progress' && progressData.currentStageId) {
-              // Find the current stage index
-              const stageIndex = sortedStages.findIndex(
-                stage => stage.id === progressData.currentStageId
-              );
-              
-              // Only update state if still mounted
-              if (isMountedRef.current && stageIndex !== -1) {
-                setCurrentStageIndex(stageIndex);
-                
-                // Record start time for the current stage
-                const currentStage = sortedStages[stageIndex];
-                const startTimes = { [currentStage.id]: new Date() };
-                setStageStartTimes(startTimes);
-              }
-            }
-          }
-        } catch (progressErr) {
-          console.error('Error fetching progress:', progressErr);
-          // Continue with default behavior (starting from the beginning)
-          if (isMountedRef.current && sortedStages.length > 0) {
-            setCurrentStageIndex(0);
-            const startTimes = { [sortedStages[0].id]: new Date() };
-            setStageStartTimes(startTimes);
-          }
-        }
-      } else {
-        // Reset to first stage for preview (if still mounted)
-        if (isMountedRef.current) {
-          setCurrentStageIndex(0);
-        }
+      // Always reset to first stage (participant or not) - simplified approach
+      if (isMountedRef.current) {
+        setCurrentStageIndex(0);
       }
       
       // Set initial timer if there are stages (if still mounted)
@@ -181,79 +107,25 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error('Error loading experiment:', err);
-      // No recovery from cached data - we've removed the cache
       throw err;
     }
   };
   
-  // Function to update progress in MongoDB with timeout and error handling
+  // Empty stub function for progress updates - all tracking removed
   const updateParticipantProgress = async (
     experimentId: string,
     status?: 'in_progress' | 'completed',
     currentStageId?: string,
     completedStageId?: string
   ) => {
-    if (!isRecordingProgress) return;
-    
-    try {
-      const payload: any = {};
-      if (status) payload.status = status;
-      if (currentStageId) payload.currentStageId = currentStageId;
-      if (completedStageId) payload.completedStageId = completedStageId;
-      
-      // Use AbortController to add timeout to fetch request, increased to match server timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout, increased from 5 seconds
-      
-      try {
-        const response = await fetch(`/api/participant/experiments/${experimentId}/progress`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          console.error('Failed to update progress:', await response.text());
-        }
-      } catch (fetchErr) {
-        if (fetchErr.name === 'AbortError') {
-          console.warn('Progress update timed out - will continue without waiting for server');
-        } else {
-          throw fetchErr;
-        }
-      }
-    } catch (err) {
-      // Log error but don't block the user experience
-      console.error('Error updating progress:', err);
-    }
+    // Do nothing - tracking removed to match admin preview
+    console.log('Progress tracking disabled');
+    return;
   };
 
-  // Go to next stage with smooth transition and record progress (non-blocking)
+  // Go to next stage with smooth transition - simplified like admin preview
   const goToNextStage = useCallback(() => {
     if (!experiment || !isMountedRef.current) return;
-    
-    const currentStage = experiment.stages[currentStageIndex];
-    
-    // Record stage completion time and duration (non-blocking)
-    if (isRecordingProgress && currentStage) {
-      const stageStartTime = stageStartTimes[currentStage.id] || new Date();
-      const stageDuration = new Date().getTime() - stageStartTime.getTime();
-      
-      console.log(`Stage ${currentStage.id} completed. Duration: ${Math.round(stageDuration / 1000)}s`);
-      
-      // Mark the current stage as completed in MongoDB (don't await - non-blocking)
-      Promise.resolve().then(() => {
-        if (isMountedRef.current) {
-          updateParticipantProgress(experiment.id, undefined, undefined, currentStage.id);
-        }
-      });
-    }
     
     if (currentStageIndex < experiment.stages.length - 1) {
       // Start transition
@@ -267,21 +139,6 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         const nextIndex = currentStageIndex + 1;
         const nextStage = experiment.stages[nextIndex];
         
-        // Record start time for the next stage
-        if (isRecordingProgress && nextStage) {
-          setStageStartTimes(prev => ({
-            ...prev,
-            [nextStage.id]: new Date()
-          }));
-          
-          // Update current stage in MongoDB (don't await - non-blocking)
-          Promise.resolve().then(() => {
-            if (isMountedRef.current) {
-              updateParticipantProgress(experiment.id, 'in_progress', nextStage.id);
-            }
-          });
-        }
-        
         setCurrentStageIndex(nextIndex);
         setTimeRemaining(nextStage.durationSeconds);
         setTimerActive(true);
@@ -293,17 +150,11 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
           }
         }, 100);
       }, 50);
-    } else if (isRecordingProgress) {
-      // This was the last stage, complete the experiment (non-blocking)
-      Promise.resolve().then(() => {
-        if (isMountedRef.current) {
-          updateParticipantProgress(experiment.id, 'completed');
-        }
-      });
     }
-  }, [experiment, currentStageIndex, isRecordingProgress, stageStartTimes]);
+    // No "else" condition needed - simplified to match admin preview
+  }, [experiment, currentStageIndex]);
 
-  // Go to previous stage with smooth transition, returns true if successful
+  // Go to previous stage with smooth transition, returns true if successful - simplified
   const goToPreviousStage = useCallback(() => {
     if (!experiment || currentStageIndex <= 0) return false;
     

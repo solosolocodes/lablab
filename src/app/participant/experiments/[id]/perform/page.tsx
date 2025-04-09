@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
 
 // Define basic interfaces for stage types
@@ -972,38 +971,14 @@ function SimpleExperimentContent() {
   const [currentStageNumber, setCurrentStageNumber] = useState(0);
   const params = useParams();
   const experimentId = params.id as string;
-  const { data: session, status } = useSession();
+  // Remove session and status for simplicity
   const [loadError, setLoadError] = useState<string | null>(null);
   
-  // Load the experiment data with simplified approach
+  // Load the experiment data with the same approach as admin preview
   useEffect(() => {
-    // Only attempt to load if we have an experiment ID
-    if (!experimentId) {
-      setLoadError("No experiment ID provided");
-      return;
+    if (experimentId) {
+      loadExperiment(experimentId);
     }
-    
-    // Show loading indicator
-    const loadingMessage = document.getElementById('loading-message');
-    if (loadingMessage) {
-      loadingMessage.textContent = 'Loading experiment data...';
-    }
-    
-    // Simple loading approach like in admin preview
-    loadExperiment(experimentId, true)
-      .then(() => {
-        setLoadError(null);
-        if (loadingMessage) {
-          loadingMessage.textContent = 'Experiment loaded successfully';
-        }
-      })
-      .catch(err => {
-        console.error('Error loading experiment:', err);
-        setLoadError(`Failed to load experiment: ${err instanceof Error ? err.message : String(err)}`);
-        if (loadingMessage) {
-          loadingMessage.textContent = 'Error loading experiment data';
-        }
-      });
   }, [experimentId, loadExperiment]);
   
   // Handle the Next button click on the welcome screen - simplified like admin preview
@@ -1033,53 +1008,9 @@ function SimpleExperimentContent() {
     window.close();
   };
   
-  // Loading state
-  if (status === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <h2 className="text-lg font-medium">Loading...</h2>
-        </div>
-      </div>
-    );
-  }
+  // Removed loading state and authentication checks to match admin preview
   
-  // Authentication check
-  if (!session || session.user.role !== 'participant') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100">
-        <div className="text-center bg-white p-8 rounded-lg shadow-md max-w-md">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h2 className="text-xl font-bold mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-6">You must be logged in as a participant to access this experiment.</p>
-          <a href="/participant/login" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
-            Login as Participant
-          </a>
-        </div>
-      </div>
-    );
-  }
-  
-  // Handle load errors
-  if (loadError) {
-    return (
-      <div className="p-4">
-        <div className="w-full p-4 bg-white rounded border text-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h2 className="text-xl font-bold mb-2 text-red-600">Error Loading Experiment</h2>
-          <p className="text-gray-600 mb-6">{loadError}</p>
-          <a href="/participant/dashboard" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
-            Return to Dashboard
-          </a>
-        </div>
-      </div>
-    );
-  }
+  // Simple error handling like admin preview
   
   // No experiment loaded yet
   if (!experiment) {
