@@ -82,6 +82,8 @@ export default function SurveysPage() {
   // Function to create a new survey
   const createNewSurvey = async () => {
     try {
+      console.log('Creating new survey...');
+      
       const response = await fetch('/api/admin/surveys', {
         method: 'POST',
         headers: {
@@ -94,11 +96,22 @@ export default function SurveysPage() {
         })
       });
       
+      console.log('API response status:', response.status);
+      
+      const responseText = await response.text();
+      console.log('API response text:', responseText);
+      
       if (!response.ok) {
-        throw new Error(`Failed to create survey: ${response.statusText}`);
+        throw new Error(`Failed to create survey: ${response.status} ${response.statusText} - ${responseText}`);
       }
       
-      const data = await response.json();
+      // Parse the response text as JSON
+      const data = responseText ? JSON.parse(responseText) : {};
+      console.log('Parsed response data:', data);
+      
+      if (!data.survey || !data.survey._id) {
+        throw new Error('Survey data is missing or invalid');
+      }
       
       toast.success('New survey created successfully');
       openInNewWindow(`/admin/surveys/${data.survey._id}/edit`);
