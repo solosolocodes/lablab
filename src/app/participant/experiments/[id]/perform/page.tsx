@@ -996,6 +996,8 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
         throw new Error('Authentication required to submit survey');
       }
       
+      console.log(`Submitting survey responses for stage ${stage.id} to MongoDB`);
+      
       const response = await fetch(`/api/participant/surveys/${stage.id}/responses`, {
         method: 'POST',
         headers: {
@@ -1004,8 +1006,6 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
         },
         body: JSON.stringify({
           experimentId: experimentId,
-          stageId: stage.id,
-          userId: session.user.id,
           answers: answers
         }),
         signal: controller.signal
@@ -1014,14 +1014,18 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        throw new Error(`Failed to submit survey: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to submit survey: ${response.status}`);
       }
+      
+      const result = await response.json();
+      console.log('Survey response saved successfully:', result);
       
       // Survey submitted successfully, move to next stage
       onNext();
     } catch (error) {
       console.error('Error submitting survey:', error);
-      alert('There was a problem submitting your survey. Please try again.');
+      toast.error('There was a problem submitting your survey. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
