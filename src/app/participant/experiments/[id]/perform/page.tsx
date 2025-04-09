@@ -1542,54 +1542,86 @@ function ExperimentContent() {
   const params = useParams();
   const experimentId = params.id as string;
   const { data: session, status } = useSession();
+  const [loadError, setLoadError] = useState<string | null>(null);
   
-  // Load the experiment data when the component mounts
-  useEffect(() => {
-    let isMounted = true;
-    
-    if (experimentId) {
-      // Pass true to indicate this is the participant view
-      loadExperiment(experimentId, true)
-        .then(() => {
-          // Optional callback if needed
-        })
-        .catch(err => {
-          if (isMounted) {
-            console.error('Error loading experiment:', err);
-          }
-        });
-    }
-    
-    // Cleanup function
-    return () => {
-      isMounted = false;
-    };
-  }, [experimentId, loadExperiment]);
-  
-  // Track if component is mounted to prevent updates after unmount
+  // Create a single mounted ref to use throughout the component
   const isMountedRef = useRef(true);
   
   // Set isMounted to false when component unmounts
   useEffect(() => {
+    // Set to true on mount
     isMountedRef.current = true;
+    
+    // Clean up function sets to false on unmount
     return () => {
       isMountedRef.current = false;
     };
   }, []);
   
+  // Load the experiment data when the component mounts
+  useEffect(() => {
+    // Safety check - don't try to load if component is already unmounted
+    if (!isMountedRef.current) return;
+    
+    // Only attempt to load if we have an experiment ID
+    if (!experimentId) {
+      setLoadError("No experiment ID provided");
+      return;
+    }
+    
+    // Abort controller to cancel fetch requests if component unmounts
+    const controller = new AbortController();
+    
+    // Pass true to indicate this is the participant view
+    loadExperiment(experimentId, true)
+      .then(() => {
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          setLoadError(null);
+        }
+      })
+      .catch(err => {
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          console.error('Error loading experiment:', err);
+          setLoadError(`Failed to load experiment: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      });
+    
+    // Cleanup function to abort any in-flight requests
+    return () => {
+      controller.abort();
+    };
+  }, [experimentId, loadExperiment]);
+  
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {
+    // Safety check - don't update state if unmounted
+    if (!isMountedRef.current) return;
+    
     // Record that the user has started the experiment (non-blocking)
     if (experiment) {
       // Immediately switch view for better UX
       setViewMode('experiment');
       
-      // Then update progress in the background
-      Promise.resolve().then(() => {
+      // Then update progress in the background with AbortController
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        // Only attempt to update if still mounted
         if (isMountedRef.current) {
-          updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id);
+          updateParticipantProgress(experiment.id, 'in_progress', experiment.stages[0]?.id)
+            .catch(err => {
+              // Silently handle errors to prevent state updates after unmount
+              console.warn('Error updating progress (non-critical):', err);
+            });
         }
-      });
+      }, 0);
+      
+      // Clean up on unmount (though this won't be used directly, it's a pattern for safety)
+      if (!isMountedRef.current) {
+        clearTimeout(timeoutId);
+        controller.abort();
+      }
     } else {
       setViewMode('experiment');
     }
@@ -1597,23 +1629,37 @@ function ExperimentContent() {
   
   // Handle Next button click for stage navigation
   const handleStageNext = () => {
-    if (!experiment) return;
+    // Safety checks
+    if (!experiment || !isMountedRef.current) return;
     
-    // Safe state update check
-    if (!isMountedRef.current) return;
-    
-    if (currentStageNumber < experiment.stages.length - 1) {
-      setCurrentStageNumber(prev => prev + 1);
-    } else {
-      // Final stage complete, show thank you and record completion
-      setViewMode('thankyou');
-      
-      // Record completion in background
-      Promise.resolve().then(() => {
-        if (isMountedRef.current) {
-          updateParticipantProgress(experiment.id, 'completed');
+    try {
+      if (currentStageNumber < experiment.stages.length - 1) {
+        setCurrentStageNumber(prev => prev + 1);
+      } else {
+        // Final stage complete, show thank you and record completion
+        setViewMode('thankyou');
+        
+        // Record completion in background with safer approach
+        const timeoutId = setTimeout(() => {
+          // Only update if still mounted
+          if (isMountedRef.current) {
+            updateParticipantProgress(experiment.id, 'completed')
+              .catch(err => {
+                // Silently log errors but don't update state
+                console.warn('Error updating completion status (non-critical):', err);
+              });
+          }
+        }, 0);
+        
+        // Clean up on unmount
+        if (!isMountedRef.current) {
+          clearTimeout(timeoutId);
         }
-      });
+      }
+    } catch (error) {
+      // Catch any other errors that might occur
+      console.error('Error in handleStageNext:', error);
+      // Don't attempt to update state with error message if unmounted
     }
   };
   
@@ -1652,6 +1698,24 @@ function ExperimentContent() {
     );
   }
   
+  // Handle load errors
+  if (loadError) {
+    return (
+      <div className="p-4">
+        <div className="w-full p-4 bg-white rounded border text-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h2 className="text-xl font-bold mb-2 text-red-600">Error Loading Experiment</h2>
+          <p className="text-gray-600 mb-6">{loadError}</p>
+          <a href="/participant/dashboard" className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+            Return to Dashboard
+          </a>
+        </div>
+      </div>
+    );
+  }
+  
   // No experiment loaded yet
   if (!experiment) {
     return (
@@ -1668,23 +1732,31 @@ function ExperimentContent() {
   if (viewMode === 'thankyou') {
     // Mark experiment as completed when showing thank you screen (non-blocking)
     useEffect(() => {
-      let isMounted = true;
+      // Safety check - don't run if already unmounted
+      if (!isMountedRef.current || !experiment) return;
       
-      if (experiment) {
-        // Ensure the experiment is marked as completed in MongoDB (background task)
-        Promise.resolve().then(() => {
-          // Only update if component is still mounted
-          if (isMounted) {
-            updateParticipantProgress(experiment.id, 'completed');
-          }
-        });
-      }
+      // Track pending operations for cleanup
+      let timeoutId: ReturnType<typeof setTimeout>;
+      const controller = new AbortController();
+      
+      // Ensure the experiment is marked as completed in MongoDB (background task)
+      timeoutId = setTimeout(() => {
+        // Only update if component is still mounted
+        if (isMountedRef.current) {
+          updateParticipantProgress(experiment.id, 'completed')
+            .catch(error => {
+              // Silently log errors without updating state
+              console.warn('Error updating completion status on thank you screen:', error);
+            });
+        }
+      }, 100); // Small delay for better reliability
       
       // Cleanup function to prevent state updates after unmount
       return () => {
-        isMounted = false;
+        clearTimeout(timeoutId);
+        controller.abort();
       };
-    }, [experiment, updateParticipantProgress]);
+    }, [experiment?.id, updateParticipantProgress]);
     
     return (
       <div className="p-4">
