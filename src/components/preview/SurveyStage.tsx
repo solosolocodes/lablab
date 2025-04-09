@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
 interface Question {
@@ -12,6 +12,15 @@ interface Question {
   minValue?: number;
   maxValue?: number;
   maxRating?: number;
+  order?: number;
+}
+
+interface SurveyData {
+  _id: string;
+  title: string;
+  description: string;
+  questions: Question[];
+  status: 'draft' | 'published' | 'archived';
 }
 
 export default function SurveyStage() {
@@ -22,12 +31,70 @@ export default function SurveyStage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [surveyData, setSurveyData] = useState<SurveyData | null>(null);
+  const [isLoadingSurvey, setIsLoadingSurvey] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Function to fetch survey data from MongoDB
+  const fetchSurveyData = useCallback(async (surveyId: string) => {
+    if (!surveyId) {
+      setLoadError('No survey ID provided');
+      return;
+    }
+
+    try {
+      setIsLoadingSurvey(true);
+      console.log('Fetching survey data for ID:', surveyId);
+      
+      // Add a cache buster to prevent caching issues
+      const cacheBuster = Date.now();
+      const response = await fetch(`/api/admin/surveys/${surveyId}?t=${cacheBuster}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch survey: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Survey data received:', data);
+      
+      if (data.success && data.survey) {
+        setSurveyData(data.survey);
+        // Reset to first question
+        setCurrentQuestionIndex(0);
+        setFormValues({});
+        setValidationErrors({});
+      } else {
+        throw new Error('Invalid survey data format');
+      }
+    } catch (error) {
+      console.error('Error fetching survey data:', error);
+      setLoadError(error instanceof Error ? error.message : 'Failed to load survey');
+    } finally {
+      setIsLoadingSurvey(false);
+    }
+  }, []);
+
+  // Fetch survey data when the component mounts, if surveyId is available
+  useEffect(() => {
+    if (currentStage?.type === 'survey' && currentStage.surveyId) {
+      fetchSurveyData(currentStage.surveyId);
+    }
+  }, [currentStage, fetchSurveyData]);
 
   if (!currentStage || currentStage.type !== 'survey') {
     return <div>Invalid stage type</div>;
   }
 
-  const questions = currentStage.questions || [];
+  // Use questions from MongoDB survey or fall back to inline questions
+  const questions = (surveyData?.questions || currentStage.questions || [])
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+  
   const currentQuestion = questions[currentQuestionIndex] || null;
   const isLastQuestion = currentQuestionIndex === questions.length - 1;
   const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
@@ -317,12 +384,58 @@ export default function SurveyStage() {
     );
   }
 
+  // Loading state
+  if (isLoadingSurvey) {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-3xl">
+        <div className="bg-white rounded-lg shadow-lg p-6 text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-purple-500 border-r-transparent mb-4"></div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Loading Survey Questions</h2>
+          <p className="text-gray-600">Please wait while we fetch the survey from the database...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (loadError) {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-3xl">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="bg-red-50 rounded-lg p-4 mb-4 border border-red-100">
+            <h2 className="text-xl font-bold text-red-600 mb-2">Error Loading Survey</h2>
+            <p className="text-gray-700">{loadError}</p>
+          </div>
+          <p className="text-gray-600 mb-4">Using fallback questions if available.</p>
+          <button
+            onClick={() => goToNextStage()}
+            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
+          >
+            Skip to Next Stage
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Question carousel
   return (
     <div className="container mx-auto py-8 px-4 max-w-3xl">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">{currentStage.title}</h2>
-        <p className="text-gray-600 mb-6">{currentStage.description}</p>
+        {/* Use survey title/description from MongoDB if available, otherwise fall back to stage values */}
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+          {surveyData?.title || currentStage.title}
+        </h2>
+        <p className="text-gray-600 mb-4">
+          {surveyData?.description || currentStage.description}
+        </p>
+        
+        {/* MongoDB source indicator */}
+        {surveyData && (
+          <p className="text-xs text-blue-600 mb-6">
+            Survey loaded from MongoDB (ID: {surveyData._id})
+          </p>
+        )}
         
         {/* Progress bar */}
         <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
