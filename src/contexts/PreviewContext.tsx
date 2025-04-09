@@ -111,16 +111,41 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     }
   };
   
-  // Empty stub function for progress updates - all tracking removed
+  // Minimal status tracking function - only records experiment start and completion
   const updateParticipantProgress = async (
     experimentId: string,
     status?: 'in_progress' | 'completed',
     currentStageId?: string,
     completedStageId?: string
   ) => {
-    // Do nothing - tracking removed to match admin preview
-    console.log('Progress tracking disabled');
-    return;
+    // Only track experiment start and completion, not individual stages
+    if (!status) return;
+    
+    try {
+      console.log(`Recording experiment status: ${status}`);
+      
+      // Add timeout and abort controller
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      
+      const response = await fetch(`/api/participant/experiments/${experimentId}/progress`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
+        body: JSON.stringify({ status }),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        console.warn(`Failed to update experiment status: ${response.status}`);
+      }
+    } catch (err) {
+      console.warn('Error recording experiment status (non-critical):', err);
+    }
   };
 
   // Go to next stage with smooth transition - simplified like admin preview

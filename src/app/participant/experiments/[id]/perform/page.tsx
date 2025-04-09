@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
 
 // Define basic interfaces for stage types
@@ -966,12 +967,13 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
 }
 
 function SimpleExperimentContent() {
-  const { experiment, loadExperiment } = usePreview();
+  const { experiment, loadExperiment, updateParticipantProgress } = usePreview();
   const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
   const [currentStageNumber, setCurrentStageNumber] = useState(0);
   const params = useParams();
   const experimentId = params.id as string;
-  // Remove session and status for simplicity
+  // Get session for authentication
+  const { data: session } = useSession();
   const [loadError, setLoadError] = useState<string | null>(null);
   
   // Load the experiment data with the same approach as admin preview
@@ -981,24 +983,38 @@ function SimpleExperimentContent() {
     }
   }, [experimentId, loadExperiment]);
   
-  // Handle the Next button click on the welcome screen - simplified like admin preview
+  // Handle the Next button click on the welcome screen - with minimal status tracking
   const handleWelcomeNext = () => {
     if (!experiment || !experiment.stages || experiment.stages.length === 0) {
       console.warn('Cannot start experiment: No experiment data or empty stages');
       return;
     }
     
-    // Simply update view mode without making additional API calls
+    // Record experiment start - only if user is authenticated
+    if (experimentId && session?.user) {
+      updateParticipantProgress(experimentId, 'in_progress')
+        .catch(err => console.warn('Failed to record experiment start:', err));
+    }
+    
+    // Update view mode
     setViewMode('experiment');
   };
   
-  // Handle Next button click for stage navigation - simplified like admin preview
+  // Handle Next button click for stage navigation - with completion tracking
   const handleStageNext = () => {
     if (!experiment) return;
     
     if (currentStageNumber < experiment.stages.length - 1) {
+      // Just move to next stage without tracking individual stages
       setCurrentStageNumber(prev => prev + 1);
     } else {
+      // This is the last stage - record experiment completion only if authenticated
+      if (experimentId && session?.user) {
+        updateParticipantProgress(experimentId, 'completed')
+          .catch(err => console.warn('Failed to record experiment completion:', err));
+      }
+      
+      // Update view to thank you page
       setViewMode('thankyou');
     }
   };
@@ -1008,7 +1024,8 @@ function SimpleExperimentContent() {
     window.close();
   };
   
-  // Removed loading state and authentication checks to match admin preview
+  // Simple authentication check - only verify user without roles
+  // Now checking only when recording progress, not blocking the UI
   
   // Simple error handling like admin preview
   
