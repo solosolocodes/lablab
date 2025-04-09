@@ -7,14 +7,18 @@ import User from '@/models/User';
 import SurveyResponse from '@/models/SurveyResponse';
 
 /**
+ * Route configuration
+ * These apply to all API methods in this file
+ */
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Maximum allowed for Vercel's Hobby plan
+
+/**
  * GET /api/admin/surveys/[id]
  * 
  * Retrieves a specific survey
  * Admin only endpoint
  */
-export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Maximum allowed for Vercel's Hobby plan
-
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -75,9 +79,6 @@ export async function GET(
  * Updates a survey
  * Admin only endpoint
  */
-// Set max duration to allow longer execution time for this route
-export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // 60 seconds - maximum allowed on Vercel Hobby plan
 
 export async function PUT(
   request: NextRequest,
