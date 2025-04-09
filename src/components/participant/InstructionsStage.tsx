@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useParticipant } from '@/contexts/ParticipantContext';
 
 type InstructionsStageProps = {
@@ -16,10 +17,39 @@ type InstructionsStageProps = {
 export default function InstructionsStage({ stage, onNext }: InstructionsStageProps) {
   const { isStageTransitioning, saveStageResponse } = useParticipant();
   
+  // Add ref to track component mount state
+  const isMountedRef = useRef(true);
+  
+  // Effect to clean up when component unmounts
+  useEffect(() => {
+    // Set the mounted flag to true (it already is, but this is for clarity)
+    isMountedRef.current = true;
+    
+    // Clean up function that runs when component unmounts
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  
   const handleNext = async () => {
-    // Mark this stage as completed with a "done" response
-    await saveStageResponse(stage.id, 'instructions', 'done');
-    onNext();
+    // Don't proceed if component is unmounted
+    if (!isMountedRef.current) return;
+    
+    try {
+      // Mark this stage as completed with a "done" response
+      await saveStageResponse(stage.id, 'instructions', 'done');
+      
+      // Only proceed if component is still mounted
+      if (isMountedRef.current) {
+        onNext();
+      }
+    } catch (error) {
+      console.error('Error completing instructions stage:', error);
+      // Still try to proceed if we encounter an error with saving the response
+      if (isMountedRef.current) {
+        onNext();
+      }
+    }
   };
   
   // Enhanced markdown-like rendering function

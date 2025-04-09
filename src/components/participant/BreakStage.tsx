@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParticipant } from '@/contexts/ParticipantContext';
 
 type BreakStageProps = {
@@ -19,33 +19,70 @@ export default function BreakStage({ stage, onNext }: BreakStageProps) {
   const [timeRemaining, setTimeRemaining] = useState(stage.durationSeconds || 0);
   const [timerComplete, setTimerComplete] = useState(false);
   
+  // Add ref to track component mount state
+  const isMountedRef = useRef(true);
+  
+  // Effect to clean up when component unmounts
+  useEffect(() => {
+    // Set the mounted flag to true (it already is, but this is for clarity)
+    isMountedRef.current = true;
+    
+    // Clean up function that runs when component unmounts
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+  
   const handleNext = async () => {
-    // Mark this stage as completed with a "done" response
-    await saveStageResponse(stage.id, 'break', 'done');
-    onNext();
+    // Don't proceed if component is unmounted
+    if (!isMountedRef.current) return;
+    
+    try {
+      // Mark this stage as completed with a "done" response
+      await saveStageResponse(stage.id, 'break', 'done');
+      
+      // Only proceed if component is still mounted
+      if (isMountedRef.current) {
+        onNext();
+      }
+    } catch (error) {
+      console.error('Error completing break stage:', error);
+      // Still try to proceed if we encounter an error with saving the response
+      if (isMountedRef.current) {
+        onNext();
+      }
+    }
   };
   
   // Handle countdown timer
   useEffect(() => {
     // Don't start timer if there's no duration
     if (!stage.durationSeconds || stage.durationSeconds <= 0) {
-      setTimerComplete(true);
+      if (isMountedRef.current) {
+        setTimerComplete(true);
+      }
       return;
     }
     
-    // Set initial time
-    setTimeRemaining(stage.durationSeconds);
+    // Set initial time only if mounted
+    if (isMountedRef.current) {
+      setTimeRemaining(stage.durationSeconds);
+    }
     
     // Create interval to decrement timer
     const interval = setInterval(() => {
-      setTimeRemaining(prevTime => {
-        if (prevTime <= 1) {
-          clearInterval(interval);
-          setTimerComplete(true);
-          return 0;
-        }
-        return prevTime - 1;
-      });
+      if (isMountedRef.current) {
+        setTimeRemaining(prevTime => {
+          if (prevTime <= 1) {
+            clearInterval(interval);
+            if (isMountedRef.current) {
+              setTimerComplete(true);
+            }
+            return 0;
+          }
+          return prevTime - 1;
+        });
+      }
     }, 1000);
     
     // Cleanup interval on unmount

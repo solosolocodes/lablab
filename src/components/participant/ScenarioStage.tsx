@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParticipant } from '@/contexts/ParticipantContext';
 import { toast } from 'react-hot-toast';
 
@@ -54,33 +54,62 @@ export default function ScenarioStage({ stage, onNext }: ScenarioStageProps) {
   const [error, setError] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   
+  // Add ref to track component mount state
+  const isMountedRef = useRef(true);
+  
   const handleNext = async () => {
-    // Currently we're not recording specific scenario responses, just marking it as completed
-    await saveStageResponse(stage.id, 'scenario', {
-      scenarioId: stage.scenarioId,
-      completed: true,
-      rounds: currentRound
-    });
-    onNext();
+    // Don't proceed if component is unmounted
+    if (!isMountedRef.current) return;
+    
+    try {
+      // Currently we're not recording specific scenario responses, just marking it as completed
+      await saveStageResponse(stage.id, 'scenario', {
+        scenarioId: stage.scenarioId,
+        completed: true,
+        rounds: currentRound
+      });
+      
+      // Only call onNext if component is still mounted
+      if (isMountedRef.current) {
+        onNext();
+      }
+    } catch (err) {
+      console.error("Error saving scenario response:", err);
+      
+      // Still try to move forward even if saving fails, but only if component is mounted
+      if (isMountedRef.current) {
+        toast.error("There was an issue saving your progress, but we'll continue anyway.");
+        onNext();
+      }
+    }
   };
   
   // Function to fetch wallet assets by wallet ID
   const fetchWalletAssets = async (walletId: string) => {
     if (!walletId) {
-      setWalletError("No wallet ID available in scenario data");
-      setIsLoadingWallet(false);
+      if (isMountedRef.current) {
+        setWalletError("No wallet ID available in scenario data");
+        setIsLoadingWallet(false);
+      }
       return;
     }
     
+    // Create an AbortController for this request
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+    
     try {
-      setIsLoadingWallet(true);
+      if (isMountedRef.current) {
+        setIsLoadingWallet(true);
+      }
       console.log(`Fetching wallet assets for wallet ID: ${walletId}`);
       
       const response = await fetch(`/api/wallets/${walletId}/assets?preview=true`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json'
-        }
+        },
+        signal
       });
       
       if (!response.ok) {
@@ -90,74 +119,120 @@ export default function ScenarioStage({ stage, onNext }: ScenarioStageProps) {
       const data = await response.json();
       console.log("Wallet assets fetched:", data);
       
-      if (Array.isArray(data)) {
-        setWalletAssets(data);
-      } else if (data.assets && Array.isArray(data.assets)) {
-        setWalletAssets(data.assets);
-      } else {
-        console.warn("Unexpected wallet data format:", data);
-        setWalletAssets([]);
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        if (Array.isArray(data)) {
+          setWalletAssets(data);
+        } else if (data.assets && Array.isArray(data.assets)) {
+          setWalletAssets(data.assets);
+        } else {
+          console.warn("Unexpected wallet data format:", data);
+          setWalletAssets([]);
+        }
+        
+        setIsLoadingWallet(false);
       }
-      
-      setIsLoadingWallet(false);
     } catch (err) {
       console.error("Error fetching wallet assets:", err);
-      setWalletError(err instanceof Error ? err.message : "Failed to load wallet assets");
-      setIsLoadingWallet(false);
+      
+      // Only update state if component is still mounted and not aborted
+      if (isMountedRef.current && !(err instanceof DOMException && err.name === 'AbortError')) {
+        setWalletError(err instanceof Error ? err.message : "Failed to load wallet assets");
+        setIsLoadingWallet(false);
+      }
     }
+    
+    return () => {
+      // Cleanup function to abort the fetch if component unmounts
+      abortController.abort();
+    };
   };
   
   // Fetch scenario data from MongoDB when the component mounts
   useEffect(() => {
+    // Create an AbortController for all network requests in this effect
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+    
     async function fetchScenarioData() {
       if (!stage.scenarioId) {
-        setError("No scenario ID provided");
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setError("No scenario ID provided");
+          setIsLoading(false);
+        }
         return;
       }
       
       try {
-        setIsLoading(true);
+        if (isMountedRef.current) {
+          setIsLoading(true);
+        }
         console.log(`Fetching scenario data for ID: ${stage.scenarioId}`);
         
         const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true`, {
           method: 'GET',
           headers: {
             'Accept': 'application/json'
-          }
+          },
+          signal
         });
         
         if (!response.ok) {
+          // Special handling for 503 errors (service unavailable)
+          if (response.status === 503) {
+            throw new Error(`MongoDB service unavailable (503). Will use fallback data.`);
+          }
           throw new Error(`Failed to fetch scenario: ${response.status}`);
         }
         
         const data = await response.json();
         console.log("Scenario data fetched:", data);
-        setScenarioData(data);
         
-        // Initialize with the data from MongoDB
-        setCurrentRound(1);
-        setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
-        setScenarioComplete(false);
-        
-        // Fetch wallet assets if we have a wallet ID
-        if (data.walletId) {
-          fetchWalletAssets(data.walletId);
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          setScenarioData(data);
+          
+          // Initialize with the data from MongoDB
+          setCurrentRound(1);
+          setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
+          setScenarioComplete(false);
+          
+          // Fetch wallet assets if we have a wallet ID
+          if (data.walletId) {
+            const cleanupWalletFetch = fetchWalletAssets(data.walletId);
+            // Store the cleanup function for later
+            const originalCleanup = abortController.abort.bind(abortController);
+            abortController.abort = () => {
+              // Call the original abort
+              originalCleanup();
+              // Call the wallet fetch cleanup if it exists
+              if (cleanupWalletFetch) cleanupWalletFetch();
+            };
+          }
+          
+          setIsLoading(false);
         }
-        
-        setIsLoading(false);
       } catch (err) {
         console.error("Error fetching scenario data:", err);
-        setError(err instanceof Error ? err.message : "Failed to load scenario data");
-        setIsLoading(false);
         
-        // If we can't get data from MongoDB, use the stage data as fallback
-        setCurrentRound(1);
-        setRoundTimeRemaining(stage.roundDuration || 60);
+        // Only update state if component is still mounted and not aborted
+        if (isMountedRef.current && !(err instanceof DOMException && err.name === 'AbortError')) {
+          setError(err instanceof Error ? err.message : "Failed to load scenario data");
+          setIsLoading(false);
+          
+          // If we can't get data from MongoDB, use the stage data as fallback
+          setCurrentRound(1);
+          setRoundTimeRemaining(stage.roundDuration || 60);
+        }
       }
     }
     
     fetchScenarioData();
+    
+    // Cleanup function
+    return () => {
+      abortController.abort();
+    };
   }, [stage.scenarioId, stage.roundDuration]);
   
   // Use the data from MongoDB, or fall back to the stage data
@@ -173,33 +248,54 @@ export default function ScenarioStage({ stage, onNext }: ScenarioStageProps) {
     
     // Don't start timer if no rounds or duration
     if (!totalRounds || !roundDuration) {
-      setScenarioComplete(true);
+      if (isMountedRef.current) {
+        setScenarioComplete(true);
+      }
       return;
     }
     
     // Create interval to decrement timer
     const interval = setInterval(() => {
-      setRoundTimeRemaining(prevTime => {
-        if (prevTime <= 1) {
-          // Time for this round is up
-          if (currentRound < totalRounds) {
-            // Move to next round
-            setCurrentRound(prev => prev + 1);
-            return roundDuration; // Reset timer for next round
-          } else {
-            // All rounds complete
-            clearInterval(interval);
-            setScenarioComplete(true);
-            return 0;
+      if (isMountedRef.current) {
+        setRoundTimeRemaining(prevTime => {
+          if (prevTime <= 1) {
+            // Time for this round is up
+            if (currentRound < totalRounds) {
+              // Move to next round
+              // Only update state if component is still mounted
+              if (isMountedRef.current) {
+                setCurrentRound(prev => prev + 1);
+              }
+              return roundDuration; // Reset timer for next round
+            } else {
+              // All rounds complete
+              clearInterval(interval);
+              // Only update state if component is still mounted
+              if (isMountedRef.current) {
+                setScenarioComplete(true);
+              }
+              return 0;
+            }
           }
-        }
-        return prevTime - 1;
-      });
+          return prevTime - 1;
+        });
+      }
     }, 1000);
     
     // Cleanup interval on unmount
     return () => clearInterval(interval);
   }, [totalRounds, roundDuration, currentRound, isLoading]);
+  
+  // Effect to clean up when component unmounts
+  useEffect(() => {
+    // Set the mounted flag to true (it already is, but this is for clarity)
+    isMountedRef.current = true;
+    
+    // Clean up function that runs when component unmounts
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
@@ -239,7 +335,21 @@ export default function ScenarioStage({ stage, onNext }: ScenarioStageProps) {
           <button 
             onClick={() => {
               // Since we couldn't load the scenario, just mark it as completed and move on
-              saveStageResponse(stage.id, 'scenario', { error: true }).then(() => onNext());
+              if (isMountedRef.current) {
+                saveStageResponse(stage.id, 'scenario', { error: true })
+                  .then(() => {
+                    if (isMountedRef.current) {
+                      onNext();
+                    }
+                  })
+                  .catch(err => {
+                    console.error("Error skipping scenario:", err);
+                    if (isMountedRef.current) {
+                      toast.error("There was an issue saving your progress, but we'll continue anyway.");
+                      onNext();
+                    }
+                  });
+              }
             }}
             className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
@@ -597,13 +707,21 @@ export default function ScenarioStage({ stage, onNext }: ScenarioStageProps) {
                           <div className="flex gap-4 mt-4">
                             <button 
                               className="flex-1 text-base bg-green-100 hover:bg-green-200 text-green-700 font-medium py-3 px-4 rounded-md transition-colors"
-                              onClick={() => toast.success(`Buy action for ${asset.symbol} (demo only)`)}
+                              onClick={() => {
+                                if (isMountedRef.current) {
+                                  toast.success(`Buy action for ${asset.symbol} (demo only)`);
+                                }
+                              }}
                             >
                               Buy
                             </button>
                             <button 
                               className="flex-1 text-base bg-red-100 hover:bg-red-200 text-red-700 font-medium py-3 px-4 rounded-md transition-colors"
-                              onClick={() => toast.success(`Sell action for ${asset.symbol} (demo only)`)}
+                              onClick={() => {
+                                if (isMountedRef.current) {
+                                  toast.success(`Sell action for ${asset.symbol} (demo only)`);
+                                }
+                              }}
                             >
                               Sell
                             </button>

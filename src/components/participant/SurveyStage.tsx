@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParticipant } from '@/contexts/ParticipantContext';
 import { toast } from 'react-hot-toast';
 
@@ -25,6 +25,20 @@ type SurveyStageProps = {
 export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
   const { isStageTransitioning, saveStageResponse, surveyResponses, setSurveyResponses } = useParticipant();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Add ref to track component mount state
+  const isMountedRef = useRef(true);
+  
+  // Effect to clean up when component unmounts
+  useEffect(() => {
+    // Set the mounted flag to true (it already is, but this is for clarity)
+    isMountedRef.current = true;
+    
+    // Clean up function that runs when component unmounts
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   
   // Initialize answers if needed
   if (!surveyResponses[stage.id]) {
@@ -86,6 +100,9 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
   };
   
   const handleSubmit = async () => {
+    // Don't proceed if component is unmounted
+    if (!isMountedRef.current) return;
+    
     // Validate required questions
     const currentResponses = surveyResponses[stage.id] || {};
     let hasErrors = false;
@@ -96,7 +113,9 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
         
         if (response === '' || response === null || 
             (Array.isArray(response) && response.length === 0)) {
-          toast.error(`Please answer question: ${question.text}`);
+          if (isMountedRef.current) {
+            toast.error(`Please answer question: ${question.text}`);
+          }
           hasErrors = true;
         }
       }
@@ -104,19 +123,27 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
     
     if (hasErrors) return;
     
-    setIsSubmitting(true);
+    if (isMountedRef.current) {
+      setIsSubmitting(true);
+    }
     
     try {
       // Save survey responses
       await saveStageResponse(stage.id, 'survey', currentResponses);
       
-      // Proceed to next stage
-      onNext();
+      // Proceed to next stage only if still mounted
+      if (isMountedRef.current) {
+        onNext();
+      }
     } catch (error) {
       console.error('Error submitting survey:', error);
-      toast.error('Failed to submit survey responses');
+      if (isMountedRef.current) {
+        toast.error('Failed to submit survey responses');
+      }
     } finally {
-      setIsSubmitting(false);
+      if (isMountedRef.current) {
+        setIsSubmitting(false);
+      }
     }
   };
   
