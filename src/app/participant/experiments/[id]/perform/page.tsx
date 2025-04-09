@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
@@ -882,6 +882,9 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
+  // Ref for scrolling to invalid questions
+  const containerRef = useRef<HTMLDivElement>(null);
+  
   // Handle answer changes
   const handleAnswerChange = (questionId: string, value: string | string[]) => {
     setAnswers(prev => ({
@@ -923,9 +926,21 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       });
     }
     
-    // Stop if there are validation errors
+    // Stop if there are validation errors and scroll to first error
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
+      
+      // Find the first error element and scroll to it
+      setTimeout(() => {
+        if (containerRef.current) {
+          const firstErrorId = Object.keys(errors)[0];
+          const errorElement = containerRef.current.querySelector(`[data-question-id="${firstErrorId}"]`);
+          if (errorElement) {
+            errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      }, 100);
+      
       return;
     }
     
@@ -974,7 +989,7 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   };
   
   return (
-    <div className="w-full p-4 bg-white rounded border">
+    <div className="w-full p-4 bg-white rounded border relative">
       <div className="mb-4 pb-3 border-b border-gray-200">
         <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
         <p className="text-gray-600">{stage.description}</p>
@@ -983,61 +998,72 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       <div className="p-4 bg-gray-50 rounded border mb-5">
         <p className="font-medium mb-3">Survey Questions</p>
         
-        {stage.questions && stage.questions.length > 0 ? (
-          <div>
-            {stage.questions.map((q: Question, i: number) => (
-              <div key={q.id || i} className="mb-4 p-3 bg-white rounded border">
-                <p className="font-medium">
-                  {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
-                </p>
-                
-                {/* Question input based on type */}
-                {q.type === 'multipleChoice' && q.options && (
-                  <div className="mt-2 pl-4">
-                    {q.options.map((option: string, idx: number) => (
-                      <div key={idx} className="flex items-center mt-1">
-                        <button 
-                          type="button"
-                          onClick={() => handleMultipleChoiceSelect(q.id, option)}
-                          className={`w-4 h-4 border ${answers[q.id] === option ? 'bg-blue-500 border-blue-500' : 'border-gray-300'} rounded-full mr-2`}
-                        ></button>
-                        <span className="text-gray-700">{option}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                
-                {q.type === 'text' && (
-                  <div className="mt-2">
-                    <textarea
-                      className="w-full p-2 border border-gray-300 rounded"
-                      rows={3}
-                      value={answers[q.id] as string || ''}
-                      onChange={(e) => handleTextChange(q.id, e.target.value)}
-                      placeholder="Enter your answer here..."
-                    />
-                  </div>
-                )}
-                
-                {/* Show validation error if any */}
-                {validationErrors[q.id] && (
-                  <p className="text-red-500 text-sm mt-1">{validationErrors[q.id]}</p>
-                )}
-              </div>
-            ))}
+        {/* Scrollable container for questions with max height and scrollbar */}
+        <div className="max-h-[60vh] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin' }} ref={containerRef}>
+          {stage.questions && stage.questions.length > 0 ? (
+            <div>
+              {stage.questions.map((q: Question, i: number) => (
+                <div key={q.id || i} className="mb-4 p-3 bg-white rounded border" data-question-id={q.id}>
+                  <p className="font-medium">
+                    {i+1}. {q.text} {q.required && <span className="text-red-500">*</span>}
+                  </p>
+                  
+                  {/* Question input based on type */}
+                  {q.type === 'multipleChoice' && q.options && (
+                    <div className="mt-2 pl-4">
+                      {q.options.map((option: string, idx: number) => (
+                        <div key={idx} className="flex items-center mt-1">
+                          <button 
+                            type="button"
+                            onClick={() => handleMultipleChoiceSelect(q.id, option)}
+                            className={`w-4 h-4 border ${answers[q.id] === option ? 'bg-blue-500 border-blue-500' : 'border-gray-300'} rounded-full mr-2`}
+                          ></button>
+                          <span className="text-gray-700">{option}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {q.type === 'text' && (
+                    <div className="mt-2">
+                      <textarea
+                        className="w-full p-2 border border-gray-300 rounded"
+                        rows={3}
+                        value={answers[q.id] as string || ''}
+                        onChange={(e) => handleTextChange(q.id, e.target.value)}
+                        placeholder="Enter your answer here..."
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Show validation error if any */}
+                  {validationErrors[q.id] && (
+                    <p className="text-red-500 text-sm mt-1">{validationErrors[q.id]}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600">No questions defined for this survey.</p>
+          )}
+        </div>
+        
+        {/* Scrolling indicator/instruction */}
+        {(stage.questions && stage.questions.length > 3) && (
+          <div className="text-center text-sm text-gray-500 mt-2 animate-pulse">
+            Scroll down to see all questions
           </div>
-        ) : (
-          <p className="text-gray-600">No questions defined for this survey.</p>
         )}
       </div>
       
-      <div className="flex justify-center">
+      {/* Fixed submit button container that stays at the bottom */}
+      <div className="sticky bottom-0 left-0 right-0 flex justify-center py-4 bg-white border-t border-gray-200 shadow-md">
         <button 
           onClick={submitSurveyAnswers}
           disabled={isStageTransitioning || isSubmitting}
-          className={`px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors ${(isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`px-8 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors ${(isStageTransitioning || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          {isSubmitting ? 'Submitting...' : 'Submit'}
+          {isSubmitting ? 'Submitting...' : 'Submit Survey'}
         </button>
       </div>
     </div>
