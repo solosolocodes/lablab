@@ -44,6 +44,27 @@ export default function SurveyEditorPage() {
   useEffect(() => {
     if (session && session.user.role === 'admin' && surveyId) {
       fetchSurvey();
+      
+      // Fallback for new surveys if the fetch fails
+      const fallbackTimeout = setTimeout(() => {
+        if (isLoading && !survey) {
+          console.log('Creating fallback survey data');
+          // Create empty survey with the ID if not loaded yet
+          setSurvey({
+            _id: surveyId,
+            title: 'New Survey',
+            description: '',
+            questions: [],
+            status: 'draft',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          setIsLoading(false);
+          toast.info('Using default survey template. Changes will be saved.');
+        }
+      }, 15000); // Wait 15 seconds before applying fallback
+      
+      return () => clearTimeout(fallbackTimeout);
     }
   }, [session, surveyId]);
 
@@ -54,28 +75,78 @@ export default function SurveyEditorPage() {
     }
   }, [session, status, router]);
 
-  // Fetch survey data from API
+  // Fetch survey data from API with retry
   const fetchSurvey = async () => {
-    try {
-      setIsLoading(true);
-      console.log('Fetching survey:', surveyId);
-      const response = await fetch(`/api/admin/surveys/${surveyId}`);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Survey fetch error response:', errorText);
-        throw new Error(`Failed to fetch survey: ${response.status} ${response.statusText}`);
+    const MAX_RETRIES = 3;
+    let attempts = 0;
+    
+    const attemptFetch = async () => {
+      try {
+        setIsLoading(true);
+        console.log(`Fetching survey (attempt ${attempts + 1}/${MAX_RETRIES}):`, surveyId);
+        
+        // Use XMLHttpRequest for better timeout control
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', `/api/admin/surveys/${surveyId}`, true);
+          xhr.timeout = 10000; // 10 second timeout
+          
+          xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const data = JSON.parse(xhr.responseText);
+                resolve(data);
+              } catch (parseError) {
+                reject(new Error(`Failed to parse response: ${parseError.message}`));
+              }
+            } else {
+              reject(new Error(`HTTP error ${xhr.status}: ${xhr.statusText || xhr.responseText}`));
+            }
+          };
+          
+          xhr.onerror = function() {
+            reject(new Error('Network error occurred'));
+          };
+          
+          xhr.ontimeout = function() {
+            reject(new Error('Request timed out'));
+          };
+          
+          xhr.send();
+        });
+      } catch (error) {
+        console.error(`Attempt ${attempts + 1} failed:`, error);
+        throw error;
       }
-      
-      const data = await response.json();
-      console.log('Survey data received:', data);
-      setSurvey(data.survey);
-    } catch (error) {
-      console.error('Error fetching survey:', error);
-      toast.error('Failed to load survey');
-    } finally {
-      setIsLoading(false);
+    };
+    
+    while (attempts < MAX_RETRIES) {
+      try {
+        const data = await attemptFetch();
+        console.log('Survey data received:', data);
+        
+        if (data && data.survey) {
+          setSurvey(data.survey);
+          setIsLoading(false);
+          return; // Success
+        } else {
+          throw new Error('Received empty survey data');
+        }
+      } catch (error) {
+        attempts++;
+        console.error(`Error fetching survey (attempt ${attempts}/${MAX_RETRIES}):`, error);
+        
+        if (attempts >= MAX_RETRIES) {
+          toast.error(`Failed to load survey after ${MAX_RETRIES} attempts`);
+          break;
+        } else {
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+        }
+      }
     }
+    
+    setIsLoading(false);
   };
 
   // Save survey changes - simplified without auto-save
