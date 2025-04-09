@@ -1000,15 +1000,34 @@ function SimpleExperimentContent() {
     setViewMode('experiment');
   };
   
-  // Handle Next button click for stage navigation - with completion tracking
+  // Handle Next button click for stage navigation - with stage completion tracking
   const handleStageNext = () => {
-    if (!experiment) return;
+    if (!experiment || !experiment.stages) return;
     
+    // Get the current stage that's being completed
+    const currentStage = experiment.stages[currentStageNumber];
+    if (!currentStage || !currentStage.id) return;
+    
+    // Handle navigation based on whether there are more stages
     if (currentStageNumber < experiment.stages.length - 1) {
-      // Just move to next stage without tracking individual stages
-      setCurrentStageNumber(prev => prev + 1);
+      // Move to next stage
+      const nextIndex = currentStageNumber + 1;
+      const nextStage = experiment.stages[nextIndex];
+      
+      // Record BOTH stage completion and next stage in a single API call
+      if (experimentId && session?.user && nextStage && nextStage.id) {
+        updateParticipantProgress(
+          experimentId,
+          undefined, // don't change status
+          nextStage.id, // set next stage as current
+          currentStage.id // mark current stage as completed
+        ).catch(err => console.warn('Failed to update progress:', err));
+      }
+      
+      // Update UI state
+      setCurrentStageNumber(nextIndex);
     } else {
-      // This is the last stage - record experiment completion only if authenticated
+      // This is the last stage - record experiment completion
       if (experimentId && session?.user) {
         updateParticipantProgress(experimentId, 'completed')
           .catch(err => console.warn('Failed to record experiment completion:', err));

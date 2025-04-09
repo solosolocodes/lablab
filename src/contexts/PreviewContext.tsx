@@ -111,18 +111,24 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     }
   };
   
-  // Minimal status tracking function - only records experiment start and completion
+  // Progress tracking function that records experiment status and completed stages
   const updateParticipantProgress = async (
     experimentId: string,
     status?: 'in_progress' | 'completed',
     currentStageId?: string,
     completedStageId?: string
   ) => {
-    // Only track experiment start and completion, not individual stages
-    if (!status) return;
-    
     try {
-      console.log(`Recording experiment status: ${status}`);
+      // Build payload based on what's provided
+      const payload: Record<string, any> = {};
+      if (status) payload.status = status;
+      if (currentStageId) payload.currentStageId = currentStageId;
+      if (completedStageId) payload.completedStageId = completedStageId;
+      
+      // Skip if no data to update
+      if (Object.keys(payload).length === 0) return;
+      
+      console.log(`Recording progress: status=${status || 'unchanged'}, currentStage=${currentStageId || 'unchanged'}, completedStage=${completedStageId || 'unchanged'}`);
       
       // Add timeout and abort controller
       const controller = new AbortController();
@@ -134,17 +140,17 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache'
         },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(payload),
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
       
       if (!response.ok) {
-        console.warn(`Failed to update experiment status: ${response.status}`);
+        console.warn(`Failed to update progress: ${response.status}`);
       }
     } catch (err) {
-      console.warn('Error recording experiment status (non-critical):', err);
+      console.warn('Error recording progress (non-critical):', err);
     }
   };
 
