@@ -937,7 +937,7 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [canGoNext, canGoPrevious, isSubmitting, isStageTransitioning, submitSurveyAnswers, transitionToQuestion];
+  }, [canGoNext, canGoPrevious, isSubmitting, isStageTransitioning, submitSurveyAnswers, transitionToQuestion]);
   
   // State to control question slide animations
   const [isTransitioning, setIsTransitioning] = useState(false);
