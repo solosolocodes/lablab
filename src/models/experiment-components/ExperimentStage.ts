@@ -26,7 +26,8 @@ export interface IScenarioStage extends IStageBase {
 // Survey stage
 export interface ISurveyStage extends IStageBase {
   type: 'survey';
-  questions: {
+  surveyId?: mongoose.Types.ObjectId; // Reference to the survey in the Survey collection
+  questions?: {
     id: string;
     text: string;
     type: 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
@@ -125,14 +126,23 @@ const QuestionSchema = new mongoose.Schema({
 // Survey stage schema
 export const SurveyStageSchema = new mongoose.Schema({
   ...StageBaseSchema,
+  surveyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Survey',
+    required: false, // Will be required in the new version
+  },
   questions: {
     type: [QuestionSchema],
-    required: [true, 'Questions are required for a survey'],
+    required: false, // No longer required as we'll use surveyId instead
     validate: {
       validator: function(questions: mongoose.Types.DocumentArray<mongoose.Document> | Array<Record<string, unknown>>) {
-        return questions.length > 0;
+        // If surveyId is set, questions array is optional
+        const doc = this as unknown as ISurveyStage;
+        if (doc.surveyId) return true;
+        // Otherwise, questions must have at least one item
+        return questions && questions.length > 0;
       },
-      message: 'Survey must have at least one question',
+      message: 'Either a surveyId or at least one question is required for a survey stage',
     },
   },
 });

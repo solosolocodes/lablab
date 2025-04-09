@@ -33,7 +33,8 @@ interface ScenarioStage extends BaseStage {
 
 interface SurveyStage extends BaseStage {
   type: 'survey';
-  questions: Array<{
+  surveyId?: string;
+  questions?: Array<{
     id: string;
     text: string;
     type: 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
@@ -65,6 +66,14 @@ export default function ExperimentDesignerPage() {
     description?: string;
     rounds?: number;
     roundDuration?: number;
+  }>>([]);
+  
+  const [surveys, setSurveys] = useState<Array<{
+    _id: string;
+    title: string;
+    description?: string;
+    status: string;
+    responsesCount?: number;
   }>>([]);
   const [userGroups, setUserGroups] = useState<Array<{ id: string; name: string }>>([]);
   const [experiment, setExperiment] = useState<{
@@ -299,6 +308,7 @@ export default function ExperimentDesignerPage() {
           // Fetch supporting data in parallel, but don't fail if these requests fail
           await Promise.allSettled([
             fetchScenarios(),
+            fetchSurveys(),
             fetchUserGroups()
           ]).then(results => {
             // Log any failures from the parallel requests
@@ -349,6 +359,30 @@ export default function ExperimentDesignerPage() {
         console.error('Error fetching scenarios:', error);
         // Don't show toast for this secondary data
         // We can still render the page without scenarios
+        return null;
+      }
+    };
+    
+    const fetchSurveys = async () => {
+      try {
+        const data = await fetchWithRetry<{success: boolean, surveys: Array<{
+          _id: string;
+          title: string;
+          description?: string;
+          status: string;
+          responsesCount?: number;
+        }>}>('/api/admin/surveys?status=published', {
+          method: 'GET'
+        }, 2, 8000); // 2 retries, 8 second timeout
+        
+        if (data.success && data.surveys) {
+          setSurveys(data.surveys);
+        }
+        return data.surveys;
+      } catch (error) {
+        console.error('Error fetching surveys:', error);
+        // Don't show toast for this secondary data
+        // We can still render the page without surveys
         return null;
       }
     };
@@ -414,6 +448,7 @@ export default function ExperimentDesignerPage() {
           type: 'survey',
           title: `New Survey`,
           description: 'Description for survey',
+          surveyId: '',
           questions: [],
           durationSeconds: 300,
           required: true,
@@ -538,6 +573,25 @@ export default function ExperimentDesignerPage() {
       }
     }
     
+    // Special case for surveyId changes - update title and description
+    if (field === 'surveyId' && typeof value === 'string' && value) {
+      const selectedSurvey = surveys.find(s => s._id === value);
+      
+      if (selectedSurvey) {
+        // Update form data with survey details
+        setStageFormData({
+          ...stageFormData,
+          surveyId: value,
+          // Set title and description from survey
+          title: selectedSurvey.title,
+          description: selectedSurvey.description || `Survey stage using "${selectedSurvey.title}"`,
+        });
+        
+        toast.success('Survey selected');
+        return;
+      }
+    }
+    
     // Default behavior for other fields
     setStageFormData({
       ...stageFormData,
@@ -585,6 +639,7 @@ export default function ExperimentDesignerPage() {
             description: stageFormData.description || stage.description,
             required: stageFormData.required !== undefined ? stageFormData.required : stage.required,
             durationSeconds: stageFormData.durationSeconds || stage.durationSeconds,
+            surveyId: surveyData.surveyId || stage.surveyId,
             questions: surveyData.questions || stage.questions
           } as SurveyStage;
         }
@@ -693,11 +748,18 @@ export default function ExperimentDesignerPage() {
       // Validate data before sending
       const validationErrors: string[] = [];
       
-      // Check for scenario stages without scenario ID
+      // Check for stages without required data
       if (experiment.stages) {
         experiment.stages.forEach((stage, index) => {
           if (stage.type === 'scenario' && !stage.scenarioId) {
             validationErrors.push(`Stage ${index + 1} (${stage.title}) is missing a scenario selection`);
+          }
+          
+          if (stage.type === 'survey') {
+            const surveyStage = stage as SurveyStage;
+            if (!surveyStage.surveyId && (!surveyStage.questions || surveyStage.questions.length === 0)) {
+              validationErrors.push(`Stage ${index + 1} (${stage.title}) is missing a survey selection`);
+            }
           }
         });
       }
@@ -1070,6 +1132,7 @@ export default function ExperimentDesignerPage() {
                 <Link href="/admin/dashboard" className="px-3 py-2 rounded hover:bg-purple-600">Dashboard</Link>
                 <Link href="/admin/experiments" className="px-3 py-2 rounded bg-purple-600">Experiments</Link>
                 <Link href="/admin/scenarios" className="px-3 py-2 rounded hover:bg-purple-600">Scenarios</Link>
+                <Link href="/admin/surveys" className="px-3 py-2 rounded hover:bg-purple-600">Surveys</Link>
                 <Link href="/admin/wallets" className="px-3 py-2 rounded hover:bg-purple-600">Wallets</Link>
                 <Link href="/admin/user-groups" className="px-3 py-2 rounded hover:bg-purple-600">User Groups</Link>
               </div>
@@ -1443,180 +1506,106 @@ export default function ExperimentDesignerPage() {
                   {selectedStage.type === 'survey' && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Questions
+                        Select Survey
                       </label>
-                      <button
-                        className="w-full py-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100"
-                        onClick={() => {
-                          const currentQuestions = (stageFormData as Partial<SurveyStage>).questions || [];
-                          handleStageFormChange('questions', [
-                            ...currentQuestions, 
-                            {
-                              id: `q-${Date.now()}`,
-                              text: 'New Question',
-                              type: 'text',
-                              required: true
-                            }
-                          ]);
-                        }}
+                      <select
+                        className="w-full px-3 py-2 border rounded-md text-sm mb-4"
+                        value={(stageFormData as Partial<SurveyStage>).surveyId || ''}
+                        onChange={(e) => handleStageFormChange('surveyId', e.target.value)}
                       >
-                        + Add Question
-                      </button>
-                      
-                      <div className="mt-2 space-y-4 max-h-[400px] overflow-y-auto">
-                        {((stageFormData as Partial<SurveyStage>).questions || []).map((question, index) => (
-                          <div key={question.id} className="border border-gray-200 rounded-md p-3">
-                            <div className="flex justify-between items-start">
-                              <input
-                                type="text"
-                                className="flex-1 px-2 py-1 text-sm border rounded"
-                                value={question.text}
-                                placeholder="Enter question text"
-                                onChange={(e) => {
-                                  const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
-                                  questions[index].text = e.target.value;
-                                  handleStageFormChange('questions', questions);
-                                }}
-                              />
-                              <button
-                                className="ml-2 text-red-500 hover:text-red-700"
-                                onClick={() => {
-                                  const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
-                                  questions.splice(index, 1);
-                                  handleStageFormChange('questions', questions);
-                                }}
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                </svg>
-                              </button>
-                            </div>
-                            
-                            <div className="mt-2 flex items-center space-x-2">
-                              <select
-                                className="px-2 py-1 text-sm border rounded"
-                                value={question.type}
-                                onChange={(e) => {
-                                  const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
-                                  const newType = e.target.value as 'text' | 'multipleChoice' | 'rating' | 'checkboxes';
-                                  questions[index].type = newType;
-                                  
-                                  // Initialize options array if switching to multipleChoice or checkboxes
-                                  if ((newType === 'multipleChoice' || newType === 'checkboxes') && !questions[index].options) {
-                                    questions[index].options = ['Option 1', 'Option 2', 'Option 3'];
-                                  }
-                                  
-                                  handleStageFormChange('questions', questions);
-                                }}
-                              >
-                                <option value="text">Text</option>
-                                <option value="multipleChoice">Multiple Choice</option>
-                                <option value="rating">Rating</option>
-                                <option value="checkboxes">Checkboxes</option>
-                              </select>
-                              
-                              <label className="text-sm flex items-center">
-                                <input
-                                  type="checkbox"
-                                  className="mr-1"
-                                  checked={question.required}
-                                  onChange={(e) => {
-                                    const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
-                                    questions[index].required = e.target.checked;
-                                    handleStageFormChange('questions', questions);
-                                  }}
-                                />
-                                Required
-                              </label>
-                            </div>
-                            
-                            {/* Options for multiple choice or checkboxes */}
-                            {(question.type === 'multipleChoice' || question.type === 'checkboxes') && (
-                              <div className="mt-3 bg-gray-50 p-2 rounded-md">
-                                <div className="text-xs font-medium text-gray-700 mb-2">
-                                  {question.type === 'multipleChoice' ? 'Multiple Choice Options' : 'Checkbox Options'}
-                                </div>
-                                
-                                <div className="space-y-2">
-                                  {(question.options || []).map((option, optionIndex) => (
-                                    <div key={optionIndex} className="flex items-center">
-                                      {question.type === 'multipleChoice' ? (
-                                        <span className="mr-2 w-4 h-4 flex-shrink-0">○</span>
-                                      ) : (
-                                        <span className="mr-2 w-4 h-4 flex-shrink-0">☐</span>
-                                      )}
-                                      <input
-                                        type="text"
-                                        className="flex-1 px-2 py-1 text-sm border rounded"
-                                        value={option}
-                                        onChange={(e) => {
-                                          const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
-                                          const options = [...(questions[index].options || [])];
-                                          options[optionIndex] = e.target.value;
-                                          questions[index].options = options;
-                                          handleStageFormChange('questions', questions);
-                                        }}
-                                      />
-                                      <button
-                                        className="ml-1 text-red-500 hover:text-red-700"
-                                        onClick={() => {
-                                          const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
-                                          const options = [...(questions[index].options || [])];
-                                          options.splice(optionIndex, 1);
-                                          questions[index].options = options;
-                                          handleStageFormChange('questions', questions);
-                                        }}
-                                      >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                          <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2" fill="none" />
-                                        </svg>
-                                      </button>
-                                    </div>
-                                  ))}
-                                  
-                                  <button
-                                    className="mt-1 w-full text-xs text-blue-600 hover:text-blue-800 py-1 bg-blue-50 hover:bg-blue-100 rounded"
-                                    onClick={() => {
-                                      const questions = [...((stageFormData as Partial<SurveyStage>).questions || [])];
-                                      const options = [...(questions[index].options || [])];
-                                      options.push(`Option ${options.length + 1}`);
-                                      questions[index].options = options;
-                                      handleStageFormChange('questions', questions);
-                                    }}
-                                  >
-                                    + Add Option
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Rating specific settings */}
-                            {question.type === 'rating' && (
-                              <div className="mt-3 bg-gray-50 p-2 rounded-md">
-                                <div className="text-xs font-medium text-gray-700 mb-2">
-                                  Rating Scale Preview
-                                </div>
-                                <div className="flex justify-between items-center px-2">
-                                  <span>1</span>
-                                  <span>2</span>
-                                  <span>3</span>
-                                  <span>4</span>
-                                  <span>5</span>
-                                </div>
-                                <div className="flex justify-between items-center px-2 mt-1 text-xs text-gray-500">
-                                  <span>Poor</span>
-                                  <span className="ml-auto">Excellent</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                        <option value="">-- Select a survey --</option>
+                        {surveys.map(survey => (
+                          <option key={survey._id} value={survey._id}>
+                            {survey.title} {survey.status === 'published' ? '(Published)' : survey.status === 'draft' ? '(Draft)' : '(Archived)'}
+                          </option>
                         ))}
-                        
-                        {((stageFormData as Partial<SurveyStage>).questions || []).length === 0 && (
-                          <div className="p-4 text-center text-gray-500 bg-gray-50 rounded-md">
-                            No questions added yet. Click the "Add Question" button to get started.
-                          </div>
-                        )}
+                      </select>
+
+                      {(stageFormData as Partial<SurveyStage>).surveyId ? (
+                        <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
+                          <h4 className="font-medium text-blue-800 mb-2">Selected Survey Information</h4>
+                          {(() => {
+                            const selectedSurvey = surveys.find(s => s._id === (stageFormData as Partial<SurveyStage>).surveyId);
+                            if (selectedSurvey) {
+                              return (
+                                <div>
+                                  <p className="text-sm text-blue-700 mb-1"><strong>Title:</strong> {selectedSurvey.title}</p>
+                                  {selectedSurvey.description && (
+                                    <p className="text-sm text-blue-700 mb-1"><strong>Description:</strong> {selectedSurvey.description}</p>
+                                  )}
+                                  <p className="text-sm text-blue-700 mb-1"><strong>Status:</strong> {selectedSurvey.status}</p>
+                                  {selectedSurvey.responsesCount !== undefined && (
+                                    <p className="text-sm text-blue-700"><strong>Responses:</strong> {selectedSurvey.responsesCount}</p>
+                                  )}
+                                  <div className="mt-3">
+                                    <Link 
+                                      href={`/admin/surveys/${selectedSurvey._id}/edit`} 
+                                      className="text-sm text-blue-600 hover:text-blue-800"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      View/Edit Survey in New Tab
+                                    </Link>
+                                  </div>
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <p className="text-sm text-blue-700">Loading survey details...</p>
+                              );
+                            }
+                          })()}
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center text-amber-700 bg-amber-50 rounded-md border border-amber-200">
+                          Please select a survey from the dropdown above.
+                          {surveys.length === 0 && (
+                            <div className="mt-2">
+                              <p className="text-sm">No published surveys found. Please create a survey first.</p>
+                              <Link 
+                                href="/admin/surveys" 
+                                className="text-sm text-blue-600 hover:text-blue-800 mt-2 inline-block"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Go to Survey Management
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      <div className="mt-4">
+                        <div className="text-sm mb-2 text-gray-600 flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Use the dropdown to select a survey created in the Surveys section.
+                        </div>
+                        <Link 
+                          href="/admin/surveys"
+                          className="text-sm text-purple-600 hover:text-purple-800 mt-2 inline-block"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Manage Surveys in New Tab
+                        </Link>
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Duration (seconds)
+                        </label>
+                        <input
+                          type="number"
+                          min="60"
+                          className="w-full px-3 py-2 border rounded-md text-sm"
+                          value={stageFormData.durationSeconds || 300}
+                          onChange={(e) => handleStageFormChange('durationSeconds', parseInt(e.target.value) || 300)}
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Estimated time participants will need to complete this survey.
+                        </p>
                       </div>
                     </div>
                   )}
