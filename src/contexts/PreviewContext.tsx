@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import * as cache from '@/lib/cache';
 
 type Stage = {
   id: string;
@@ -37,6 +38,7 @@ interface PreviewContextType {
   isRecordingProgress: boolean;
   stageStartTimes: Record<string, Date>;
   updateParticipantProgress: (experimentId: string, status?: 'in_progress' | 'completed', currentStageId?: string, completedStageId?: string) => Promise<void>;
+  prefetchExperimentData: (experimentId: string) => Promise<void>;
 }
 
 const PreviewContext = createContext<PreviewContextType | undefined>(undefined);
@@ -62,17 +64,38 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Load experiment and progress data
+  // Prefetch experiment data and cache it for future use
+  const prefetchExperimentData = async (experimentId: string) => {
+    try {
+      console.log('Prefetching experiment data for:', experimentId);
+      // This will cache the experiment data and trigger prefetching of related data
+      await cache.cacheExperimentData(experimentId, true);
+      console.log('Experiment data prefetched and cached');
+    } catch (error) {
+      console.error('Error prefetching experiment data:', error);
+    }
+  };
+
+  // Load experiment and progress data with caching
   const loadExperiment = async (experimentId: string, isParticipantView = false) => {
     try {
-      // Fetch the experiment data
-      const response = await fetch(`/api/experiments/${experimentId}?preview=true&t=${Date.now()}`);
+      console.log(`Loading experiment ${experimentId}${isParticipantView ? ' (participant view)' : ''}`);
       
-      // Parse the data
-      const data = await response.json();
+      // Try to get experiment data from cache first
+      const { experiment: experimentData, success, message } = await cache.cacheExperimentData(experimentId);
+      
+      // If there was a cache message, log it
+      if (message) {
+        console.log(`Cache status: ${message}`);
+      }
+      
+      // If data fetching/caching failed, throw error
+      if (!success || !experimentData) {
+        throw new Error('Failed to fetch experiment data');
+      }
       
       // Use empty array as fallback for stages
-      const stages = Array.isArray(data.stages) ? data.stages : [];
+      const stages = Array.isArray(experimentData.stages) ? experimentData.stages : [];
       
       // Sort stages by order
       const sortedStages = [...stages].sort((a, b) => {
@@ -85,16 +108,39 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       if (!isMountedRef.current) return;
       
       // Set the experiment data
-      setExperiment({ ...data, stages: sortedStages });
+      setExperiment({ ...experimentData, stages: sortedStages } as ExperimentData);
+      
+      // Prefetch scenario data for all scenario stages in the background
+      if (sortedStages.length > 0) {
+        // Use setTimeout to avoid blocking the UI thread
+        setTimeout(() => {
+          sortedStages.forEach(stage => {
+            if (stage.type === 'scenario' && stage.scenarioId) {
+              cache.getCachedScenarioData(stage.scenarioId).catch(err => {
+                console.warn(`Error prefetching scenario ${stage.scenarioId}:`, err);
+              });
+            }
+          });
+        }, 500);
+      }
       
       // For participant view, also fetch progress
       if (isParticipantView) {
         setIsRecordingProgress(true);
         try {
+          // Use a timeout to ensure we don't wait too long
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          
           const progressResponse = await fetch(
             `/api/participant/experiments/${experimentId}/progress?t=${Date.now()}`,
-            { headers: { 'Cache-Control': 'no-cache' } }
+            { 
+              headers: { 'Cache-Control': 'no-cache' },
+              signal: controller.signal 
+            }
           );
+          
+          clearTimeout(timeoutId);
           
           // Check if component is still mounted
           if (!isMountedRef.current) return;
@@ -143,6 +189,12 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
           }
         } catch (progressErr) {
           console.error('Error fetching progress:', progressErr);
+          // Continue with default behavior (starting from the beginning)
+          if (isMountedRef.current && sortedStages.length > 0) {
+            setCurrentStageIndex(0);
+            const startTimes = { [sortedStages[0].id]: new Date() };
+            setStageStartTimes(startTimes);
+          }
         }
       } else {
         // Reset to first stage for preview (if still mounted)
@@ -153,12 +205,35 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
       
       // Set initial timer if there are stages (if still mounted)
       if (isMountedRef.current && sortedStages.length > 0) {
-        setTimeRemaining(sortedStages[0].durationSeconds);
-        setTimerActive(true);
+        const firstStage = sortedStages[0];
+        const durationSeconds = typeof firstStage.durationSeconds === 'number' ? firstStage.durationSeconds : 0;
+        setTimeRemaining(durationSeconds);
+        setTimerActive(durationSeconds > 0);
       }
     } catch (err) {
-      // Silently handle errors - we'll just show the default view
       console.error('Error loading experiment:', err);
+      
+      // Try to recover with cached data if available
+      if (isMountedRef.current) {
+        const cachedExp = cache.get<Record<string, unknown>>(`experiment:${experimentId}`);
+        if (cachedExp) {
+          console.log('Recovering with cached experiment data');
+          const stages = Array.isArray(cachedExp.stages) ? cachedExp.stages : [];
+          const sortedStages = [...stages].sort((a, b) => {
+            const orderA = typeof a.order === 'number' ? a.order : 0;
+            const orderB = typeof b.order === 'number' ? b.order : 0;
+            return orderA - orderB;
+          });
+          
+          setExperiment({ ...cachedExp, stages: sortedStages } as ExperimentData);
+          setCurrentStageIndex(0);
+          
+          if (sortedStages.length > 0) {
+            setTimeRemaining(sortedStages[0].durationSeconds || 0);
+            setTimerActive(true);
+          }
+        }
+      }
     }
   };
   
@@ -369,7 +444,8 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         isStageTransitioning,
         isRecordingProgress,
         stageStartTimes,
-        updateParticipantProgress
+        updateParticipantProgress,
+        prefetchExperimentData
       }}
     >
       {children}

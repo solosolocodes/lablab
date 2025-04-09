@@ -220,7 +220,10 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
   const [error, setError] = useState<string | null>(null);
   const [walletError, setWalletError] = useState<string | null>(null);
   
-  // Function to fetch wallet assets by wallet ID
+  // Import cache at the top of the file
+  const cache = require('@/lib/cache');
+  
+  // Function to fetch wallet assets by wallet ID with caching
   const fetchWalletAssets = async (walletId: string) => {
     if (!walletId) {
       setWalletError("No wallet ID available in scenario data");
@@ -232,38 +235,83 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       setIsLoadingWallet(true);
       console.log(`Fetching wallet assets for wallet ID: ${walletId}`);
       
-      const response = await fetch(`/api/wallets/${walletId}/assets?preview=true`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        }
-      });
+      // Try to get from cache first
+      const { assets, success, message } = await cache.getCachedWalletAssets(walletId);
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch wallet assets: ${response.status}`);
+      if (message) {
+        console.log(`Wallet assets cache: ${message}`);
       }
       
-      const data = await response.json();
-      console.log("Wallet assets fetched:", data);
-      
-      if (Array.isArray(data)) {
-        setWalletAssets(data);
-      } else if (data.assets && Array.isArray(data.assets)) {
-        setWalletAssets(data.assets);
+      // If we got assets, use them
+      if (assets && assets.length > 0) {
+        setWalletAssets(assets);
+        
+        // If it's fallback data, show a warning but don't block the UI
+        if (!success) {
+          setWalletError("Using cached or fallback wallet data due to connection issues");
+        }
       } else {
-        console.warn("Unexpected wallet data format:", data);
-        setWalletAssets([]);
+        // No assets from cache, show warning
+        setWalletError("No wallet assets found");
+        
+        // Create some fallback assets
+        const fallbackAssets = [
+          {
+            id: `${walletId}-asset1`,
+            symbol: 'BTC',
+            name: 'Bitcoin',
+            amount: 0.5
+          },
+          {
+            id: `${walletId}-asset2`,
+            symbol: 'AAPL',
+            name: 'Apple Inc.',
+            amount: 10
+          },
+          {
+            id: `${walletId}-asset3`,
+            symbol: 'ETH',
+            name: 'Ethereum',
+            amount: 5
+          }
+        ];
+        
+        setWalletAssets(fallbackAssets);
       }
       
       setIsLoadingWallet(false);
     } catch (err) {
       console.error("Error fetching wallet assets:", err);
       setWalletError(err instanceof Error ? err.message : "Failed to load wallet assets");
+      
+      // Create fallback assets even on error
+      const fallbackAssets = [
+        {
+          id: `${walletId}-fallback1`,
+          symbol: 'BTC',
+          name: 'Bitcoin',
+          amount: 0.5
+        },
+        {
+          id: `${walletId}-fallback2`,
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          amount: 10
+        },
+        {
+          id: `${walletId}-fallback3`,
+          symbol: 'ETH',
+          name: 'Ethereum',
+          amount: 5
+        }
+      ];
+      
+      setWalletAssets(fallbackAssets);
       setIsLoadingWallet(false);
     }
   };
   
-  // Fetch scenario data from MongoDB when the component mounts
+  // Fetch scenario data with caching
   useEffect(() => {
     async function fetchScenarioData() {
       if (!stage.scenarioId) {
@@ -274,47 +322,80 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
       
       try {
         setIsLoading(true);
-        console.log(`Fetching scenario data for ID: ${stage.scenarioId}`);
+        console.log(`Loading scenario data for ID: ${stage.scenarioId}`);
         
-        const response = await fetch(`/api/scenarios/${stage.scenarioId}?preview=true`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json'
-          }
-        });
+        // Try to get data from cache first
+        const { scenario, success, message } = await cache.getCachedScenarioData(stage.scenarioId);
         
-        if (!response.ok) {
-          throw new Error(`Failed to fetch scenario: ${response.status}`);
+        if (message) {
+          console.log(`Scenario cache: ${message}`);
         }
         
-        const data = await response.json();
-        console.log("Scenario data fetched:", data);
-        setScenarioData(data);
+        if (!success) {
+          // Show warning but continue with the data we have
+          console.warn(`Using potentially stale data for scenario ${stage.scenarioId}`);
+        }
         
-        // Initialize with the data from MongoDB
-        setCurrentRound(1);
-        setRoundTimeRemaining(data.roundDuration || stage.roundDuration || 60);
-        setScenarioComplete(false);
-        
-        // Fetch wallet assets if we have a wallet ID
-        if (data.walletId) {
-          fetchWalletAssets(data.walletId);
+        // Use the data we got (either from cache or fresh)
+        if (scenario && Object.keys(scenario).length > 0) {
+          console.log("Scenario data loaded successfully");
+          setScenarioData(scenario as ScenarioData);
+          
+          // Initialize with the data
+          setCurrentRound(1);
+          setRoundTimeRemaining(scenario.roundDuration || stage.roundDuration || 60);
+          setScenarioComplete(false);
+          
+          // Fetch wallet assets if we have a wallet ID
+          if (scenario.walletId) {
+            fetchWalletAssets(scenario.walletId);
+          }
+        } else {
+          // No data from cache or fetch, use fallback
+          console.warn("No scenario data available, using fallback");
+          
+          // Create minimal fallback data
+          const fallbackData: ScenarioData = {
+            id: stage.scenarioId,
+            name: stage.title || 'Investment Scenario',
+            description: stage.description || 'Simulated trading scenario',
+            rounds: stage.rounds || 3,
+            roundDuration: stage.roundDuration || 60,
+            walletId: 'fallback-wallet-id'
+          };
+          
+          setScenarioData(fallbackData);
+          setCurrentRound(1);
+          setRoundTimeRemaining(fallbackData.roundDuration);
+          
+          // Use fallback wallet
+          fetchWalletAssets('fallback-wallet-id');
         }
         
         setIsLoading(false);
       } catch (err) {
-        console.error("Error fetching scenario data:", err);
+        console.error("Error loading scenario data:", err);
         setError(err instanceof Error ? err.message : "Failed to load scenario data");
-        setIsLoading(false);
         
-        // If we can't get data from MongoDB, use the stage data as fallback
+        // Create fallback data even on error
+        const fallbackData: ScenarioData = {
+          id: stage.scenarioId || 'error-fallback',
+          name: stage.title || 'Investment Scenario',
+          description: stage.description || 'Simulated trading scenario',
+          rounds: stage.rounds || 3,
+          roundDuration: stage.roundDuration || 60,
+          walletId: 'fallback-wallet-id'
+        };
+        
+        setScenarioData(fallbackData);
         setCurrentRound(1);
-        setRoundTimeRemaining(stage.roundDuration || 60);
+        setRoundTimeRemaining(fallbackData.roundDuration);
+        setIsLoading(false);
       }
     }
     
     fetchScenarioData();
-  }, [stage.scenarioId, stage.roundDuration]);
+  }, [stage.scenarioId, stage.roundDuration, stage.title, stage.description, stage.rounds]);
   
   // Use the data from MongoDB, or fall back to the stage data
   const totalRounds = scenarioData?.rounds || stage.rounds || 1;
@@ -888,15 +969,36 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
 }
 
 function ExperimentContent() {
-  const { experiment, loadExperiment, updateParticipantProgress } = usePreview();
+  const { experiment, loadExperiment, updateParticipantProgress, prefetchExperimentData } = usePreview();
   const [viewMode, setViewMode] = useState<'welcome' | 'experiment' | 'thankyou'>('welcome');
   const [currentStageNumber, setCurrentStageNumber] = useState(0);
   const params = useParams();
   const experimentId = params.id as string;
   const { data: session, status } = useSession();
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   
-  // Load the experiment data when the component mounts
+  // First, prefetch all experiment data when the component mounts
+  useEffect(() => {
+    if (!experimentId) return;
+    
+    // Only do this on initial mount
+    if (isInitialLoad) {
+      setIsInitialLoad(false);
+      
+      // Prefetch in the background
+      prefetchExperimentData(experimentId)
+        .then(() => {
+          console.log('Experiment data prefetched successfully');
+        })
+        .catch(err => {
+          console.warn('Error prefetching experiment data:', err);
+          // Continue anyway - this is just a prefetch
+        });
+    }
+  }, [experimentId, prefetchExperimentData, isInitialLoad]);
+  
+  // Then load the experiment data with proper UI state
   useEffect(() => {
     // Only attempt to load if we have an experiment ID
     if (!experimentId) {
@@ -904,14 +1006,26 @@ function ExperimentContent() {
       return;
     }
     
+    // Show loading indicator
+    const loadingMessage = document.getElementById('loading-message');
+    if (loadingMessage) {
+      loadingMessage.textContent = 'Loading experiment data...';
+    }
+    
     // Pass true to indicate this is the participant view
     loadExperiment(experimentId, true)
       .then(() => {
         setLoadError(null);
+        if (loadingMessage) {
+          loadingMessage.textContent = 'Experiment loaded successfully';
+        }
       })
       .catch(err => {
         console.error('Error loading experiment:', err);
         setLoadError(`Failed to load experiment: ${err instanceof Error ? err.message : String(err)}`);
+        if (loadingMessage) {
+          loadingMessage.textContent = 'Error loading experiment data';
+        }
       });
   }, [experimentId, loadExperiment]);
   
@@ -1166,12 +1280,17 @@ export default function PerformExperimentPage() {
       <header className="bg-white shadow-sm py-3">
         <div className="container mx-auto px-4 flex justify-between items-center">
           <h1 className="text-xl font-bold text-blue-600">LabLab Experiment</h1>
-          <button 
-            onClick={() => window.close()}
-            className="text-sm py-1 px-3 border border-gray-300 rounded hover:bg-gray-100"
-          >
-            Close Window
-          </button>
+          <div className="flex items-center">
+            <span id="loading-message" className="text-sm text-gray-600 mr-4 hidden md:inline">
+              Initializing...
+            </span>
+            <button 
+              onClick={() => window.close()}
+              className="text-sm py-1 px-3 border border-gray-300 rounded hover:bg-gray-100"
+            >
+              Close Window
+            </button>
+          </div>
         </div>
       </header>
 
