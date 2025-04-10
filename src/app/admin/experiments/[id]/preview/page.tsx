@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
 import SurveyStageComponent from '@/components/preview/SurveyStage';
@@ -880,8 +880,12 @@ function SimplePreviewContent() {
   const params = useParams();
   const experimentId = params.id as string;
 
+  // Use reference to track if we've already started loading
+  const hasStartedLoadingRef = useRef(false);
+
   useEffect(() => {
-    if (experimentId) {
+    if (experimentId && !hasStartedLoadingRef.current) {
+      hasStartedLoadingRef.current = true;
       loadExperiment(experimentId);
     }
   }, [experimentId, loadExperiment]);
