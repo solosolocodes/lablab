@@ -163,9 +163,16 @@ export default function SurveyStage() {
   
   const handleNext = () => {
     if (hasMoreQuestions) {
+      console.log('Moving to next question:', currentIndex + 1);
       setCurrentIndex(currentIndex + 1);
     } else {
-      goToNextStage();
+      console.log('No more questions, going to next stage');
+      // Ensure goToNextStage is properly called
+      try {
+        goToNextStage();
+      } catch (error) {
+        console.error('Error in goToNextStage:', error);
+      }
     }
   };
   

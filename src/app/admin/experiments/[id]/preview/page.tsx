@@ -817,8 +817,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 
 
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
-  // We render our optimized SurveyStageComponent directly
-  // The component handles its own error, loading states and goToNextStage
+  // Create a wrapper component that overrides the goToNextStage behavior
   return (
     <div style={{ 
       position: 'relative', 
@@ -827,8 +826,31 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       borderRadius: '4px',
       boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' 
     }}>
-      <SurveyStageComponent />
+      <SurveyStageWrapper onNext={onNext} />
     </div>
+  );
+}
+
+// Wrapper component that overrides the goToNextStage context value
+function SurveyStageWrapper({ onNext }: { onNext: () => void }) {
+  const previewContext = usePreview();
+  
+  // Create a modified context with overridden goToNextStage
+  const enhancedGoToNextStage = () => {
+    console.log('Enhanced goToNextStage called - navigating to next stage');
+    onNext();
+  };
+  
+  // Render the SurveyStageComponent with modified goToNextStage behavior
+  return (
+    <PreviewContext.Provider
+      value={{
+        ...previewContext,
+        goToNextStage: enhancedGoToNextStage
+      }}
+    >
+      <SurveyStageComponent />
+    </PreviewContext.Provider>
   );
 }
 

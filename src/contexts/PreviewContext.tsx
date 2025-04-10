@@ -39,7 +39,7 @@ interface PreviewContextType {
   updateParticipantProgress: (experimentId: string, status?: 'in_progress' | 'completed', currentStageId?: string, completedStageId?: string) => Promise<void>;
 }
 
-const PreviewContext = createContext<PreviewContextType | undefined>(undefined);
+export const PreviewContext = createContext<PreviewContextType | undefined>(undefined);
 
 export function PreviewProvider({ children }: { children: React.ReactNode }) {
   const [experiment, setExperiment] = useState<ExperimentData | null>(null);
