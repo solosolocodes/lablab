@@ -4,7 +4,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
 // Ultra-minimal survey component for preview only - fixed for stability
-export default function SurveyStage({ externalNextHandler }: { externalNextHandler?: () => void }) {
+export default function SurveyStage({ 
+  externalNextHandler, 
+  forceRefreshSignal 
+}: { 
+  externalNextHandler?: () => void;
+  forceRefreshSignal?: boolean;
+}) {
   const { currentStage, goToNextStage } = usePreview();
   
   // Use external handler if provided, otherwise use context handler
@@ -15,6 +21,9 @@ export default function SurveyStage({ externalNextHandler }: { externalNextHandl
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasAttemptedFetch = useRef(false);
+  
+  // Track the previous value of forceRefreshSignal to detect changes
+  const prevForceRefreshSignal = useRef(forceRefreshSignal);
   
   // Function to fetch survey data that can be called multiple times
   const fetchSurveyData = useCallback(async (isRefresh = false) => {
@@ -90,6 +99,36 @@ export default function SurveyStage({ externalNextHandler }: { externalNextHandl
     
     return () => clearTimeout(timeoutId);
   }, [currentStage, fetchSurveyData]);
+  
+  // Effect to handle forced refresh from parent component
+  useEffect(() => {
+    // Check if forceRefreshSignal changed from false to true
+    if (forceRefreshSignal === true && prevForceRefreshSignal.current === false) {
+      console.log('Force refresh triggered from parent component');
+      
+      // Reset fetch attempt flag to allow a new fetch
+      hasAttemptedFetch.current = false;
+      
+      // Clear any existing errors
+      setError(null);
+      
+      // Set loading state
+      setIsLoading(true);
+      
+      // Fetch survey data with small delay to avoid race conditions
+      setTimeout(() => {
+        if (currentStage?.surveyId) {
+          fetchSurveyData(true);
+        } else {
+          setError("No survey ID available for refresh");
+          setIsLoading(false);
+        }
+      }, 100);
+    }
+    
+    // Update previous value reference
+    prevForceRefreshSignal.current = forceRefreshSignal;
+  }, [forceRefreshSignal, currentStage, fetchSurveyData]);
   
   // Validate stage
   if (!currentStage || currentStage.type !== 'survey') {
