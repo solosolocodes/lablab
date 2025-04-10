@@ -243,6 +243,14 @@ const SurveyStageComponent = ({
     return () => clearTimeout(timeoutId);
   }, [isLoading]);
   
+  // Effect to log questions when they change, not on every render
+  useEffect(() => {
+    if (!hasLoggedQuestions.current && questions.length > 0) {
+      console.log(`Loaded ${questions.length} questions for survey`);
+      hasLoggedQuestions.current = true;
+    }
+  }, [questions.length]);
+  
   // Check for missing stage
   if (!currentStage) {
     return <div style={{ padding: '20px', backgroundColor: 'white' }}>
@@ -466,13 +474,6 @@ const SurveyStageComponent = ({
     );
   }
   
-  // Only log questions when they change, not on every render
-  useEffect(() => {
-    if (!hasLoggedQuestions.current && questions.length > 0) {
-      console.log(`Loaded ${questions.length} questions for survey`);
-      hasLoggedQuestions.current = true;
-    }
-  }, [questions.length]);
   
   // Super-minimal rendering of questions - absolute bare minimum for stability
   return (

@@ -816,7 +816,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 }
 
 
-function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
+function SurveyStageWrapper({ stage, onNext }: { stage: Stage; onNext: () => void }) {
   // Keep a local reference to the surveyId for refresh button functionality
   const surveyId = stage?.surveyId;
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -911,10 +911,11 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
         borderRadius: '4px',
         boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' 
       }}>
-        {/* We'll use props to pass the next handler */}
+        {/* We'll use props to pass the next handler and stage data */}
         <SurveyStageComponent 
           externalNextHandler={onNext} 
           forceRefreshSignal={isRefreshing} // Pass the refreshing state to trigger re-render
+          stage={stage} // Pass the stage data explicitly
         />
       </div>
     </>
@@ -933,7 +934,7 @@ function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void 
   }
   
   if (stage.type === 'survey') {
-    return <SurveyStage stage={stage} onNext={onNext} />;
+    return <SurveyStageWrapper stage={stage} onNext={onNext} />;
   }
   
   // Default placeholder for unknown stage types
@@ -1235,7 +1236,7 @@ function SimplePreviewContent() {
             borderRadius: '4px',
             boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' 
           }}>
-            <SurveyStage 
+            <SurveyStageComponent 
               stage={surveyStage}
               externalNextHandler={handleStageNext} 
               forceRefreshSignal={isRefreshing}
@@ -1265,7 +1266,7 @@ function SimplePreviewContent() {
           onNext={handleStageNext} 
         />
       ),
-      'survey': stage => <SurveyStageWrapper stage={stage} />
+      'survey': stage => <SurveyStageWrapper stage={stage} onNext={handleStageNext} />
     };
     
     // Default component for unknown stage types
