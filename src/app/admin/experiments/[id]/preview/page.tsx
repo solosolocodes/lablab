@@ -821,35 +821,19 @@ function SurveyStageWrapper({ stage, onNext }: { stage: Stage; onNext: () => voi
   const surveyId = stage?.surveyId;
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // Function to refresh survey data directly
-  const handleManualRefresh = async () => {
+  // Function to refresh survey data directly - but only set the signal
+  const handleManualRefresh = () => {
     if (!surveyId || isRefreshing) return;
     
-    try {
-      setIsRefreshing(true);
-      console.log('Manual refresh of survey data triggered from page level');
-      
-      // Direct fetch to MongoDB
-      const timestamp = new Date().getTime();
-      await fetch(`/api/admin/surveys/${surveyId}?t=${timestamp}`, {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-      
-      // Force a refresh by causing re-render with timeout
-      setTimeout(() => {
-        setIsRefreshing(false);
-        console.log('Manual refresh completed');
-      }, 500);
-      
-    } catch (error) {
-      console.error('Error refreshing survey:', error);
+    // Just set the refreshing state and let the child component handle it
+    setIsRefreshing(true);
+    console.log('Manual refresh triggered from page level');
+    
+    // Reset the refresh signal after a delay
+    setTimeout(() => {
       setIsRefreshing(false);
-    }
+      console.log('Manual refresh signal reset');
+    }, 1000);
   };
   
   return (
