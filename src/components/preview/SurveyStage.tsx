@@ -114,16 +114,35 @@ const SurveyStageComponent = ({
     }
   }, [currentStage]);
   
-  // Load data on initial mount
+  // Flag to track if data has been successfully loaded
+  const dataLoadedRef = useRef(false);
+  
+  // Load data once on initial mount or stage change
   useEffect(() => {
+    // Skip if we've already loaded data for this stage
+    if (dataLoadedRef.current && questions.length > 0) {
+      console.log('Already loaded data for this stage, skipping fetch');
+      setIsLoading(false);
+      return;
+    }
+    
     let isMounted = true;
     let retryTimeoutId = null;
     
     // Reset retry count when stage changes
     retryCountRef.current = 0;
+    dataLoadedRef.current = false;
     
     const performFetch = async () => {
       if (!isMounted) return;
+      
+      // Don't fetch if we already have questions
+      if (questions.length > 0) {
+        console.log('Questions already available, skipping fetch');
+        setIsLoading(false);
+        dataLoadedRef.current = true;
+        return;
+      }
       
       console.log(`Fetching survey data (attempt ${retryCountRef.current + 1}/${maxRetries + 1})...`);
       setIsLoading(true);
@@ -137,7 +156,7 @@ const SurveyStageComponent = ({
         // Successfully loaded data
         console.log('Successfully loaded survey data');
         setIsLoading(false);
-        setShouldRetry(false);
+        dataLoadedRef.current = true; // Mark as loaded
       } else if (retryCountRef.current < maxRetries) {
         // Failed to load data, schedule retry
         retryCountRef.current += 1;
@@ -145,7 +164,9 @@ const SurveyStageComponent = ({
         
         // Schedule retry
         retryTimeoutId = setTimeout(() => {
-          setShouldRetry(prev => !prev); // Toggle to trigger effect
+          if (isMounted && !dataLoadedRef.current) {
+            setShouldRetry(prev => !prev); // Toggle to trigger effect
+          }
         }, retryDelay);
       } else {
         // Out of retries
@@ -161,25 +182,37 @@ const SurveyStageComponent = ({
       isMounted = false;
       if (retryTimeoutId) clearTimeout(retryTimeoutId);
     };
-  }, [fetchSurveyData, shouldRetry, currentStage?.id]);
+  }, [fetchSurveyData, shouldRetry, currentStage?.id, questions.length]);
   
   // Handle manual refresh
   const handleRefresh = useCallback(() => {
     console.log('Manual refresh triggered');
     retryCountRef.current = 0; // Reset retry count
+    dataLoadedRef.current = false; // Reset loaded flag
     setIsLoading(true);
     fetchSurveyData().then(success => {
-      if (!success) {
-        setIsLoading(false);
+      if (success) {
+        dataLoadedRef.current = true;
       }
+      setIsLoading(false);
     });
   }, [fetchSurveyData]);
   
+  // Flag to track if we already processed this refresh signal
+  const refreshProcessedRef = useRef(false);
+  
   // Handle parent's forceRefreshSignal
   useEffect(() => {
-    if (forceRefreshSignal) {
-      console.log('Parent-triggered refresh');
+    // Only respond to changes from false to true
+    const isNewRefreshSignal = forceRefreshSignal && !refreshProcessedRef.current;
+    
+    if (isNewRefreshSignal) {
+      console.log('Parent-triggered refresh (new signal)');
+      refreshProcessedRef.current = true;
       handleRefresh();
+    } else if (!forceRefreshSignal) {
+      // Reset the processed flag when signal goes back to false
+      refreshProcessedRef.current = false;
     }
   }, [forceRefreshSignal, handleRefresh]);
   
