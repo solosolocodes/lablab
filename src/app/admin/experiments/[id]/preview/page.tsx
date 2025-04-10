@@ -1112,6 +1112,173 @@ function SimplePreviewContent() {
     const stage = experiment.stages[currentStageNumber];
     if (!stage) return null;
     
+    // Debug panel that shows for all stage types at the top
+    const DebugPanel = ({ stage }) => (
+      <div style={{ 
+        padding: '4px 8px',
+        backgroundColor: '#f0f9ff', 
+        border: '1px solid #bae6fd',
+        borderRadius: '4px',
+        fontSize: '11px',
+        marginBottom: '8px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontFamily: 'monospace'
+      }}>
+        <span>Stage: {stage.type} | ID: {stage.id?.substring(0, 8) || 'none'}</span>
+        <span>
+          {stage.type === 'survey' && <>SurveyID: {stage.surveyId || 'not set'}</>}
+          {stage.type === 'scenario' && <>ScenarioID: {stage.scenarioId || 'not set'}</>}
+        </span>
+      </div>
+    );
+    
+    // Map of stage types to their components
+    const StageComponentMap = {
+      'instructions': stage => (
+        <InstructionsView 
+          stage={stage as unknown as InstructionsStage} 
+          onNext={handleStageNext} 
+        />
+      ),
+      'break': stage => (
+        <BreakStage 
+          stage={stage} 
+          onNext={handleStageNext} 
+        />
+      ),
+      'scenario': stage => (
+        <ScenarioStage 
+          stage={stage} 
+          onNext={handleStageNext} 
+        />
+      ),
+      'survey': stage => {
+        // For survey type, we need special handling
+        // We'll ensure we have a surveyId and fix any type issues
+        const surveyStage = {
+          ...stage,
+          // Force type to be survey to avoid rendering issues
+          type: 'survey'
+        };
+        
+        // Create a refresh handler for the top-level refresh button
+        const [isRefreshing, setIsRefreshing] = useState(false);
+        
+        const handleManualRefresh = async () => {
+          if (!stage.surveyId || isRefreshing) return;
+          
+          try {
+            setIsRefreshing(true);
+            console.log('Manual refresh of survey data triggered from page level');
+            
+            // Direct fetch to MongoDB
+            const timestamp = new Date().getTime();
+            await fetch(`/api/admin/surveys/${stage.surveyId}?t=${timestamp}`, {
+              method: 'GET',
+              headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+              }
+            });
+            
+            // Force a refresh by causing re-render with timeout
+            setTimeout(() => {
+              setIsRefreshing(false);
+              console.log('Manual refresh completed');
+            }, 500);
+            
+          } catch (error) {
+            console.error('Error refreshing survey:', error);
+            setIsRefreshing(false);
+          }
+        };
+        
+        return (
+          <div>
+            {/* Top-level refresh button for survey */}
+            <div style={{
+              padding: '8px 16px',
+              backgroundColor: '#f8f9fa',
+              border: '1px solid #dee2e6',
+              borderRadius: '4px',
+              marginBottom: '16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <span style={{ fontWeight: 'bold' }}>Survey ID:</span> {stage.surveyId || 'Not specified'}
+              </div>
+              <button
+                onClick={handleManualRefresh}
+                disabled={isRefreshing || !stage.surveyId}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: isRefreshing ? '#6c757d' : '#0d6efd',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: isRefreshing || !stage.surveyId ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                {isRefreshing ? 'Refreshing...' : 'Refresh Survey Data'}
+                {isRefreshing && (
+                  <span style={{
+                    display: 'inline-block',
+                    width: '16px',
+                    height: '16px',
+                    borderRadius: '50%',
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTopColor: 'white',
+                    animation: 'topRefreshSpin 1s linear infinite'
+                  }}></span>
+                )}
+              </button>
+              <style jsx>{`
+                @keyframes topRefreshSpin {
+                  to { transform: rotate(360deg); }
+                }
+              `}</style>
+            </div>
+            
+            {/* Survey component with fixed types */}
+            <div style={{ 
+              position: 'relative', 
+              zIndex: 10, 
+              backgroundColor: 'white',
+              borderRadius: '4px',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' 
+            }}>
+              <SurveyStage 
+                stage={surveyStage}
+                externalNextHandler={handleStageNext} 
+                forceRefreshSignal={isRefreshing}
+              />
+            </div>
+          </div>
+        );
+      }
+    };
+    
+    // Default component for unknown stage types
+    const DefaultComponent = stage => (
+      <PlaceholderStage 
+        stage={stage} 
+        onNext={handleStageNext} 
+      />
+    );
+    
+    // Get the right component for this stage type
+    const renderStageComponent = (stage) => {
+      const renderFunc = StageComponentMap[stage.type] || DefaultComponent;
+      return renderFunc(stage);
+    };
+    
     return (
       <div className="p-4">
         <div className="flex justify-between items-center w-full mb-4">
@@ -1123,58 +1290,12 @@ function SimplePreviewContent() {
           </div>
         </div>
         
+        {/* Debug panel at the top */}
+        <DebugPanel stage={stage} />
+        
+        {/* Stage component based on type */}
         <div className="w-full">
-          {stage.type === 'instructions' && 'content' in stage && (
-            <InstructionsView 
-              stage={stage as unknown as InstructionsStage} 
-              onNext={handleStageNext} 
-            />
-          )}
-          
-          {stage.type === 'break' && (
-            <BreakStage 
-              stage={stage} 
-              onNext={handleStageNext} 
-            />
-          )}
-          
-          {stage.type === 'scenario' && (
-            <ScenarioStage 
-              stage={stage} 
-              onNext={handleStageNext} 
-            />
-          )}
-          
-          {stage.type === 'survey' && (
-            <div>
-              {/* Debug information for stage type */}
-              <div style={{ 
-                padding: '4px 8px',
-                backgroundColor: '#e9f5fd', 
-                border: '1px solid #c2e0f4',
-                borderRadius: '4px',
-                fontSize: '12px',
-                marginBottom: '8px',
-                display: 'flex',
-                justifyContent: 'space-between'
-              }}>
-                <span>Debug: Type={stage.type}, ID={stage.id || 'none'}</span>
-                <span>SurveyID: {stage.surveyId || 'not set'}</span>
-              </div>
-              
-              <SurveyStage 
-                stage={stage} 
-                onNext={handleStageNext} 
-              />
-            </div>
-          )}
-          
-          {!['instructions', 'break', 'scenario', 'survey'].includes(stage.type) && (
-            <PlaceholderStage 
-              stage={stage} 
-              onNext={handleStageNext} 
-            />
-          )}
+          {renderStageComponent(stage)}
         </div>
       </div>
     );
