@@ -17,7 +17,7 @@ const SurveyStageComponent = ({
   const { currentStage: contextStage, goToNextStage } = usePreview();
   const [surveyData, setSurveyData] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Start with not loading
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
@@ -54,7 +54,7 @@ const SurveyStageComponent = ({
   const currentQuestion = questions[currentIndex] || null;
   const hasMoreQuestions = currentIndex < questions.length - 1;
   
-  // Fetch survey data with caching
+  // Fetch survey data without caching
   const fetchSurveyData = useCallback(async (isRefresh = false) => {
     // For instructions type, we just show the content directly without fetch
     if (currentStage?.type === 'instructions') {
@@ -83,6 +83,13 @@ const SurveyStageComponent = ({
       return;
     }
     
+    // If we already have survey data and we're not explicitly refreshing, don't fetch again
+    if (surveyData && !isRefresh && questions.length > 0) {
+      console.log("Already have survey data, skipping fetch");
+      setIsLoading(false);
+      return;
+    }
+    
     // Regular survey flow
     if (!currentStage?.surveyId) {
       setError("No survey ID available");
@@ -91,11 +98,9 @@ const SurveyStageComponent = ({
     }
     
     try {
-      // Show loading or refreshing state
+      // Show loading or refreshing state based on context
       if (isRefresh) {
         setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
       }
       
       // Add timestamp to prevent caching
@@ -132,7 +137,7 @@ const SurveyStageComponent = ({
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentStage]);
+  }, [currentStage, surveyData, questions.length]);
   
   // Handle refresh button click
   const handleRefresh = useCallback(() => {
@@ -156,9 +161,10 @@ const SurveyStageComponent = ({
   
   // One-time fetch survey data at component mount
   useEffect(() => {
-    // Always fetch data on first mount or when component remounts
-    if (!didMountRef.current) {
+    // Only fetch if we haven't already loaded questions or if explicitly refreshing
+    if (!didMountRef.current && (!questions.length || isRefreshing)) {
       didMountRef.current = true;
+      setIsLoading(true); // Set loading only when we're actually fetching
       
       // For instructions type, process without API fetch
       if (currentStage?.type === 'instructions') {
@@ -167,40 +173,36 @@ const SurveyStageComponent = ({
       }
       
       const surveyId = currentStage?.surveyId;
-      if (!surveyId) return;
+      if (!surveyId) {
+        setIsLoading(false);
+        return;
+      }
       
-      // Always fetch on initial mount - skip cache check
+      // Fetch data if needed
       fetchSurveyData(false);
+    } else if (questions.length > 0) {
+      // If we already have questions, make sure we're not in loading state
+      setIsLoading(false);
     }
-  }, [currentStage, fetchSurveyData]);
+  }, [currentStage, fetchSurveyData, questions.length, isRefreshing]);
   
   // Effect to handle forced refresh from parent component
   useEffect(() => {
     // Check if forceRefreshSignal changed from false to true
     if (forceRefreshSignal === true && prevForceRefreshSignal.current === false) {
-      // Reset local storage cache for this survey if available
-      if (currentStage?.surveyId) {
-        try {
-          const STORAGE_KEY = 'fetchedSurveys';
-          const fetchedSurveys = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-          delete fetchedSurveys[currentStage.surveyId];
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedSurveys));
-        } catch (e) {
-          console.error('Error clearing survey cache:', e);
-        }
-      }
+      console.log("Forced refresh triggered by parent component");
       
       // Clear any existing errors
       setError(null);
       
-      // Set loading state and fetch data
+      // Set loading state and fetch data only if explicitly refreshing
       setIsLoading(true);
       fetchSurveyData(true);
     }
     
     // Update previous value reference
     prevForceRefreshSignal.current = forceRefreshSignal;
-  }, [forceRefreshSignal, currentStage, fetchSurveyData]);
+  }, [forceRefreshSignal, fetchSurveyData]);
   
   // Effect to detect prolonged loading
   useEffect(() => {
