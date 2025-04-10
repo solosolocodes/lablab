@@ -6,12 +6,30 @@ import { usePreview } from '@/contexts/PreviewContext';
 // Ultra-minimal survey component for preview only - fixed for stability
 export default function SurveyStage({ 
   externalNextHandler, 
-  forceRefreshSignal 
+  forceRefreshSignal,
+  stage: propStage  // Accept stage as a prop
 }: { 
   externalNextHandler?: () => void;
   forceRefreshSignal?: boolean;
+  stage?: any;  // Allow stage to be passed from parent
 }) {
-  const { currentStage, goToNextStage } = usePreview();
+  // Get context stage but prefer the prop stage
+  const { currentStage: contextStage, goToNextStage } = usePreview();
+  
+  // Use prop stage if available, otherwise fall back to context stage
+  // This should fix issues where the component is used both directly and as a child
+  const currentStage = propStage || contextStage;
+  
+  // Log stage source for debugging
+  useEffect(() => {
+    if (propStage) {
+      console.log('SurveyStage using prop stage:', propStage.id, 'type:', propStage.type);
+    } else if (contextStage) {
+      console.log('SurveyStage using context stage:', contextStage.id, 'type:', contextStage.type);
+    } else {
+      console.error('SurveyStage has no stage data from props or context!');
+    }
+  }, [propStage, contextStage]);
   
   // Use external handler if provided, otherwise use context handler
   const nextStageHandler = externalNextHandler || goToNextStage;
@@ -130,9 +148,26 @@ export default function SurveyStage({
     prevForceRefreshSignal.current = forceRefreshSignal;
   }, [forceRefreshSignal, currentStage, fetchSurveyData]);
   
-  // Validate stage
-  if (!currentStage || currentStage.type !== 'survey') {
-    return <div style={{ padding: '20px', backgroundColor: 'white' }}>Invalid stage</div>;
+  // Validate stage with more detailed logging to catch the issue
+  if (!currentStage) {
+    console.error('Survey stage error: currentStage is null or undefined');
+    return <div style={{ padding: '20px', backgroundColor: 'white' }}>
+      <p>Error: Stage data not available</p>
+      <button onClick={handleRefresh} style={{marginTop: '10px', padding: '5px 10px', backgroundColor: '#4285f4', color: 'white', border: 'none', borderRadius: '4px'}}>
+        Try Refresh
+      </button>
+    </div>;
+  }
+  
+  if (currentStage.type !== 'survey') {
+    console.error(`Survey stage error: Expected stage type 'survey' but got '${currentStage.type}'`, currentStage);
+    return <div style={{ padding: '20px', backgroundColor: 'white' }}>
+      <p>Error: Invalid stage type ({currentStage.type})</p>
+      <p>Expected: survey</p>
+      <pre style={{fontSize: '12px', padding: '10px', backgroundColor: '#f5f5f5', overflowX: 'auto', marginTop: '10px'}}>
+        {JSON.stringify(currentStage, null, 2)}
+      </pre>
+    </div>;
   }
   
   // Handle loading state

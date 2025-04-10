@@ -1146,10 +1146,27 @@ function SimplePreviewContent() {
           )}
           
           {stage.type === 'survey' && (
-            <SurveyStage 
-              stage={stage} 
-              onNext={handleStageNext} 
-            />
+            <div>
+              {/* Debug information for stage type */}
+              <div style={{ 
+                padding: '4px 8px',
+                backgroundColor: '#e9f5fd', 
+                border: '1px solid #c2e0f4',
+                borderRadius: '4px',
+                fontSize: '12px',
+                marginBottom: '8px',
+                display: 'flex',
+                justifyContent: 'space-between'
+              }}>
+                <span>Debug: Type={stage.type}, ID={stage.id || 'none'}</span>
+                <span>SurveyID: {stage.surveyId || 'not set'}</span>
+              </div>
+              
+              <SurveyStage 
+                stage={stage} 
+                onNext={handleStageNext} 
+              />
+            </div>
           )}
           
           {!['instructions', 'break', 'scenario', 'survey'].includes(stage.type) && (
