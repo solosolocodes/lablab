@@ -156,44 +156,20 @@ const SurveyStageComponent = ({
   
   // One-time fetch survey data at component mount
   useEffect(() => {
-    if (didMountRef.current) {
-      return; // Already mounted - do nothing
-    }
-    
-    didMountRef.current = true;
-    
-    // Check if we've recently fetched this survey
-    const STORAGE_KEY = 'fetchedSurveys';
-    try {
-      const fetchedSurveys = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      const surveyId = currentStage?.surveyId;
+    // Always fetch data on first mount or when component remounts
+    if (!didMountRef.current) {
+      didMountRef.current = true;
       
+      // For instructions type, process without API fetch
       if (currentStage?.type === 'instructions') {
-        // Process instructions content without fetching
         fetchSurveyData(false);
         return;
       }
       
+      const surveyId = currentStage?.surveyId;
       if (!surveyId) return;
       
-      // Check if we've fetched this survey recently (within last 5 minutes)
-      const now = Date.now();
-      const recentThreshold = 5 * 60 * 1000; // 5 minutes
-      
-      if (fetchedSurveys[surveyId] && (now - fetchedSurveys[surveyId]) < recentThreshold) {
-        // Skip silently using cached data
-        return;
-      }
-      
-      // Mark this survey as fetched with timestamp
-      fetchedSurveys[surveyId] = now;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedSurveys));
-      
-      // Fetch the data
-      fetchSurveyData(false);
-    } catch (e) {
-      console.error('Error checking survey cache:', e);
-      // Proceed with fetch anyway
+      // Always fetch on initial mount - skip cache check
       fetchSurveyData(false);
     }
   }, [currentStage, fetchSurveyData]);
