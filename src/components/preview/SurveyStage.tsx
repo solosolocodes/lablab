@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
 // Ultra-minimal survey component for preview only - fixed for stability
-export default function SurveyStage({ 
+// Create a memoized version of the component to prevent unnecessary re-renders
+function SurveyStageComponent({ 
   externalNextHandler, 
   forceRefreshSignal,
   stage: propStage  // Accept stage as a prop
@@ -20,15 +21,17 @@ export default function SurveyStage({
   // This should fix issues where the component is used both directly and as a child
   const currentStage = propStage || contextStage;
   
-  // Log stage source for debugging
+  // Only log stage source when debugging is needed
+  const hasLoggedStageSource = useRef(false);
   useEffect(() => {
-    if (propStage) {
-      console.log('SurveyStage using prop stage:', propStage.id, 'type:', propStage.type);
-    } else if (contextStage) {
-      console.log('SurveyStage using context stage:', contextStage.id, 'type:', contextStage.type);
-    } else {
+    // Only log once per component instance to reduce console spam
+    if (hasLoggedStageSource.current) return;
+    
+    if (!propStage && !contextStage) {
       console.error('SurveyStage has no stage data from props or context!');
     }
+    
+    hasLoggedStageSource.current = true;
   }, [propStage, contextStage]);
   
   // Use external handler if provided, otherwise use context handler
@@ -61,7 +64,11 @@ export default function SurveyStage({
         ]
       };
       
-      console.log("Using instructions content as survey data");
+      // Only log if this is an explicit refresh, not on normal render
+      if (isRefresh) {
+        console.log("Using instructions content as survey data");
+      }
+      
       setSurveyData(instructionsSurvey);
       setIsLoading(false);
       setIsRefreshing(false);
@@ -142,14 +149,14 @@ export default function SurveyStage({
     
     // For instructions type, we just show the content directly without fetch
     if (currentStage?.type === 'instructions') {
-      console.log('Processing instructions content without fetch');
+      // Reduced logging to prevent console spam
       fetchSurveyData(false);
       return;
     }
     
     // Skip if no valid survey ID
     if (!currentStage?.surveyId) {
-      console.log('No survey ID found, skipping fetch');
+      // Reduced logging
       return;
     }
     
@@ -163,15 +170,13 @@ export default function SurveyStage({
     const recentThreshold = 5 * 60 * 1000; // 5 minutes
     
     if (fetchedSurveys[surveyKey] && (now - fetchedSurveys[surveyKey]) < recentThreshold) {
-      console.log(`Survey ID ${surveyKey} was recently fetched, using cached data`);
+      // Skip silently using cached data
       return;
     }
     
     // Mark this survey as fetched with timestamp
     fetchedSurveys[surveyKey] = now;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedSurveys));
-    
-    console.log(`Fetching survey ID: ${surveyKey}`);
     
     // Fetch once with delay to avoid race conditions
     const timeoutId = setTimeout(() => {
@@ -454,6 +459,17 @@ export default function SurveyStage({
     questions.push(...currentStage.questions);
   }
   
+  // Track if we've already logged the question count (for selective logging)
+  const hasLoggedQuestions = useRef(false);
+  
+  // Only log questions when they change, not on every render
+  useEffect(() => {
+    if (!hasLoggedQuestions.current && questions.length > 0) {
+      console.log(`Loaded ${questions.length} questions for survey`);
+      hasLoggedQuestions.current = true;
+    }
+  }, [questions.length]);
+  
   // No questions case
   if (!questions.length) {
     return (
@@ -656,3 +672,39 @@ export default function SurveyStage({
     </div>
   );
 }
+
+// Define a custom comparison function for React.memo
+// This prevents unnecessary re-renders by only updating when important props change
+const arePropsEqual = (prevProps, nextProps) => {
+  // Always re-render when forceRefreshSignal changes from false to true
+  if (nextProps.forceRefreshSignal === true && prevProps.forceRefreshSignal === false) {
+    return false;
+  }
+  
+  // Check if stage ID changed
+  const prevStageId = prevProps.stage?.id;
+  const nextStageId = nextProps.stage?.id;
+  if (prevStageId !== nextStageId) {
+    return false;
+  }
+  
+  // Check if stage type changed
+  const prevType = prevProps.stage?.type;
+  const nextType = nextProps.stage?.type;
+  if (prevType !== nextType) {
+    return false;
+  }
+  
+  // Check if surveyId changed
+  const prevSurveyId = prevProps.stage?.surveyId;
+  const nextSurveyId = nextProps.stage?.surveyId;
+  if (prevSurveyId !== nextSurveyId) {
+    return false;
+  }
+  
+  // Otherwise, consider props equal and prevent re-render
+  return true;
+};
+
+// Export the memoized component to prevent unnecessary re-renders
+export default React.memo(SurveyStageComponent, arePropsEqual);
