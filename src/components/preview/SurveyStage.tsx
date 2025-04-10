@@ -3,6 +3,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
+// Create a singleton cache to track which surveys have been successfully loaded
+// This prevents duplicate fetches across component mounts
+const loadedSurveys = new Set();
+
 // Simple survey component for preview mode
 const SurveyStageComponent = ({ 
   externalNextHandler, 
@@ -13,24 +17,41 @@ const SurveyStageComponent = ({
   forceRefreshSignal?: boolean;
   stage?: any;
 }) => {
-  // Core state
+  // Destructure needed context values
   const { currentStage: contextStage, goToNextStage } = usePreview();
+  
+  // Core component state
   const [currentIndex, setCurrentIndex] = useState(0);
   const [surveyData, setSurveyData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // API call retry mechanism
-  const [shouldRetry, setShouldRetry] = useState(false);
+  // Retry mechanism state
   const retryCountRef = useRef(0);
   const maxRetries = 3;
-  const retryDelay = 200; // milliseconds
+  const retryDelayMs = 200;
+  
+  // Flags to prevent duplicate operations
+  const isFetchingRef = useRef(false);
+  const isComponentMountedRef = useRef(true);
+  const stageIdRef = useRef(null);
+  
+  // Track whether parent refresh is in progress
+  const lastRefreshTimeRef = useRef(0);
+  const refreshMinIntervalMs = 500; // Minimum time between refreshes
   
   // Use prop stage if available, otherwise fall back to context stage
   const currentStage = useMemo(() => propStage || contextStage, [propStage, contextStage]);
   
   // Use external handler if provided, otherwise use context handler
   const nextStageHandler = useMemo(() => externalNextHandler || goToNextStage, [externalNextHandler, goToNextStage]);
+  
+  // Get current stage ID, handling different formats
+  const stageId = useMemo(() => {
+    return currentStage?.id || 
+           currentStage?.surveyId || 
+           (currentStage?.type === 'instructions' ? 'instructions-' + Date.now() : null);
+  }, [currentStage]);
   
   // Extract questions from either surveyData or directly from stage
   const questions = useMemo(() => {
@@ -52,38 +73,102 @@ const SurveyStageComponent = ({
   const currentQuestion = questions[currentIndex] || null;
   const hasMoreQuestions = currentIndex < questions.length - 1;
   
-  // Main fetch function
-  const fetchSurveyData = useCallback(async () => {
-    // For instructions type, we create synthetic survey data
-    if (currentStage?.type === 'instructions') {
-      const instructionsSurvey = {
-        title: currentStage.title || "Instructions",
-        description: currentStage.description || "",
-        questions: [
-          {
-            id: "instructions-question",
-            type: "text",
-            text: currentStage.content || "Please review the instructions and continue when ready.",
-            required: false
-          }
-        ]
-      };
+  // Reset component state when stage changes
+  useEffect(() => {
+    // Only run this on stage ID change
+    if (stageId !== stageIdRef.current) {
+      // Store current stage ID
+      stageIdRef.current = stageId;
       
-      setSurveyData(instructionsSurvey);
-      setIsLoading(false);
-      return true; // Successfully loaded data
+      // Reset component state
+      retryCountRef.current = 0;
+      setCurrentIndex(0);
+      
+      console.log(`Stage changed to: ${stageId}`);
+      
+      // Clear survey data if switching to a different stage
+      if (stageId && !loadedSurveys.has(stageId)) {
+        setSurveyData(null);
+      }
+    }
+  }, [stageId]);
+  
+  // Component cleanup
+  useEffect(() => {
+    isComponentMountedRef.current = true;
+    
+    return () => {
+      isComponentMountedRef.current = false;
+    };
+  }, []);
+  
+  // Main fetch function
+  const fetchSurveyData = useCallback(async (force = false) => {
+    // Skip if we're already fetching or the component is unmounted
+    if (isFetchingRef.current || !isComponentMountedRef.current) {
+      console.log('Skipping fetch: already in progress or component unmounted');
+      return false;
     }
     
-    // Regular survey flow
-    if (!currentStage?.surveyId) {
-      setError("No survey ID available");
-      setIsLoading(false);
-      return false; // Failed to load data
+    // Skip if we've already loaded this survey
+    if (!force && stageId && loadedSurveys.has(stageId) && questions.length > 0) {
+      console.log(`Skipping fetch: survey ${stageId} already loaded`);
+      return true;
     }
+    
+    // Set fetching flag to prevent duplicate requests
+    isFetchingRef.current = true;
+    setIsLoading(true);
     
     try {
+      // For instructions type, we create synthetic survey data
+      if (currentStage?.type === 'instructions') {
+        // Create a survey-compatible object from instructions
+        const instructionsSurvey = {
+          title: currentStage.title || "Instructions",
+          description: currentStage.description || "",
+          questions: [
+            {
+              id: "instructions-content",
+              type: "text",
+              text: currentStage.content || "Please review the instructions and continue when ready.",
+              required: false
+            }
+          ]
+        };
+        
+        console.log('Using instructions content as survey data');
+        
+        if (isComponentMountedRef.current) {
+          setSurveyData(instructionsSurvey);
+          setError(null);
+          setIsLoading(false);
+          
+          // Mark as loaded
+          if (stageId) loadedSurveys.add(stageId);
+        }
+        
+        isFetchingRef.current = false;
+        return true;
+      }
+      
+      // Regular survey flow
+      if (!currentStage?.surveyId) {
+        console.error('No survey ID available');
+        
+        if (isComponentMountedRef.current) {
+          setError("No survey ID available");
+          setIsLoading(false);
+        }
+        
+        isFetchingRef.current = false;
+        return false;
+      }
+      
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
+      console.log(`Fetching survey ${currentStage.surveyId} (attempt ${retryCountRef.current + 1}/${maxRetries + 1})...`);
+      
       const response = await fetch(`/api/admin/surveys/${currentStage.surveyId}?t=${timestamp}`, {
         method: 'GET',
         headers: {
@@ -93,126 +178,138 @@ const SurveyStageComponent = ({
         }
       });
       
+      // If component unmounted during fetch, don't update state
+      if (!isComponentMountedRef.current) {
+        isFetchingRef.current = false;
+        return false;
+      }
+      
       if (response.ok) {
         const data = await response.json();
+        
         if (data.success && data.survey) {
-          setSurveyData(data.survey);
-          setError(null);
-          setIsLoading(false);
-          return true; // Successfully loaded data
+          console.log(`Successfully loaded survey data with ${data.survey.questions?.length || 0} questions`);
+          
+          if (isComponentMountedRef.current) {
+            setSurveyData(data.survey);
+            setError(null);
+            setIsLoading(false);
+            
+            // Mark as successfully loaded
+            if (stageId) loadedSurveys.add(stageId);
+          }
+          
+          isFetchingRef.current = false;
+          return true;
         } else {
-          setError("Survey data structure invalid");
-          return false; // Failed to load data
+          console.error('Invalid survey data structure:', data);
+          
+          if (isComponentMountedRef.current) {
+            setError("Survey data structure invalid");
+            setIsLoading(false);
+          }
+          
+          isFetchingRef.current = false;
+          return false;
         }
       } else {
-        setError(`Failed to load survey (${response.status})`);
-        return false; // Failed to load data
+        console.error(`Failed to load survey: ${response.status}`);
+        
+        if (isComponentMountedRef.current) {
+          setError(`Failed to load survey (${response.status})`);
+          setIsLoading(false);
+        }
+        
+        isFetchingRef.current = false;
+        return false;
       }
     } catch (error) {
-      setError("Error loading survey: " + (error.message || "Unknown error"));
-      return false; // Failed to load data
+      console.error('Failed to load survey:', error);
+      
+      if (isComponentMountedRef.current) {
+        setError("Error loading survey: " + (error.message || "Unknown error"));
+        setIsLoading(false);
+      }
+      
+      isFetchingRef.current = false;
+      return false;
     }
-  }, [currentStage]);
+  }, [currentStage, questions.length, stageId]);
   
-  // Flag to track if data has been successfully loaded
-  const dataLoadedRef = useRef(false);
-  
-  // Load data once on initial mount or stage change
+  // Initial data loading
   useEffect(() => {
-    // Skip if we've already loaded data for this stage
-    if (dataLoadedRef.current && questions.length > 0) {
-      console.log('Already loaded data for this stage, skipping fetch');
-      setIsLoading(false);
+    // Skip if we don't have a stage or we're already loaded
+    if (!stageId || isFetchingRef.current) return;
+    
+    // Skip if we've already loaded this survey
+    if (stageId && loadedSurveys.has(stageId) && questions.length > 0) {
+      console.log(`Survey ${stageId} already loaded, skipping fetch`);
       return;
     }
     
-    let isMounted = true;
-    let retryTimeoutId = null;
-    
-    // Reset retry count when stage changes
+    // Reset retry counter
     retryCountRef.current = 0;
-    dataLoadedRef.current = false;
     
-    const performFetch = async () => {
-      if (!isMounted) return;
+    const loadWithRetries = async () => {
+      // Skip if component is no longer mounted
+      if (!isComponentMountedRef.current) return;
       
-      // Don't fetch if we already have questions
-      if (questions.length > 0) {
-        console.log('Questions already available, skipping fetch');
-        setIsLoading(false);
-        dataLoadedRef.current = true;
-        return;
-      }
-      
-      console.log(`Fetching survey data (attempt ${retryCountRef.current + 1}/${maxRetries + 1})...`);
-      setIsLoading(true);
-      
+      console.log(`Initial load for stage ${stageId}`);
       const success = await fetchSurveyData();
       
-      // If component is unmounted, don't update state
-      if (!isMounted) return;
+      // Skip if component unmounted or fetching was successful
+      if (!isComponentMountedRef.current || success) return;
       
-      if (success) {
-        // Successfully loaded data
-        console.log('Successfully loaded survey data');
-        setIsLoading(false);
-        dataLoadedRef.current = true; // Mark as loaded
-      } else if (retryCountRef.current < maxRetries) {
-        // Failed to load data, schedule retry
-        retryCountRef.current += 1;
-        console.log(`Scheduling retry ${retryCountRef.current} in ${retryDelay}ms...`);
+      // Retry if fetch failed and we haven't exceeded max retries
+      if (!success && retryCountRef.current < maxRetries) {
+        retryCountRef.current++;
         
-        // Schedule retry
-        retryTimeoutId = setTimeout(() => {
-          if (isMounted && !dataLoadedRef.current) {
-            setShouldRetry(prev => !prev); // Toggle to trigger effect
+        console.log(`Scheduling retry ${retryCountRef.current} in ${retryDelayMs}ms...`);
+        
+        // Schedule retry after delay
+        setTimeout(() => {
+          if (isComponentMountedRef.current) {
+            loadWithRetries();
           }
-        }, retryDelay);
-      } else {
-        // Out of retries
+        }, retryDelayMs);
+      } else if (!success) {
         console.log('Failed to load survey data after all retries');
-        setIsLoading(false);
       }
     };
     
-    performFetch();
-    
-    // Cleanup
-    return () => {
-      isMounted = false;
-      if (retryTimeoutId) clearTimeout(retryTimeoutId);
-    };
-  }, [fetchSurveyData, shouldRetry, currentStage?.id, questions.length]);
+    loadWithRetries();
+  }, [stageId, fetchSurveyData, questions.length]);
   
-  // Handle manual refresh
+  // Handle manual refresh button click
   const handleRefresh = useCallback(() => {
+    // Prevent rapid refreshes
+    const now = Date.now();
+    if (now - lastRefreshTimeRef.current < refreshMinIntervalMs) {
+      console.log('Refresh triggered too soon, skipping');
+      return;
+    }
+    
     console.log('Manual refresh triggered');
-    retryCountRef.current = 0; // Reset retry count
-    dataLoadedRef.current = false; // Reset loaded flag
-    setIsLoading(true);
-    fetchSurveyData().then(success => {
-      if (success) {
-        dataLoadedRef.current = true;
-      }
-      setIsLoading(false);
-    });
-  }, [fetchSurveyData]);
-  
-  // Flag to track if we already processed this refresh signal
-  const refreshProcessedRef = useRef(false);
+    lastRefreshTimeRef.current = now;
+    
+    // Reset retry counter
+    retryCountRef.current = 0;
+    
+    // Remove from loaded surveys to force a fresh fetch
+    if (stageId) loadedSurveys.delete(stageId);
+    
+    // Force fetch with cache clearing
+    fetchSurveyData(true);
+  }, [fetchSurveyData, stageId]);
   
   // Handle parent's forceRefreshSignal
   useEffect(() => {
-    // Only respond to changes from false to true
-    const isNewRefreshSignal = forceRefreshSignal && !refreshProcessedRef.current;
+    const now = Date.now();
     
-    if (isNewRefreshSignal) {
-      console.log('Parent-triggered refresh (new signal)');
-      refreshProcessedRef.current = true;
+    // Only trigger refresh if signal is true and sufficient time has passed
+    if (forceRefreshSignal && now - lastRefreshTimeRef.current >= refreshMinIntervalMs) {
+      console.log('Parent component triggered refresh');
       handleRefresh();
-    } else if (!forceRefreshSignal) {
-      // Reset the processed flag when signal goes back to false
-      refreshProcessedRef.current = false;
     }
   }, [forceRefreshSignal, handleRefresh]);
   
@@ -494,19 +591,16 @@ const SurveyStageComponent = ({
   );
 };
 
-// Define a simple comparison function for React.memo
+// Define a comparison function for React.memo to prevent unnecessary re-renders
 const arePropsEqual = (prevProps, nextProps) => {
-  // Re-render when forceRefreshSignal changes from false to true
-  if (nextProps.forceRefreshSignal === true && prevProps.forceRefreshSignal === false) {
-    return false;
-  }
+  // Always re-render if stage changes
+  if (prevProps.stage?.id !== nextProps.stage?.id) return false;
   
-  // Re-render if stage ID changed
-  const prevStageId = prevProps.stage?.id;
-  const nextStageId = nextProps.stage?.id;
-  if (prevStageId !== nextStageId) {
-    return false;
-  }
+  // Always re-render if survey ID changes
+  if (prevProps.stage?.surveyId !== nextProps.stage?.surveyId) return false;
+  
+  // Always re-render if a forced refresh is requested
+  if (prevProps.forceRefreshSignal !== nextProps.forceRefreshSignal) return false;
   
   // Otherwise, consider props equal
   return true;
