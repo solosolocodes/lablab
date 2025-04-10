@@ -817,7 +817,7 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 
 
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
-  // Create a wrapper component that overrides the goToNextStage behavior
+  // Instead of using a wrapper, we'll modify the SurveyStageComponent to accept an onNext prop
   return (
     <div style={{ 
       position: 'relative', 
@@ -826,31 +826,9 @@ function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
       borderRadius: '4px',
       boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' 
     }}>
-      <SurveyStageWrapper onNext={onNext} />
+      {/* We'll use a simpler approach with props */}
+      <SurveyStageComponent externalNextHandler={onNext} />
     </div>
-  );
-}
-
-// Wrapper component that overrides the goToNextStage context value
-function SurveyStageWrapper({ onNext }: { onNext: () => void }) {
-  const previewContext = usePreview();
-  
-  // Create a modified context with overridden goToNextStage
-  const enhancedGoToNextStage = () => {
-    console.log('Enhanced goToNextStage called - navigating to next stage');
-    onNext();
-  };
-  
-  // Render the SurveyStageComponent with modified goToNextStage behavior
-  return (
-    <PreviewContext.Provider
-      value={{
-        ...previewContext,
-        goToNextStage: enhancedGoToNextStage
-      }}
-    >
-      <SurveyStageComponent />
-    </PreviewContext.Provider>
   );
 }
 

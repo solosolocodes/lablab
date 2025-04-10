@@ -4,8 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
 // Ultra-minimal survey component for preview only - fixed for stability
-export default function SurveyStage() {
+export default function SurveyStage({ externalNextHandler }: { externalNextHandler?: () => void }) {
   const { currentStage, goToNextStage } = usePreview();
+  
+  // Use external handler if provided, otherwise use context handler
+  const nextStageHandler = externalNextHandler || goToNextStage;
   const [surveyData, setSurveyData] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,7 +104,7 @@ export default function SurveyStage() {
           <p>No static questions available.</p>
         )}
         <button 
-          onClick={goToNextStage}
+          onClick={nextStageHandler}
           style={{
             padding: '8px 16px',
             backgroundColor: '#4285f4',
@@ -142,7 +145,7 @@ export default function SurveyStage() {
         <h3>{surveyData?.title || currentStage.title || "Survey"}</h3>
         <p>No questions found.</p>
         <button 
-          onClick={goToNextStage}
+          onClick={nextStageHandler}
           style={{
             padding: '8px 16px',
             backgroundColor: '#4285f4',
@@ -167,11 +170,11 @@ export default function SurveyStage() {
       setCurrentIndex(currentIndex + 1);
     } else {
       console.log('No more questions, going to next stage');
-      // Ensure goToNextStage is properly called
+      // Ensure the appropriate next handler is called
       try {
-        goToNextStage();
+        nextStageHandler(); // Use the external handler if provided
       } catch (error) {
-        console.error('Error in goToNextStage:', error);
+        console.error('Error in nextStageHandler:', error);
       }
     }
   };
