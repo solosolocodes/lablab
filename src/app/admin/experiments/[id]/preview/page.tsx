@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { PreviewProvider, usePreview } from '@/contexts/PreviewContext';
 import SurveyStageComponent from '@/components/preview/SurveyStage';
@@ -880,15 +880,43 @@ function SimplePreviewContent() {
   const params = useParams();
   const experimentId = params.id as string;
 
-  // Use reference to track if we've already started loading
+  // Use references to track loading state and attempts
   const hasStartedLoadingRef = useRef(false);
+  const loadAttemptsRef = useRef(0);
+  const maxRetries = 3;
+  
+  // Function to load experiment with retry logic
+  const loadExperimentWithRetry = useCallback(() => {
+    if (!experimentId) return;
+    
+    const attemptLoad = () => {
+      console.log(`Loading experiment attempt ${loadAttemptsRef.current + 1}/${maxRetries}`);
+      loadAttemptsRef.current += 1;
+      loadExperiment(experimentId)
+        .catch(error => {
+          console.error("Error loading experiment:", error);
+          
+          // Retry if we haven't reached max attempts
+          if (loadAttemptsRef.current < maxRetries) {
+            console.log(`Retrying in 200ms... (attempt ${loadAttemptsRef.current + 1}/${maxRetries})`);
+            setTimeout(attemptLoad, 200); // Wait 200ms between retries
+          } else {
+            console.error("Failed to load experiment after maximum retries");
+          }
+        });
+    };
+    
+    // Start the first attempt
+    attemptLoad();
+  }, [experimentId, loadExperiment]);
 
+  // Initial loading effect
   useEffect(() => {
     if (experimentId && !hasStartedLoadingRef.current) {
       hasStartedLoadingRef.current = true;
-      loadExperiment(experimentId);
+      loadExperimentWithRetry();
     }
-  }, [experimentId, loadExperiment]);
+  }, [experimentId, loadExperimentWithRetry]);
 
   // Handle the Next button click on the welcome screen
   const handleWelcomeNext = () => {

@@ -62,8 +62,8 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Simple experiment loading without caching
-  const loadExperiment = async (experimentId: string, isParticipantView = false) => {
+  // Enhanced experiment loading with explicit Promise return
+  const loadExperiment = async (experimentId: string, isParticipantView = false): Promise<void> => {
     try {
       console.log(`Loading experiment ${experimentId}${isParticipantView ? ' (participant view)' : ''}`);
       
@@ -105,9 +105,12 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         setTimeRemaining(durationSeconds);
         setTimerActive(durationSeconds > 0);
       }
+      
+      // Explicitly return to make Promise chaining work properly
+      return Promise.resolve();
     } catch (err) {
       console.error('Error loading experiment:', err);
-      throw err;
+      return Promise.reject(err);
     }
   };
   
