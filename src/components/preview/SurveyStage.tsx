@@ -126,38 +126,54 @@ export default function SurveyStage({
     fetchSurveyData(true);
   }, [fetchSurveyData]);
   
-  // Track which survey IDs we've already tried to fetch
-  const fetchedSurveyIds = useRef(new Set());
+  // Keep track of fetched survey IDs in localStorage as a more permanent solution
+  // This will prevent refetching even when the component remounts
+  const didMountRef = useRef(false);
   
-  // One-time fetch survey data at component mount with aggressive duplicate prevention
+  // One-time fetch survey data at component mount with cross-session tracking
   useEffect(() => {
-    // For instructions stage type, just process without fetching
+    if (didMountRef.current) {
+      // Already mounted - do nothing
+      return;
+    }
+    
+    // Mark as mounted to prevent multiple executions
+    didMountRef.current = true;
+    
+    // For instructions type, we just show the content directly without fetch
     if (currentStage?.type === 'instructions') {
-      if (hasAttemptedFetch.current) return;
-      hasAttemptedFetch.current = true;
       console.log('Processing instructions content without fetch');
       fetchSurveyData(false);
       return;
     }
     
-    // Skip if conditions aren't right
-    if (currentStage?.type !== 'survey' || !currentStage?.surveyId) {
+    // Skip if no valid survey ID
+    if (!currentStage?.surveyId) {
+      console.log('No survey ID found, skipping fetch');
       return;
     }
     
-    // Skip if we've already tried to fetch this specific survey ID
-    if (fetchedSurveyIds.current.has(currentStage.surveyId)) {
-      console.log(`Already attempted fetch for survey ID: ${currentStage.surveyId}, skipping`);
+    // Use localStorage to track fetched surveys
+    const STORAGE_KEY = 'fetchedSurveys';
+    const fetchedSurveys = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const surveyKey = currentStage.surveyId;
+    
+    // Check if we've fetched this survey recently (within last 5 minutes)
+    const now = Date.now();
+    const recentThreshold = 5 * 60 * 1000; // 5 minutes
+    
+    if (fetchedSurveys[surveyKey] && (now - fetchedSurveys[surveyKey]) < recentThreshold) {
+      console.log(`Survey ID ${surveyKey} was recently fetched, using cached data`);
       return;
     }
     
-    // Mark this survey ID as fetched to prevent duplicates
-    fetchedSurveyIds.current.add(currentStage.surveyId);
-    hasAttemptedFetch.current = true;
+    // Mark this survey as fetched with timestamp
+    fetchedSurveys[surveyKey] = now;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedSurveys));
     
-    console.log(`First time seeing survey ID: ${currentStage.surveyId}, will fetch data`);
+    console.log(`Fetching survey ID: ${surveyKey}`);
     
-    // Fetch with delay to avoid race conditions with rendering
+    // Fetch once with delay to avoid race conditions
     const timeoutId = setTimeout(() => {
       fetchSurveyData(false);
     }, 100);
@@ -171,8 +187,17 @@ export default function SurveyStage({
     if (forceRefreshSignal === true && prevForceRefreshSignal.current === false) {
       console.log('Force refresh triggered from parent component');
       
-      // Reset fetch attempt flag to allow a new fetch
-      hasAttemptedFetch.current = false;
+      // Reset local storage cache for this survey if available
+      if (currentStage?.surveyId) {
+        try {
+          const STORAGE_KEY = 'fetchedSurveys';
+          const fetchedSurveys = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+          delete fetchedSurveys[currentStage.surveyId];
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedSurveys));
+        } catch (e) {
+          console.error('Error clearing survey cache:', e);
+        }
+      }
       
       // Clear any existing errors
       setError(null);
@@ -180,15 +205,15 @@ export default function SurveyStage({
       // Set loading state
       setIsLoading(true);
       
-      // Fetch survey data with small delay to avoid race conditions
-      setTimeout(() => {
-        if (currentStage?.surveyId) {
-          fetchSurveyData(true);
-        } else {
-          setError("No survey ID available for refresh");
-          setIsLoading(false);
-        }
-      }, 100);
+      // Fetch survey data directly without delay
+      if (currentStage?.surveyId) {
+        fetchSurveyData(true);
+      } else if (currentStage?.type === 'instructions') {
+        fetchSurveyData(true);
+      } else {
+        setError("No valid survey data available for refresh");
+        setIsLoading(false);
+      }
     }
     
     // Update previous value reference
