@@ -154,57 +154,59 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Go to next stage with smooth transition - simplified like admin preview
+  // Go to next stage with immediate transition - optimized to prevent flickering
   const goToNextStage = useCallback(() => {
     if (!experiment || !isMountedRef.current) return;
     
     if (currentStageIndex < experiment.stages.length - 1) {
-      // Start transition
+      // Set transitioning flag
       setIsStageTransitioning(true);
       
-      // Use setTimeout to create a smooth transition effect
-      setTimeout(() => {
-        // Check if still mounted before state updates
-        if (!isMountedRef.current) return;
-        
-        const nextIndex = currentStageIndex + 1;
-        const nextStage = experiment.stages[nextIndex];
-        
-        setCurrentStageIndex(nextIndex);
-        setTimeRemaining(nextStage.durationSeconds);
-        setTimerActive(true);
-        
-        // Complete transition after a small delay to prevent flickering
-        setTimeout(() => {
-          if (isMountedRef.current) {
-            setIsStageTransitioning(false);
-          }
-        }, 100);
-      }, 50);
+      // Immediate transition for better performance - no nested timeouts
+      const nextIndex = currentStageIndex + 1;
+      const nextStage = experiment.stages[nextIndex];
+      
+      // Batch state updates
+      setCurrentStageIndex(nextIndex);
+      setTimeRemaining(nextStage?.durationSeconds || 0);
+      setTimerActive(nextStage?.durationSeconds > 0);
+      
+      // Reset transition state after a single short delay
+      const transitionTimer = setTimeout(() => {
+        if (isMountedRef.current) {
+          setIsStageTransitioning(false);
+        }
+      }, 300);
+      
+      // Cleanup timer if component unmounts
+      return () => clearTimeout(transitionTimer);
     }
-    // No "else" condition needed - simplified to match admin preview
   }, [experiment, currentStageIndex]);
 
-  // Go to previous stage with smooth transition, returns true if successful - simplified
+  // Go to previous stage with immediate transition - matching the next stage function
   const goToPreviousStage = useCallback(() => {
     if (!experiment || currentStageIndex <= 0) return false;
     
-    // Start transition
+    // Set transitioning flag
     setIsStageTransitioning(true);
     
-    // Use setTimeout to create a smooth transition effect
-    setTimeout(() => {
-      const prevIndex = currentStageIndex - 1;
-      setCurrentStageIndex(prevIndex);
-      setTimeRemaining(experiment.stages[prevIndex].durationSeconds);
-      setTimerActive(true);
-      
-      // Complete transition after a small delay to prevent flickering
-      setTimeout(() => {
-        setIsStageTransitioning(false);
-      }, 100);
-    }, 50);
+    // Immediate transition for better performance
+    const prevIndex = currentStageIndex - 1;
+    const prevStage = experiment.stages[prevIndex];
     
+    // Batch state updates
+    setCurrentStageIndex(prevIndex);
+    setTimeRemaining(prevStage?.durationSeconds || 0);
+    setTimerActive(prevStage?.durationSeconds > 0);
+    
+    // Reset transition state after a single short delay
+    const transitionTimer = setTimeout(() => {
+      if (isMountedRef.current) {
+        setIsStageTransitioning(false);
+      }
+    }, 300);
+    
+    // Cleanup timer if component unmounts
     return true;
   }, [experiment, currentStageIndex]);
 

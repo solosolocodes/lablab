@@ -48,9 +48,17 @@ export async function GET(
     await dbConnect();
     console.log('[Survey API] Database connected');
 
-    // Find the survey with timeout protection
+    // Find the survey with optimizations for preview mode
     console.log('[Survey API] Finding survey:', surveyId);
-    const survey = await Survey.findById(surveyId).maxTimeMS(10000).lean();
+    
+    // Create a projection to limit fields
+    const projection = { title: 1, questions: 1 };
+    
+    // Find survey with timeout protection and field projection for faster queries
+    const survey = await Survey.findById(surveyId)
+      .select(projection)
+      .maxTimeMS(5000) // Reduced timeout to prevent long-running queries
+      .lean();
     
     if (!survey) {
       console.log('[Survey API] Survey not found:', surveyId);

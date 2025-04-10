@@ -817,8 +817,19 @@ function ScenarioStage({ stage, onNext }: { stage: Stage; onNext: () => void }) 
 
 
 function SurveyStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
-  // We'll render our SurveyStageComponent directly
-  return <SurveyStageComponent />;
+  // We render our optimized SurveyStageComponent directly
+  // The component handles its own error, loading states and goToNextStage
+  return (
+    <div style={{ 
+      position: 'relative', 
+      zIndex: 10, 
+      backgroundColor: 'white',
+      borderRadius: '4px',
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' 
+    }}>
+      <SurveyStageComponent />
+    </div>
+  );
 }
 
 function PlaceholderStage({ stage, onNext }: { stage: Stage; onNext: () => void }) {
