@@ -45,6 +45,30 @@ export default function SurveyStage({
   
   // Function to fetch survey data that can be called multiple times
   const fetchSurveyData = useCallback(async (isRefresh = false) => {
+    // For instructions type, we just show the content directly without fetch
+    if (currentStage?.type === 'instructions') {
+      // Create synthetic survey data from instructions content
+      const instructionsSurvey = {
+        title: currentStage.title || "Instructions",
+        description: currentStage.description || "",
+        questions: [
+          {
+            id: "instructions-question",
+            type: "text",
+            text: currentStage.content || "Please review the instructions and continue when ready.",
+            required: false
+          }
+        ]
+      };
+      
+      console.log("Using instructions content as survey data");
+      setSurveyData(instructionsSurvey);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+    
+    // Regular survey flow
     if (!currentStage?.surveyId) {
       setError("No survey ID available");
       setIsLoading(false);
@@ -95,7 +119,7 @@ export default function SurveyStage({
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentStage?.surveyId]);
+  }, [currentStage?.surveyId, currentStage?.type, currentStage?.title, currentStage?.description, currentStage?.content]);
   
   // Handle manual refresh button click
   const handleRefresh = useCallback(() => {
@@ -148,7 +172,7 @@ export default function SurveyStage({
     prevForceRefreshSignal.current = forceRefreshSignal;
   }, [forceRefreshSignal, currentStage, fetchSurveyData]);
   
-  // Validate stage with more detailed logging to catch the issue
+  // Validate stage but accept both survey and instructions types
   if (!currentStage) {
     console.error('Survey stage error: currentStage is null or undefined');
     return <div style={{ padding: '20px', backgroundColor: 'white' }}>
@@ -159,11 +183,14 @@ export default function SurveyStage({
     </div>;
   }
   
-  if (currentStage.type !== 'survey') {
-    console.error(`Survey stage error: Expected stage type 'survey' but got '${currentStage.type}'`, currentStage);
+  // Accept both survey and instructions types for maximum compatibility
+  const isSupportedType = currentStage.type === 'survey' || currentStage.type === 'instructions';
+  
+  if (!isSupportedType) {
+    console.error(`Survey stage error: Expected type 'survey' or 'instructions' but got '${currentStage.type}'`, currentStage);
     return <div style={{ padding: '20px', backgroundColor: 'white' }}>
-      <p>Error: Invalid stage type ({currentStage.type})</p>
-      <p>Expected: survey</p>
+      <p>Error: Unsupported stage type ({currentStage.type})</p>
+      <p>Expected: survey or instructions</p>
       <pre style={{fontSize: '12px', padding: '10px', backgroundColor: '#f5f5f5', overflowX: 'auto', marginTop: '10px'}}>
         {JSON.stringify(currentStage, null, 2)}
       </pre>
