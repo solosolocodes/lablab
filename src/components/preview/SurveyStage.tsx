@@ -126,13 +126,36 @@ export default function SurveyStage({
     fetchSurveyData(true);
   }, [fetchSurveyData]);
   
-  // One-time fetch survey data at component mount
+  // Track which survey IDs we've already tried to fetch
+  const fetchedSurveyIds = useRef(new Set());
+  
+  // One-time fetch survey data at component mount with aggressive duplicate prevention
   useEffect(() => {
-    if (currentStage?.type !== 'survey' || !currentStage?.surveyId || hasAttemptedFetch.current) {
+    // For instructions stage type, just process without fetching
+    if (currentStage?.type === 'instructions') {
+      if (hasAttemptedFetch.current) return;
+      hasAttemptedFetch.current = true;
+      console.log('Processing instructions content without fetch');
+      fetchSurveyData(false);
       return;
     }
     
-    hasAttemptedFetch.current = true; // Set flag to prevent multiple fetches
+    // Skip if conditions aren't right
+    if (currentStage?.type !== 'survey' || !currentStage?.surveyId) {
+      return;
+    }
+    
+    // Skip if we've already tried to fetch this specific survey ID
+    if (fetchedSurveyIds.current.has(currentStage.surveyId)) {
+      console.log(`Already attempted fetch for survey ID: ${currentStage.surveyId}, skipping`);
+      return;
+    }
+    
+    // Mark this survey ID as fetched to prevent duplicates
+    fetchedSurveyIds.current.add(currentStage.surveyId);
+    hasAttemptedFetch.current = true;
+    
+    console.log(`First time seeing survey ID: ${currentStage.surveyId}, will fetch data`);
     
     // Fetch with delay to avoid race conditions with rendering
     const timeoutId = setTimeout(() => {
@@ -140,7 +163,7 @@ export default function SurveyStage({
     }, 100);
     
     return () => clearTimeout(timeoutId);
-  }, [currentStage, fetchSurveyData]);
+  }, [currentStage?.type, currentStage?.surveyId, fetchSurveyData]);
   
   // Effect to handle forced refresh from parent component
   useEffect(() => {
@@ -197,6 +220,26 @@ export default function SurveyStage({
     </div>;
   }
   
+  // Handle loading state with timeout detection
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  
+  // Effect to detect prolonged loading
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingTimeout(false);
+      return;
+    }
+    
+    // Set a timeout to detect if loading is taking too long
+    const timeoutId = setTimeout(() => {
+      if (isLoading) {
+        setLoadingTimeout(true);
+      }
+    }, 5000); // 5 seconds
+    
+    return () => clearTimeout(timeoutId);
+  }, [isLoading]);
+  
   // Handle loading state
   if (isLoading) {
     return (
@@ -207,33 +250,62 @@ export default function SurveyStage({
         borderRadius: '4px' 
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-          <p>Loading survey data...</p>
+          <div>
+            <p>{loadingTimeout ? 'Still loading survey data...' : 'Loading survey data...'}</p>
+            {loadingTimeout && (
+              <p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                This is taking longer than expected. You can try refreshing.
+              </p>
+            )}
+          </div>
           <button
             onClick={handleRefresh}
-            disabled={isLoading || isRefreshing}
+            disabled={isRefreshing}
             style={{
               padding: '5px 10px',
               backgroundColor: '#f0f0f0',
               border: '1px solid #ccc',
               borderRadius: '4px',
-              cursor: isLoading || isRefreshing ? 'not-allowed' : 'pointer',
-              opacity: isLoading || isRefreshing ? 0.5 : 1
+              cursor: isRefreshing ? 'not-allowed' : 'pointer',
+              opacity: isRefreshing ? 0.5 : 1
             }}
           >
             Refresh Data
           </button>
         </div>
+        
+        {/* Loading progress bar */}
         <div style={{ height: '4px', width: '100%', backgroundColor: '#f0f0f0', borderRadius: '2px', overflow: 'hidden' }}>
           <div 
             style={{ 
               height: '100%', 
               width: '30%', 
-              backgroundColor: '#4285f4',
+              backgroundColor: loadingTimeout ? '#ff9800' : '#4285f4',
               animation: 'loading 1.5s infinite ease-in-out',
               transformOrigin: 'left center'
             }} 
           />
         </div>
+        
+        {/* Skip button shows after timeout */}
+        {loadingTimeout && (
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <button
+              onClick={() => { setIsLoading(false); setError("Loading skipped by user"); }}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#f44336',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Skip Loading
+            </button>
+          </div>
+        )}
+        
         <style jsx>{`
           @keyframes loading {
             0% { transform: translateX(0) scaleX(0.1); }
