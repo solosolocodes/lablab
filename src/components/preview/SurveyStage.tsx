@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
-// Ultra-minimal survey component for preview only - fixed for stability
-// Create a memoized version of the component to prevent unnecessary re-renders
-function SurveyStageComponent({ 
+// Simple survey component for preview mode that strictly follows React hooks rules
+const SurveyStageComponent = ({ 
   externalNextHandler, 
   forceRefreshSignal,
   stage: propStage  // Accept stage as a prop
@@ -13,40 +12,49 @@ function SurveyStageComponent({
   externalNextHandler?: () => void;
   forceRefreshSignal?: boolean;
   stage?: any;  // Allow stage to be passed from parent
-}) {
-  // Get context stage but prefer the prop stage
+}) => {
+  // All hooks must be called at the top level
   const { currentStage: contextStage, goToNextStage } = usePreview();
-  
-  // Use prop stage if available, otherwise fall back to context stage
-  // This should fix issues where the component is used both directly and as a child
-  const currentStage = propStage || contextStage;
-  
-  // Only log stage source when debugging is needed
-  const hasLoggedStageSource = useRef(false);
-  useEffect(() => {
-    // Only log once per component instance to reduce console spam
-    if (hasLoggedStageSource.current) return;
-    
-    if (!propStage && !contextStage) {
-      console.error('SurveyStage has no stage data from props or context!');
-    }
-    
-    hasLoggedStageSource.current = true;
-  }, [propStage, contextStage]);
-  
-  // Use external handler if provided, otherwise use context handler
-  const nextStageHandler = externalNextHandler || goToNextStage;
   const [surveyData, setSurveyData] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  
+  // All refs must be declared at the top level
   const hasAttemptedFetch = useRef(false);
-  
-  // Track the previous value of forceRefreshSignal to detect changes
   const prevForceRefreshSignal = useRef(forceRefreshSignal);
+  const didMountRef = useRef(false);
+  const hasLoggedStage = useRef(false);
+  const hasLoggedQuestions = useRef(false);
   
-  // Function to fetch survey data that can be called multiple times
+  // Use prop stage if available, otherwise fall back to context stage
+  const currentStage = useMemo(() => propStage || contextStage, [propStage, contextStage]);
+  
+  // Use external handler if provided, otherwise use context handler
+  const nextStageHandler = useMemo(() => externalNextHandler || goToNextStage, [externalNextHandler, goToNextStage]);
+  
+  // Current question
+  const questions = useMemo(() => {
+    const result = [];
+    
+    // First try to get questions from MongoDB survey data
+    if (surveyData && Array.isArray(surveyData.questions)) {
+      result.push(...surveyData.questions);
+    } 
+    // Then fallback to inline questions from the stage
+    else if (currentStage && Array.isArray(currentStage.questions)) {
+      result.push(...currentStage.questions);
+    }
+    
+    return result;
+  }, [surveyData, currentStage]);
+  
+  const currentQuestion = questions[currentIndex] || null;
+  const hasMoreQuestions = currentIndex < questions.length - 1;
+  
+  // Fetch survey data with caching
   const fetchSurveyData = useCallback(async (isRefresh = false) => {
     // For instructions type, we just show the content directly without fetch
     if (currentStage?.type === 'instructions') {
@@ -92,7 +100,6 @@ function SurveyStageComponent({
       
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
-      console.log(`Fetching survey data for ID: ${currentStage.surveyId} (${isRefresh ? 'refresh' : 'initial'})`);
       
       const response = await fetch(`/api/admin/surveys/${currentStage.surveyId}?t=${timestamp}`, {
         method: 'GET',
@@ -106,7 +113,6 @@ function SurveyStageComponent({
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.survey) {
-          console.log("Survey data loaded successfully");
           // Set survey data state
           setSurveyData(data.survey);
           setError(null); // Clear any previous errors
@@ -126,72 +132,76 @@ function SurveyStageComponent({
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [currentStage?.surveyId, currentStage?.type, currentStage?.title, currentStage?.description, currentStage?.content]);
+  }, [currentStage]);
   
-  // Handle manual refresh button click
+  // Handle refresh button click
   const handleRefresh = useCallback(() => {
     fetchSurveyData(true);
   }, [fetchSurveyData]);
   
-  // Keep track of fetched survey IDs in localStorage as a more permanent solution
-  // This will prevent refetching even when the component remounts
-  const didMountRef = useRef(false);
+  // Handle navigation buttons
+  const handleNext = useCallback(() => {
+    if (hasMoreQuestions) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      nextStageHandler();
+    }
+  }, [hasMoreQuestions, currentIndex, nextStageHandler]);
   
-  // One-time fetch survey data at component mount with cross-session tracking
+  const handlePrev = useCallback(() => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+    }
+  }, [currentIndex]);
+  
+  // One-time fetch survey data at component mount
   useEffect(() => {
     if (didMountRef.current) {
-      // Already mounted - do nothing
-      return;
+      return; // Already mounted - do nothing
     }
     
-    // Mark as mounted to prevent multiple executions
     didMountRef.current = true;
     
-    // For instructions type, we just show the content directly without fetch
-    if (currentStage?.type === 'instructions') {
-      // Reduced logging to prevent console spam
-      fetchSurveyData(false);
-      return;
-    }
-    
-    // Skip if no valid survey ID
-    if (!currentStage?.surveyId) {
-      // Reduced logging
-      return;
-    }
-    
-    // Use localStorage to track fetched surveys
+    // Check if we've recently fetched this survey
     const STORAGE_KEY = 'fetchedSurveys';
-    const fetchedSurveys = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    const surveyKey = currentStage.surveyId;
-    
-    // Check if we've fetched this survey recently (within last 5 minutes)
-    const now = Date.now();
-    const recentThreshold = 5 * 60 * 1000; // 5 minutes
-    
-    if (fetchedSurveys[surveyKey] && (now - fetchedSurveys[surveyKey]) < recentThreshold) {
-      // Skip silently using cached data
-      return;
-    }
-    
-    // Mark this survey as fetched with timestamp
-    fetchedSurveys[surveyKey] = now;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedSurveys));
-    
-    // Fetch once with delay to avoid race conditions
-    const timeoutId = setTimeout(() => {
+    try {
+      const fetchedSurveys = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const surveyId = currentStage?.surveyId;
+      
+      if (currentStage?.type === 'instructions') {
+        // Process instructions content without fetching
+        fetchSurveyData(false);
+        return;
+      }
+      
+      if (!surveyId) return;
+      
+      // Check if we've fetched this survey recently (within last 5 minutes)
+      const now = Date.now();
+      const recentThreshold = 5 * 60 * 1000; // 5 minutes
+      
+      if (fetchedSurveys[surveyId] && (now - fetchedSurveys[surveyId]) < recentThreshold) {
+        // Skip silently using cached data
+        return;
+      }
+      
+      // Mark this survey as fetched with timestamp
+      fetchedSurveys[surveyId] = now;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedSurveys));
+      
+      // Fetch the data
       fetchSurveyData(false);
-    }, 100);
-    
-    return () => clearTimeout(timeoutId);
-  }, [currentStage?.type, currentStage?.surveyId, fetchSurveyData]);
+    } catch (e) {
+      console.error('Error checking survey cache:', e);
+      // Proceed with fetch anyway
+      fetchSurveyData(false);
+    }
+  }, [currentStage, fetchSurveyData]);
   
   // Effect to handle forced refresh from parent component
   useEffect(() => {
     // Check if forceRefreshSignal changed from false to true
     if (forceRefreshSignal === true && prevForceRefreshSignal.current === false) {
-      console.log('Force refresh triggered from parent component');
-      
       // Reset local storage cache for this survey if available
       if (currentStage?.surveyId) {
         try {
@@ -207,51 +217,14 @@ function SurveyStageComponent({
       // Clear any existing errors
       setError(null);
       
-      // Set loading state
+      // Set loading state and fetch data
       setIsLoading(true);
-      
-      // Fetch survey data directly without delay
-      if (currentStage?.surveyId) {
-        fetchSurveyData(true);
-      } else if (currentStage?.type === 'instructions') {
-        fetchSurveyData(true);
-      } else {
-        setError("No valid survey data available for refresh");
-        setIsLoading(false);
-      }
+      fetchSurveyData(true);
     }
     
     // Update previous value reference
     prevForceRefreshSignal.current = forceRefreshSignal;
   }, [forceRefreshSignal, currentStage, fetchSurveyData]);
-  
-  // Validate stage but accept both survey and instructions types
-  if (!currentStage) {
-    console.error('Survey stage error: currentStage is null or undefined');
-    return <div style={{ padding: '20px', backgroundColor: 'white' }}>
-      <p>Error: Stage data not available</p>
-      <button onClick={handleRefresh} style={{marginTop: '10px', padding: '5px 10px', backgroundColor: '#4285f4', color: 'white', border: 'none', borderRadius: '4px'}}>
-        Try Refresh
-      </button>
-    </div>;
-  }
-  
-  // Accept both survey and instructions types for maximum compatibility
-  const isSupportedType = currentStage.type === 'survey' || currentStage.type === 'instructions';
-  
-  if (!isSupportedType) {
-    console.error(`Survey stage error: Expected type 'survey' or 'instructions' but got '${currentStage.type}'`, currentStage);
-    return <div style={{ padding: '20px', backgroundColor: 'white' }}>
-      <p>Error: Unsupported stage type ({currentStage.type})</p>
-      <p>Expected: survey or instructions</p>
-      <pre style={{fontSize: '12px', padding: '10px', backgroundColor: '#f5f5f5', overflowX: 'auto', marginTop: '10px'}}>
-        {JSON.stringify(currentStage, null, 2)}
-      </pre>
-    </div>;
-  }
-  
-  // Handle loading state with timeout detection
-  const [loadingTimeout, setLoadingTimeout] = useState(false);
   
   // Effect to detect prolonged loading
   useEffect(() => {
@@ -269,6 +242,25 @@ function SurveyStageComponent({
     
     return () => clearTimeout(timeoutId);
   }, [isLoading]);
+  
+  // Check for missing stage
+  if (!currentStage) {
+    return <div style={{ padding: '20px', backgroundColor: 'white' }}>
+      <p>Error: Stage data not available</p>
+    </div>;
+  }
+  
+  // Check stage type
+  const isSupportedType = currentStage.type === 'survey' || currentStage.type === 'instructions';
+  if (!isSupportedType) {
+    return <div style={{ padding: '20px', backgroundColor: 'white' }}>
+      <p>Error: Unsupported stage type ({currentStage.type})</p>
+      <p>Expected: survey or instructions</p>
+      <pre style={{fontSize: '12px', padding: '10px', backgroundColor: '#f5f5f5', overflowX: 'auto', marginTop: '10px'}}>
+        {JSON.stringify(currentStage, null, 2)}
+      </pre>
+    </div>;
+  }
   
   // Handle loading state
   if (isLoading) {
@@ -446,30 +438,6 @@ function SurveyStageComponent({
     );
   }
   
-  // Get questions from survey data or fallback to inline
-  // Use safe, stable accessor patterns to prevent undefined errors
-  const questions = [];
-  
-  // First try to get questions from MongoDB survey data
-  if (surveyData && Array.isArray(surveyData.questions)) {
-    questions.push(...surveyData.questions);
-  } 
-  // Then fallback to inline questions from the stage
-  else if (currentStage && Array.isArray(currentStage.questions)) {
-    questions.push(...currentStage.questions);
-  }
-  
-  // Track if we've already logged the question count (for selective logging)
-  const hasLoggedQuestions = useRef(false);
-  
-  // Only log questions when they change, not on every render
-  useEffect(() => {
-    if (!hasLoggedQuestions.current && questions.length > 0) {
-      console.log(`Loaded ${questions.length} questions for survey`);
-      hasLoggedQuestions.current = true;
-    }
-  }, [questions.length]);
-  
   // No questions case
   if (!questions.length) {
     return (
@@ -498,29 +466,13 @@ function SurveyStageComponent({
     );
   }
   
-  const currentQuestion = questions[currentIndex] || null;
-  const hasMoreQuestions = currentIndex < questions.length - 1;
-  
-  const handleNext = () => {
-    if (hasMoreQuestions) {
-      console.log('Moving to next question:', currentIndex + 1);
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      console.log('No more questions, going to next stage');
-      // Ensure the appropriate next handler is called
-      try {
-        nextStageHandler(); // Use the external handler if provided
-      } catch (error) {
-        console.error('Error in nextStageHandler:', error);
-      }
+  // Only log questions when they change, not on every render
+  useEffect(() => {
+    if (!hasLoggedQuestions.current && questions.length > 0) {
+      console.log(`Loaded ${questions.length} questions for survey`);
+      hasLoggedQuestions.current = true;
     }
-  };
-  
-  const handlePrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
+  }, [questions.length]);
   
   // Super-minimal rendering of questions - absolute bare minimum for stability
   return (
@@ -532,46 +484,9 @@ function SurveyStageComponent({
       maxWidth: '600px',
       margin: '0 auto'
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-        <h3 style={{ margin: 0 }}>
-          {surveyData?.title || currentStage.title || "Survey"}
-        </h3>
-        
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          style={{
-            padding: '5px 10px',
-            backgroundColor: isRefreshing ? '#ccc' : '#f5f5f5',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '12px',
-            cursor: isRefreshing ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px'
-          }}
-        >
-          {isRefreshing ? 'Refreshing...' : 'Refresh Survey'}
-          {isRefreshing && (
-            <span style={{ 
-              display: 'inline-block', 
-              width: '12px', 
-              height: '12px', 
-              borderRadius: '50%', 
-              border: '2px solid #ccc',
-              borderTopColor: '#666',
-              animation: 'spin 1s linear infinite'
-            }}></span>
-          )}
-        </button>
-        
-        <style jsx>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
+      <h3 style={{ marginBottom: '20px' }}>
+        {surveyData?.title || currentStage.title || "Survey"}
+      </h3>
       
       {currentQuestion && (
         <div style={{ margin: '20px 0', padding: '10px' }}>
@@ -671,7 +586,7 @@ function SurveyStageComponent({
       </div>
     </div>
   );
-}
+};
 
 // Define a custom comparison function for React.memo
 // This prevents unnecessary re-renders by only updating when important props change
