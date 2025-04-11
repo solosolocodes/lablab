@@ -113,9 +113,9 @@ const SurveyStageComponent = ({
       return false;
     }
     
-    // Skip if we've already loaded this survey
-    if (!force && stageId && loadedSurveys.has(stageId) && questions.length > 0) {
-      console.log(`Skipping fetch: survey ${stageId} already loaded`);
+    // Skip if we've already loaded this survey - this is the key check to prevent loops
+    if (!force && stageId && loadedSurveys.has(stageId)) {
+      console.log(`Skipping fetch: survey ${stageId} already loaded from global cache`);
       return true;
     }
     
@@ -172,14 +172,21 @@ const SurveyStageComponent = ({
       const timestamp = new Date().getTime();
       console.log(`Fetching survey ${currentStage.surveyId} (attempt ${retryCountRef.current + 1}/${maxRetries + 1})...`);
       
+      // Use a longer timeout for survey fetch (15 seconds)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
       const response = await fetch(`/api/admin/surveys/${currentStage.surveyId}?t=${timestamp}`, {
         method: 'GET',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0'
-        }
+        },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       // If component unmounted during fetch, don't update state
       if (!isComponentMountedRef.current) {
@@ -198,8 +205,11 @@ const SurveyStageComponent = ({
             setError(null);
             setIsLoading(false);
             
-            // Mark as successfully loaded
-            if (stageId) loadedSurveys.add(stageId);
+            // Mark as successfully loaded in the global cache
+            if (stageId) {
+              console.log(`Adding survey ${stageId} to global cache`);
+              loadedSurveys.add(stageId);
+            }
           }
           
           isFetchingRef.current = false;
@@ -237,7 +247,7 @@ const SurveyStageComponent = ({
       isFetchingRef.current = false;
       return false;
     }
-  }, [currentStage, questions.length, stageId]);
+  }, [currentStage, stageId]); // Remove questions.length from dependency array to prevent loops
   
   // Prevent the initial loading screen flash by immediately 
   // checking if we already have the data in our cache
@@ -251,36 +261,36 @@ const SurveyStageComponent = ({
   
   // Initial data loading - run only once for this stage
   useEffect(() => {
+    // Store the current stageId in a ref to track if it changes during async operations
+    const currentStageIdRef = useRef(stageId);
+    currentStageIdRef.current = stageId;
+    
     // Return early if:
     // 1. We don't have a stage ID
     // 2. A fetch is already in progress
-    // 3. We've already loaded this survey and have questions
-    if (!stageId || 
-        isFetchingRef.current || 
-        (loadedSurveys.has(stageId) && questions.length > 0)) {
+    // 3. We've already loaded this survey
+    if (!stageId || isFetchingRef.current || loadedSurveys.has(stageId)) {
       if (loadedSurveys.has(stageId)) {
         console.log(`Survey ${stageId} already in global cache, skipping fetch`);
       }
       return;
     }
     
-    // Reset retry counter
+    // Reset retry counter for each new stage
     retryCountRef.current = 0;
     
-    // Only show loading state if we don't already have questions
-    if (questions.length === 0) {
-      setIsLoading(true);
-    }
+    // Always show loading state for consistency
+    setIsLoading(true);
     
     const loadWithRetries = async () => {
-      // Skip if component is no longer mounted
-      if (!isComponentMountedRef.current) return;
+      // Skip if component is no longer mounted or stageId changed
+      if (!isComponentMountedRef.current || currentStageIdRef.current !== stageId) return;
       
       console.log(`Initial load for stage ${stageId}`);
       const success = await fetchSurveyData();
       
-      // Skip if component unmounted or fetching was successful
-      if (!isComponentMountedRef.current || success) return;
+      // Skip if component unmounted, stageId changed, or fetching was successful
+      if (!isComponentMountedRef.current || currentStageIdRef.current !== stageId || success) return;
       
       // Retry if fetch failed and we haven't exceeded max retries
       if (!success && retryCountRef.current < maxRetries) {
@@ -290,7 +300,7 @@ const SurveyStageComponent = ({
         
         // Schedule retry after delay
         setTimeout(() => {
-          if (isComponentMountedRef.current) {
+          if (isComponentMountedRef.current && currentStageIdRef.current === stageId) {
             loadWithRetries();
           }
         }, retryDelayMs);
@@ -301,9 +311,16 @@ const SurveyStageComponent = ({
     
     loadWithRetries();
     
-    // Only depend on stageId to ensure this effect runs exactly once per stage
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stageId]);
+    // Cleanup function to handle any pending operations
+    return () => {
+      // If this specific stage is unmounting, clear its fetching state
+      if (stageId === currentStageIdRef.current) {
+        isFetchingRef.current = false;
+      }
+    };
+    
+    // Only depend on stageId and fetchSurveyData to ensure this effect runs exactly once per stage
+  }, [stageId, fetchSurveyData, retryDelayMs, maxRetries]);
   
   // Handle manual refresh button click
   const handleRefresh = useCallback(() => {
