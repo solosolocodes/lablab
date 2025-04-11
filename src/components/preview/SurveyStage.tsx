@@ -4,9 +4,12 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { usePreview } from '@/contexts/PreviewContext';
 
 // Create singleton caches to track which surveys have been loaded and store their data
-// This prevents duplicate fetches across component mounts
+// Using a module-level cache that persists between renders and component instances
 const loadedSurveys = new Set();
 const loadedSurveysData = new Map(); // Maps surveyId to the actual data
+
+// Debug counter to track render cycles - helps debug continuous fetching
+let renderCount = 0;
 
 // Simple survey component for preview mode
 const SurveyStageComponent = ({ 
@@ -18,6 +21,10 @@ const SurveyStageComponent = ({
   forceRefreshSignal?: boolean;
   stage?: any;
 }) => {
+  // Increment render counter for debugging
+  renderCount++;
+  console.log(`SurveyStage render #${renderCount}`);
+  
   // Destructure needed context values
   const { currentStage: contextStage, goToNextStage, isStageTransitioning } = usePreview();
   
@@ -82,20 +89,25 @@ const SurveyStageComponent = ({
       // Store current stage ID
       stageIdRef.current = stageId;
       
-      // Reset component state
+      // Reset retry counter
       retryCountRef.current = 0;
+      
+      // Important: reset the loading initiation tracker when stage changes
+      hasInitiatedLoadingRef.current = false;
       
       console.log(`Stage changed to: ${stageId}`);
       
-      // If we have data in the cache for this survey, retrieve it
+      // If we have data in the cache for this survey, retrieve it immediately
       if (stageId && loadedSurveys.has(stageId) && loadedSurveysData.has(stageId)) {
         console.log(`Loading survey ${stageId} from memory cache`);
         setSurveyData(loadedSurveysData.get(stageId));
         setIsLoading(false);
+        setError(null);
       } 
       // Clear survey data if switching to a different stage that's not cached
       else if (stageId && !loadedSurveys.has(stageId)) {
         setSurveyData(null);
+        setError(null);
       }
     }
   }, [stageId]);
@@ -275,64 +287,84 @@ const SurveyStageComponent = ({
     currentStageIdRef.current = stageId;
   }, [stageId]);
   
-  // Initial data loading - run only once for this stage
+  // Use a ref to track whether we've already initiated loading for this stage
+  const hasInitiatedLoadingRef = useRef(false);
+
+  // Initial data loading - run only once per stage, with strict controls to prevent continuous loading
   useEffect(() => {
-    // Return early if:
-    // 1. We don't have a stage ID
-    // 2. A fetch is already in progress
-    // 3. We've already loaded this survey
-    if (!stageId || isFetchingRef.current || loadedSurveys.has(stageId)) {
-      if (loadedSurveys.has(stageId)) {
-        console.log(`Survey ${stageId} already in global cache, skipping fetch`);
+    const needsLoading = stageId && 
+                        !hasInitiatedLoadingRef.current && 
+                        !isFetchingRef.current && 
+                        !loadedSurveys.has(stageId);
+    
+    // Log the decision process for debugging
+    console.log(`Load decision for ${stageId}: ${needsLoading ? 'WILL LOAD' : 'SKIPPING'}`, {
+      stageId: !!stageId,
+      hasInitiatedLoading: hasInitiatedLoadingRef.current,
+      isFetching: isFetchingRef.current,
+      inCache: loadedSurveys.has(stageId)
+    });
+    
+    // If we've determined we don't need to load, exit early
+    if (!needsLoading) {
+      // Still update state based on cache
+      if (stageId && loadedSurveys.has(stageId) && loadedSurveysData.has(stageId)) {
+        console.log(`Using cached data for survey ${stageId}`);
+        setSurveyData(loadedSurveysData.get(stageId));
+        setIsLoading(false);
+        setError(null);
       }
       return;
     }
+
+    // Mark that we've initiated loading for this stage - this is crucial to prevent loops
+    hasInitiatedLoadingRef.current = true;
     
-    // Reset retry counter for each new stage
+    // Reset retry counter
     retryCountRef.current = 0;
     
-    // Always show loading state for consistency
+    // Show loading state
     setIsLoading(true);
     
+    // Define loading function with retries
     const loadWithRetries = async () => {
-      // Skip if component is no longer mounted or stageId changed
+      // Safety check - has component unmounted or stage changed?
       if (!isComponentMountedRef.current || currentStageIdRef.current !== stageId) return;
       
-      console.log(`Initial load for stage ${stageId}`);
+      console.log(`Loading survey data for stage ${stageId}`);
       const success = await fetchSurveyData();
       
-      // Skip if component unmounted, stageId changed, or fetching was successful
+      // If successful or unmounted, we're done
       if (!isComponentMountedRef.current || currentStageIdRef.current !== stageId || success) return;
       
-      // Retry if fetch failed and we haven't exceeded max retries
-      if (!success && retryCountRef.current < maxRetries) {
+      // Handle failure with retries
+      if (retryCountRef.current < maxRetries) {
         retryCountRef.current++;
+        console.log(`Retry ${retryCountRef.current}/${maxRetries} for survey ${stageId} in ${retryDelayMs}ms`);
         
-        console.log(`Scheduling retry ${retryCountRef.current} in ${retryDelayMs}ms...`);
-        
-        // Schedule retry after delay
         setTimeout(() => {
           if (isComponentMountedRef.current && currentStageIdRef.current === stageId) {
             loadWithRetries();
           }
         }, retryDelayMs);
-      } else if (!success) {
-        console.log('Failed to load survey data after all retries');
+      } else {
+        console.log(`Failed to load survey ${stageId} after ${maxRetries} retries`);
       }
     };
     
+    // Start the loading process
     loadWithRetries();
     
-    // Cleanup function to handle any pending operations
+    // Clean up function
     return () => {
-      // If this specific stage is unmounting, clear its fetching state
       if (stageId === currentStageIdRef.current) {
         isFetchingRef.current = false;
       }
     };
     
-    // Only depend on stageId and fetchSurveyData to ensure this effect runs exactly once per stage
-  }, [stageId, fetchSurveyData, retryDelayMs, maxRetries]);
+    // Only depend on stageId to ensure this runs exactly once per stage ID
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageId]);
   
   // Handle manual refresh button click
   const handleRefresh = useCallback(() => {
@@ -343,32 +375,49 @@ const SurveyStageComponent = ({
       return;
     }
     
-    console.log('Manual refresh triggered');
+    console.log('Manual refresh triggered for survey', stageId);
     lastRefreshTimeRef.current = now;
     
-    // Reset retry counter
+    // Reset loading states
     retryCountRef.current = 0;
+    hasInitiatedLoadingRef.current = false;
     
     // Remove from loaded surveys to force a fresh fetch
     if (stageId) {
       loadedSurveys.delete(stageId);
       loadedSurveysData.delete(stageId);
+      console.log(`Removed ${stageId} from cache for refresh`);
     }
+    
+    // Reset state
+    setIsLoading(true);
+    setError(null);
+    setSurveyData(null);
     
     // Force fetch with cache clearing
     fetchSurveyData(true);
   }, [fetchSurveyData, stageId]);
   
   // Handle parent's forceRefreshSignal
+  const lastRefreshSignalRef = useRef(false);
+  
   useEffect(() => {
-    const now = Date.now();
+    // Only trigger refresh if the signal changed from false to true
+    // This prevents multiple refreshes when the component re-renders
+    const isNewRefreshSignal = forceRefreshSignal && !lastRefreshSignalRef.current;
+    lastRefreshSignalRef.current = !!forceRefreshSignal;
     
-    // Only trigger refresh if signal is true and sufficient time has passed
-    if (forceRefreshSignal && now - lastRefreshTimeRef.current >= refreshMinIntervalMs) {
-      console.log('Parent component triggered refresh');
-      handleRefresh();
+    if (isNewRefreshSignal) {
+      const now = Date.now();
+      // Check if sufficient time has passed since last refresh
+      if (now - lastRefreshTimeRef.current >= refreshMinIntervalMs) {
+        console.log('Parent component triggered refresh for survey', stageId);
+        handleRefresh();
+      } else {
+        console.log('Parent refresh ignored - too soon since last refresh');
+      }
     }
-  }, [forceRefreshSignal, handleRefresh]);
+  }, [forceRefreshSignal, handleRefresh, refreshMinIntervalMs, stageId]);
   
   // We no longer need Next/Prev handlers for carousel navigation
   // since we're showing all questions at once
