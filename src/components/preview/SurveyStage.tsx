@@ -59,9 +59,30 @@ const SurveyStageComponent = ({
   
   // Get current stage ID, handling different formats
   const stageId = useMemo(() => {
-    return currentStage?.id || 
-           currentStage?.surveyId || 
-           (currentStage?.type === 'instructions' ? 'instructions-' + Date.now() : null);
+    // Prioritize existing IDs
+    if (currentStage?.id) {
+      return currentStage.id;
+    }
+    if (currentStage?.surveyId) {
+      return currentStage.surveyId;
+    }
+
+    // Handle instructions type specifically if no ID is present
+    if (currentStage?.type === 'instructions') {
+      // Use a stable identifier instead of Date.now()
+      // For multiple instruction stages, we create a more unique stable ID
+      // based on title or content if available
+      if (currentStage.title) {
+        return `instructions-${currentStage.title.toLowerCase().replace(/\s+/g, '-')}`;
+      }
+      
+      console.warn("Instruction stage lacks a unique 'id', 'surveyId', or 'title'. Using generic identifier 'instructions-stage'.");
+      return 'instructions-stage'; // Stable identifier
+    }
+
+    // Fallback if no identifiable information is found
+    console.warn("Could not determine a stable stageId.");
+    return null;
   }, [currentStage]);
   
   // Extract questions from either surveyData or directly from stage
