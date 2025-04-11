@@ -10,11 +10,15 @@ type Question = {
   type: string;
   required?: boolean;
   options?: string[];
+  minValue?: number;
+  maxValue?: number;
+  maxRating?: number;
 };
 
 type SurveyStageProps = {
   stage: {
     id: string;
+    surveyId?: string;
     title: string;
     description: string;
     questions?: Question[];
@@ -22,30 +26,154 @@ type SurveyStageProps = {
   onNext: () => void;
 };
 
+// Create module-level cache to prevent duplicate fetches
+const loadedSurveys = new Map<string, any>();
+let fetchCount = 0;
+
 export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
   const { isStageTransitioning, saveStageResponse, surveyResponses, setSurveyResponses } = useParticipant();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [surveyData, setSurveyData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
   
-  // Add ref to track component mount state
+  // Add refs to track state
   const isMountedRef = useRef(true);
+  const hasInitiatedLoadingRef = useRef(false);
+  const isFetchingRef = useRef(false);
+  
+  // Use a ref to store the stage ID
+  const stageIdRef = useRef(stage.id);
+  const surveyIdRef = useRef(stage.surveyId);
   
   // Effect to clean up when component unmounts
   useEffect(() => {
     // Set the mounted flag to true (it already is, but this is for clarity)
     isMountedRef.current = true;
+    console.log('SurveyStage mounted with stage ID:', stage.id, 'survey ID:', stage.surveyId);
     
     // Clean up function that runs when component unmounts
     return () => {
       isMountedRef.current = false;
+      console.log('SurveyStage unmounted');
     };
-  }, []);
+  }, [stage.id, stage.surveyId]);
   
-  // Initialize answers if needed
-  if (!surveyResponses[stage.id]) {
+  // Fetch survey data if needed
+  useEffect(() => {
+    // Track current survey ID to prevent stale closures
+    const currentSurveyId = stage.surveyId;
+    
+    // Skip if no survey ID or already loaded
+    if (!currentSurveyId || hasInitiatedLoadingRef.current) {
+      console.log(`Survey ${currentSurveyId} - Skip loading:`, {
+        hasSurveyId: !!currentSurveyId,
+        alreadyInitiated: hasInitiatedLoadingRef.current,
+      });
+      return;
+    }
+    
+    // Check if already in cache
+    if (loadedSurveys.has(currentSurveyId)) {
+      console.log(`Using cached survey data for ${currentSurveyId}`);
+      setSurveyData(loadedSurveys.get(currentSurveyId));
+      return;
+    }
+    
+    // Mark that we've started loading
+    hasInitiatedLoadingRef.current = true;
+    isFetchingRef.current = true;
+    setIsLoading(true);
+    
+    // Fetch the survey data
+    const fetchSurvey = async () => {
+      fetchCount++;
+      const currentFetchId = fetchCount;
+      console.log(`Fetching survey ${currentSurveyId} (fetch #${currentFetchId})`);
+      
+      try {
+        // Use AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        
+        const response = await fetch(`/api/admin/surveys/${currentSurveyId}`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Check if component is still mounted and this is still the relevant survey
+        if (!isMountedRef.current || currentSurveyId !== surveyIdRef.current) {
+          console.log('Component unmounted or survey changed during fetch, aborting');
+          return;
+        }
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.success && data.survey) {
+            console.log(`Successfully loaded survey with ${data.survey.questions?.length || 0} questions`);
+            
+            // Store in cache
+            loadedSurveys.set(currentSurveyId, data.survey);
+            
+            // Update state
+            if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
+              setSurveyData(data.survey);
+              setError(null);
+              initializeAnswers(stage.id, data.survey.questions || []);
+            }
+          } else {
+            console.error('Invalid survey data structure:', data);
+            if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
+              setError('Failed to load survey data');
+            }
+          }
+        } else {
+          console.error(`Failed to load survey: ${response.status}`);
+          if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
+            setError(`Failed to load survey (${response.status})`);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching survey:', err);
+        if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
+          setError(`Error: ${err.message || 'Failed to load survey'}`);
+        }
+      } finally {
+        // Reset loading state
+        if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
+          setIsLoading(false);
+          isFetchingRef.current = false;
+        }
+      }
+    };
+    
+    // Start the fetch
+    fetchSurvey();
+    
+  }, [stage.surveyId, stage.id]);
+  
+  // Track changes to survey ID
+  useEffect(() => {
+    surveyIdRef.current = stage.surveyId;
+    stageIdRef.current = stage.id;
+  }, [stage.surveyId, stage.id]);
+  
+  // Initialize answers for the questions
+  const initializeAnswers = (stageId: string, questions: Question[]) => {
+    if (!questions || questions.length === 0) return;
+    
     const initialAnswers: Record<string, any> = {};
     
     // Initialize with empty values based on question type
-    stage.questions?.forEach(question => {
+    questions.forEach(question => {
       if (question.type === 'multipleChoice') {
         initialAnswers[question.id] = '';
       } else if (question.type === 'checkboxes') {
@@ -59,9 +187,9 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
     
     setSurveyResponses(prev => ({
       ...prev,
-      [stage.id]: initialAnswers
+      [stageId]: initialAnswers
     }));
-  }
+  };
   
   const handleInputChange = (questionId: string, value: string | string[] | number) => {
     setSurveyResponses(prev => ({
@@ -147,19 +275,81 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
     }
   };
   
+  // Get questions from either the direct stage or the fetched survey data
+  const getQuestionsToDisplay = () => {
+    // If we have survey data loaded from MongoDB, use those questions
+    if (surveyData && Array.isArray(surveyData.questions)) {
+      return surveyData.questions;
+    }
+    
+    // Fall back to questions provided directly in the stage
+    if (stage.questions && stage.questions.length > 0) {
+      return stage.questions;
+    }
+    
+    // No questions available
+    return [];
+  };
+  
+  // Get the questions to display
+  const questionsToDisplay = getQuestionsToDisplay();
+  
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="w-full p-4 bg-white rounded border shadow-sm">
+        <div className="mb-4 pb-3 border-b border-gray-200">
+          <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
+          <p className="text-gray-600">{stage.description}</p>
+        </div>
+        
+        <div className="p-8 text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="mt-4 text-gray-600">Loading survey questions...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Error state
+  if (error) {
+    return (
+      <div className="w-full p-4 bg-white rounded border shadow-sm">
+        <div className="mb-4 pb-3 border-b border-gray-200">
+          <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
+          <p className="text-gray-600">{stage.description}</p>
+        </div>
+        
+        <div className="p-4 bg-red-50 rounded border border-red-200 mb-5 text-center">
+          <p className="text-red-600 font-medium">{error}</p>
+          <p className="mt-2 text-gray-600">Please try refreshing the page or contact support if the problem persists.</p>
+        </div>
+        
+        <div className="flex justify-center">
+          <button 
+            onClick={onNext}
+            className="px-6 py-2 bg-blue-500 text-white rounded"
+          >
+            Skip to Next Stage
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="w-full p-4 bg-white rounded border shadow-sm">
       <div className="mb-4 pb-3 border-b border-gray-200">
-        <h3 className="text-xl font-bold mb-2">{stage.title}</h3>
-        <p className="text-gray-600">{stage.description}</p>
+        <h3 className="text-xl font-bold mb-2">{surveyData?.title || stage.title}</h3>
+        <p className="text-gray-600">{surveyData?.description || stage.description}</p>
       </div>
       
       <div className="p-4 bg-gray-50 rounded border mb-5">
         <p className="font-medium mb-4">Please answer the following questions:</p>
         
-        {stage.questions && stage.questions.length > 0 ? (
+        {questionsToDisplay.length > 0 ? (
           <div className="space-y-6">
-            {stage.questions.map((question, index) => (
+            {questionsToDisplay.map((question, index) => (
               <div key={question.id} className="p-4 bg-white rounded border">
                 <label className="block mb-2 font-medium">
                   {index + 1}. {question.text} {question.required && <span className="text-red-500">*</span>}
@@ -229,10 +419,13 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
                   </div>
                 )}
                 
-                {/* Scale (1-5, 1-10, etc.) */}
+                {/* Scale question with configurable range */}
                 {question.type === 'scale' && (
                   <div className="flex flex-wrap justify-between items-center mt-2">
-                    {[1, 2, 3, 4, 5].map((number) => (
+                    {Array.from(
+                      { length: (question.maxValue || 10) - (question.minValue || 1) + 1 },
+                      (_, i) => i + (question.minValue || 1)
+                    ).map((number) => (
                       <div key={number} className="text-center mx-2 mb-2">
                         <button
                           type="button"
@@ -245,9 +438,36 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
                         >
                           {number}
                         </button>
-                        {number === 1 && <div className="text-xs mt-1">Strongly Disagree</div>}
-                        {number === 5 && <div className="text-xs mt-1">Strongly Agree</div>}
+                        {number === (question.minValue || 1) && 
+                          <div className="text-xs mt-1">Min</div>
+                        }
+                        {number === (question.maxValue || 10) && 
+                          <div className="text-xs mt-1">Max</div>
+                        }
                       </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Rating with stars */}
+                {question.type === 'rating' && (
+                  <div className="flex justify-center gap-4 mt-4">
+                    {Array.from({ length: question.maxRating || 5 }, (_, i) => i + 1).map((rating) => (
+                      <button
+                        key={rating}
+                        type="button"
+                        onClick={() => handleInputChange(question.id, rating)}
+                        className="flex flex-col items-center"
+                      >
+                        <span className={`text-2xl ${
+                          surveyResponses[stage.id]?.[question.id] >= rating
+                            ? 'text-yellow-400'
+                            : 'text-gray-300'
+                        }`}>
+                          ★
+                        </span>
+                        <span className="text-xs mt-1">{rating}</span>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -255,7 +475,12 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
             ))}
           </div>
         ) : (
-          <p className="text-gray-600 text-center p-4">No questions defined for this survey.</p>
+          <div className="text-center py-8">
+            <p className="text-gray-600">No questions defined for this survey.</p>
+            <p className="text-gray-500 text-sm mt-2">
+              {stage.surveyId ? `Survey ID: ${stage.surveyId}` : 'No Survey ID provided'}
+            </p>
+          </div>
         )}
       </div>
       
