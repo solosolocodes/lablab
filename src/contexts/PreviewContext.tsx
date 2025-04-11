@@ -162,17 +162,88 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     if (!experiment || !isMountedRef.current) return;
     
     if (currentStageIndex < experiment.stages.length - 1) {
-      // Set transitioning flag
-      setIsStageTransitioning(true);
-      
-      // Immediate transition for better performance - no nested timeouts
+      // Get info about current and next stage
       const nextIndex = currentStageIndex + 1;
       const nextStage = experiment.stages[nextIndex];
+      const currentStage = experiment.stages[currentStageIndex];
+      
+      // Special case: If moving from or to a survey stage, minimize transition effects
+      // to prevent flickering with surveys
+      const isFromSurvey = currentStage?.type === 'survey';
+      const isToSurvey = nextStage?.type === 'survey';
+      
+      if (isFromSurvey || isToSurvey) {
+        // For surveys, use minimal transition to prevent flickering
+        setCurrentStageIndex(nextIndex);
+        setTimeRemaining(nextStage?.durationSeconds || 0);
+        setTimerActive(nextStage?.durationSeconds > 0);
+        
+        // Set transitioning flag only briefly
+        setIsStageTransitioning(true);
+        const transitionTimer = setTimeout(() => {
+          if (isMountedRef.current) {
+            setIsStageTransitioning(false);
+          }
+        }, 50); // Much shorter transition time for surveys
+        
+        return () => clearTimeout(transitionTimer);
+      } else {
+        // For non-survey transitions, use normal transition
+        setIsStageTransitioning(true);
+        
+        // Batch state updates
+        setCurrentStageIndex(nextIndex);
+        setTimeRemaining(nextStage?.durationSeconds || 0);
+        setTimerActive(nextStage?.durationSeconds > 0);
+        
+        // Reset transition state after a single short delay
+        const transitionTimer = setTimeout(() => {
+          if (isMountedRef.current) {
+            setIsStageTransitioning(false);
+          }
+        }, 300);
+        
+        return () => clearTimeout(transitionTimer);
+      }
+    }
+  }, [experiment, currentStageIndex]);
+
+  // Go to previous stage with immediate transition - matching the next stage function
+  const goToPreviousStage = useCallback(() => {
+    if (!experiment || currentStageIndex <= 0) return false;
+    
+    // Get info about current and previous stage
+    const prevIndex = currentStageIndex - 1;
+    const prevStage = experiment.stages[prevIndex];
+    const currentStage = experiment.stages[currentStageIndex];
+    
+    // Special case: If moving from or to a survey stage, minimize transition effects
+    const isFromSurvey = currentStage?.type === 'survey';
+    const isToSurvey = prevStage?.type === 'survey';
+    
+    if (isFromSurvey || isToSurvey) {
+      // For surveys, use minimal transition to prevent flickering
+      setCurrentStageIndex(prevIndex);
+      setTimeRemaining(prevStage?.durationSeconds || 0);
+      setTimerActive(prevStage?.durationSeconds > 0);
+      
+      // Set transitioning flag only briefly
+      setIsStageTransitioning(true);
+      const transitionTimer = setTimeout(() => {
+        if (isMountedRef.current) {
+          setIsStageTransitioning(false);
+        }
+      }, 50); // Much shorter transition time for surveys
+      
+      return true;
+    } else {
+      // For non-survey transitions, use normal transition
+      setIsStageTransitioning(true);
       
       // Batch state updates
-      setCurrentStageIndex(nextIndex);
-      setTimeRemaining(nextStage?.durationSeconds || 0);
-      setTimerActive(nextStage?.durationSeconds > 0);
+      setCurrentStageIndex(prevIndex);
+      setTimeRemaining(prevStage?.durationSeconds || 0);
+      setTimerActive(prevStage?.durationSeconds > 0);
       
       // Reset transition state after a single short delay
       const transitionTimer = setTimeout(() => {
@@ -181,36 +252,8 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         }
       }, 300);
       
-      // Cleanup timer if component unmounts
-      return () => clearTimeout(transitionTimer);
+      return true;
     }
-  }, [experiment, currentStageIndex]);
-
-  // Go to previous stage with immediate transition - matching the next stage function
-  const goToPreviousStage = useCallback(() => {
-    if (!experiment || currentStageIndex <= 0) return false;
-    
-    // Set transitioning flag
-    setIsStageTransitioning(true);
-    
-    // Immediate transition for better performance
-    const prevIndex = currentStageIndex - 1;
-    const prevStage = experiment.stages[prevIndex];
-    
-    // Batch state updates
-    setCurrentStageIndex(prevIndex);
-    setTimeRemaining(prevStage?.durationSeconds || 0);
-    setTimerActive(prevStage?.durationSeconds > 0);
-    
-    // Reset transition state after a single short delay
-    const transitionTimer = setTimeout(() => {
-      if (isMountedRef.current) {
-        setIsStageTransitioning(false);
-      }
-    }, 300);
-    
-    // Cleanup timer if component unmounts
-    return true;
   }, [experiment, currentStageIndex]);
 
   // Reset timer for current stage

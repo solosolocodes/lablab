@@ -18,13 +18,16 @@ const SurveyStageComponent = ({
   stage?: any;
 }) => {
   // Destructure needed context values
-  const { currentStage: contextStage, goToNextStage } = usePreview();
+  const { currentStage: contextStage, goToNextStage, isStageTransitioning } = usePreview();
   
   // Core component state
   const [currentIndex, setCurrentIndex] = useState(0);
   const [surveyData, setSurveyData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Use this to prevent initial loading flash during stage transitions
+  const firstRenderRef = useRef(true);
   
   // Retry mechanism state
   const retryCountRef = useRef(0);
@@ -236,19 +239,38 @@ const SurveyStageComponent = ({
     }
   }, [currentStage, questions.length, stageId]);
   
-  // Initial data loading
+  // Prevent the initial loading screen flash by immediately 
+  // checking if we already have the data in our cache
   useEffect(() => {
-    // Skip if we don't have a stage or we're already loaded
-    if (!stageId || isFetchingRef.current) return;
-    
-    // Skip if we've already loaded this survey
-    if (stageId && loadedSurveys.has(stageId) && questions.length > 0) {
-      console.log(`Survey ${stageId} already loaded, skipping fetch`);
+    // Set immediate state based on whether data is already loaded
+    if (stageId && loadedSurveys.has(stageId)) {
+      // Data is already in our cache, no need to show loading
+      setIsLoading(false);
+    }
+  }, [stageId]);
+  
+  // Initial data loading - run only once for this stage
+  useEffect(() => {
+    // Return early if:
+    // 1. We don't have a stage ID
+    // 2. A fetch is already in progress
+    // 3. We've already loaded this survey and have questions
+    if (!stageId || 
+        isFetchingRef.current || 
+        (loadedSurveys.has(stageId) && questions.length > 0)) {
+      if (loadedSurveys.has(stageId)) {
+        console.log(`Survey ${stageId} already in global cache, skipping fetch`);
+      }
       return;
     }
     
     // Reset retry counter
     retryCountRef.current = 0;
+    
+    // Only show loading state if we don't already have questions
+    if (questions.length === 0) {
+      setIsLoading(true);
+    }
     
     const loadWithRetries = async () => {
       // Skip if component is no longer mounted
@@ -278,7 +300,10 @@ const SurveyStageComponent = ({
     };
     
     loadWithRetries();
-  }, [stageId, fetchSurveyData, questions.length]);
+    
+    // Only depend on stageId to ensure this effect runs exactly once per stage
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageId]);
   
   // Handle manual refresh button click
   const handleRefresh = useCallback(() => {
@@ -348,14 +373,31 @@ const SurveyStageComponent = ({
     );
   }
   
+  // Mark first render complete after component mounts
+  useEffect(() => {
+    // After a short delay, mark first render as complete
+    const timer = setTimeout(() => {
+      firstRenderRef.current = false;
+    }, 50);
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Don't show loading state if this is the first render or during stage transitions
+  // This prevents flickering during stage navigation
+  const shouldShowLoading = isLoading && 
+                          !isStageTransitioning && 
+                          !firstRenderRef.current;
+  
   // Loading state
-  if (isLoading) {
+  if (shouldShowLoading) {
     return (
       <div style={{ 
         padding: '20px', 
         backgroundColor: 'white',
         border: '1px solid #ccc',
-        borderRadius: '4px' 
+        borderRadius: '4px',
+        opacity: isStageTransitioning ? 0 : 1,
+        transition: 'opacity 0.15s ease-in-out'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '15px' }}>
           <p style={{ fontWeight: 'bold' }}>Loading survey data...</p>
@@ -391,6 +433,12 @@ const SurveyStageComponent = ({
         `}</style>
       </div>
     );
+  }
+  
+  // During stage transitions, if we have questions, render them directly 
+  // without showing loading to prevent flickering
+  if (isLoading && questions.length > 0) {
+    isLoading = false; // Override loading state
   }
   
   // Error state 
