@@ -259,12 +259,16 @@ const SurveyStageComponent = ({
     }
   }, [stageId]);
   
+  // Create the current stageId ref at component level, not inside the effect
+  const currentStageIdRef = useRef(stageId);
+  
+  // Update ref when stageId changes
+  useEffect(() => {
+    currentStageIdRef.current = stageId;
+  }, [stageId]);
+  
   // Initial data loading - run only once for this stage
   useEffect(() => {
-    // Store the current stageId in a ref to track if it changes during async operations
-    const currentStageIdRef = useRef(stageId);
-    currentStageIdRef.current = stageId;
-    
     // Return early if:
     // 1. We don't have a stage ID
     // 2. A fetch is already in progress
