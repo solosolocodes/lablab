@@ -382,11 +382,15 @@ const SurveyStageComponent = ({
     return () => clearTimeout(timer);
   }, []);
   
-  // Don't show loading state if this is the first render or during stage transitions
+  // Don't show loading state if:
+  // 1. This is the first render
+  // 2. During stage transitions
+  // 3. We already have questions to show
   // This prevents flickering during stage navigation
   const shouldShowLoading = isLoading && 
-                          !isStageTransitioning && 
-                          !firstRenderRef.current;
+                         !isStageTransitioning && 
+                         !firstRenderRef.current &&
+                         questions.length === 0;
   
   // Loading state
   if (shouldShowLoading) {
@@ -435,11 +439,8 @@ const SurveyStageComponent = ({
     );
   }
   
-  // During stage transitions, if we have questions, render them directly 
-  // without showing loading to prevent flickering
-  if (isLoading && questions.length > 0) {
-    isLoading = false; // Override loading state
-  }
+  // Note: We handle the loading state in the shouldShowLoading variable above
+  // If we have questions, we never show loading even if isLoading is true
   
   // Error state 
   if (error) {
