@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { debug } from './debug';
 
 // In development, use .env.local value, in production use vercel.json environment variable
 // Note: Added TLS parameter to handle SSL/TLS issues (can't use both tlsInsecure and tlsAllowInvalidCertificates)
@@ -8,7 +9,16 @@ if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable');
 }
 
-console.log(`[DEBUG DB] Using MongoDB URI from ${process.env.MONGODB_URI ? 'environment variable' : 'fallback hardcoded value'}`);
+debug.info('DB', `Using MongoDB URI from ${process.env.MONGODB_URI ? 'environment variable' : 'fallback hardcoded value'}`);
+debug.info('ENV', `Debug mode: ${debug.isEnabled ? 'ENABLED' : 'DISABLED'}`);
+debug.info('ENV', `Node environment: ${process.env.NODE_ENV}`);
+
+// Log Vercel deployment information if available
+if (process.env.VERCEL_ENV) {
+  debug.info('VERCEL', `Deployment environment: ${process.env.VERCEL_ENV}`);
+  debug.info('VERCEL', `Deployment URL: ${process.env.VERCEL_URL || 'unknown'}`);
+  debug.info('VERCEL', `Deployment ID: ${process.env.VERCEL_ID || 'unknown'}`);
+}
 
 // Define the types for the cached connection
 interface ConnectionCache {
@@ -64,7 +74,7 @@ async function connectDB() {
     }
     
     // Connection is not ready, reset the cache
-    console.log('MongoDB connection not in ready state, resetting...');
+    debug.warn('DB', 'MongoDB connection not in ready state, resetting...');
     cached.conn = null;
     cached.promise = null;
   }
@@ -76,7 +86,7 @@ async function connectDB() {
       return cached.conn;
     } catch (error) {
       // If previous attempt failed, reset and try again
-      console.error('Previous MongoDB connection attempt failed:', error);
+      debug.error('DB', 'Previous MongoDB connection attempt failed:', error);
       cached.promise = null;
     }
   }
@@ -85,25 +95,25 @@ async function connectDB() {
   const now = Date.now();
   if (cached.lastConnectionAttempt && now - cached.lastConnectionAttempt < 3000) {
     const waitTime = 3000 - (now - cached.lastConnectionAttempt);
-    console.log(`Rate limiting MongoDB connection attempts, waiting ${waitTime}ms...`);
+    debug.info('DB', `Rate limiting MongoDB connection attempts, waiting ${waitTime}ms...`);
     await new Promise(resolve => setTimeout(resolve, waitTime));
   }
 
   cached.lastConnectionAttempt = Date.now();
   
   // Start a new connection attempt
-  console.log('Establishing new MongoDB connection...');
+  debug.info('DB', 'Establishing new MongoDB connection...');
   cached.promise = mongoose.connect(MONGODB_URI, connectionOptions)
     .then(mongoose => {
-      console.log('MongoDB connected successfully at', new Date().toISOString());
+      debug.info('DB', `MongoDB connected successfully at ${new Date().toISOString()}`);
       
       // Setup connection event handlers
       mongoose.connection.on('error', err => {
-        console.error('MongoDB connection error:', err);
+        debug.error('DB', 'MongoDB connection error:', err);
       });
       
       mongoose.connection.on('disconnected', () => {
-        console.log('MongoDB disconnected at', new Date().toISOString());
+        debug.warn('DB', `MongoDB disconnected at ${new Date().toISOString()}`);
         // Reset the connection cache when disconnected to force a new connection on next request
         if (cached.conn) {
           cached.conn = null;
@@ -114,22 +124,18 @@ async function connectDB() {
     })
     .catch(err => {
       // Log detailed connection error information
-      console.error('MongoDB connection error details:');
-      console.error('- Error name:', err.name);
-      console.error('- Error message:', err.message);
-      console.error('- Error code:', err.code);
-      console.error('- Error stack:', err.stack);
+      debug.error('DB', 'MongoDB connection error details:', err);
       
       // Handle specific MongoDB error cases
       if (err.name === 'MongoServerSelectionError') {
-        console.error('- Could not connect to MongoDB server. Check network connectivity and server status.');
+        debug.error('DB', 'Could not connect to MongoDB server. Check network connectivity and server status.');
       } else if (err.message.includes('Authentication failed')) {
-        console.error('- Authentication failed. Check MongoDB username and password.');
+        debug.error('DB', 'Authentication failed. Check MongoDB username and password.');
       } else if (err.message.includes('ENOTFOUND')) {
-        console.error('- DNS lookup failed. Check MongoDB URI hostname.');
+        debug.error('DB', 'DNS lookup failed. Check MongoDB URI hostname.');
       } else if (err.message.includes('SSL') || err.message.includes('TLS') || err.message.includes('ssl') || err.message.includes('tls')) {
-        console.error('- SSL/TLS connection error. This might be caused by certificate issues or TLS version incompatibility.');
-        console.error('- Try connecting with tlsAllowInvalidCertificates=true in connection options.');
+        debug.error('DB', 'SSL/TLS connection error. This might be caused by certificate issues or TLS version incompatibility.');
+        debug.error('DB', 'Try connecting with tlsAllowInvalidCertificates=true in connection options.');
       }
       
       // Reset on error to force a retry on next request
@@ -141,27 +147,24 @@ async function connectDB() {
     cached.conn = await cached.promise;
     return cached.conn;
   } catch (error) {
-    console.error('Failed to connect to MongoDB in connectDB function:', error);
+    debug.error('DB', 'Failed to connect to MongoDB in connectDB function:', error);
     
     // Log detailed error information
     if (error instanceof Error) {
-      console.error('- Error name:', error.name);
-      console.error('- Error message:', error.message);
-      
       // Add user-friendly error messages for common MongoDB issues
       if (error.name === 'MongoNetworkError' || error.message.includes('failed to connect')) {
-        console.error('MongoDB connection failed: Network error - please check your internet connection and MongoDB server status');
+        debug.error('DB', 'MongoDB connection failed: Network error - please check your internet connection and MongoDB server status');
       } else if (error.message.includes('Authentication failed')) {
-        console.error('MongoDB connection failed: Authentication error - please check your MongoDB username and password');
+        debug.error('DB', 'MongoDB connection failed: Authentication error - please check your MongoDB username and password');
       } else if (error.message.includes('ENOTFOUND')) {
-        console.error('MongoDB connection failed: DNS lookup error - please check the hostname in your MongoDB URI');
+        debug.error('DB', 'MongoDB connection failed: DNS lookup error - please check the hostname in your MongoDB URI');
       } else if (error.message.includes('SSL') || error.message.includes('TLS') || error.message.includes('ssl') || error.message.includes('tls')) {
-        console.error('MongoDB connection failed: SSL/TLS error - this is often caused by certificate validation issues');
-        console.error('Trying to reconnect with relaxed TLS settings. This should only be used in development.');
+        debug.error('DB', 'MongoDB connection failed: SSL/TLS error - this is often caused by certificate validation issues');
+        debug.info('DB', 'Trying to reconnect with relaxed TLS settings. This should only be used in development.');
         
         // Try to connect again with relaxed TLS settings
         try {
-          console.log('Attempting connection with relaxed TLS settings...');
+          debug.info('DB', 'Attempting connection with relaxed TLS settings...');
           mongoose.connection.close();
           
           // Apply TLS relaxation for this connection attempt
@@ -178,7 +181,7 @@ async function connectDB() {
           
           return await mongoose.connect(MONGODB_URI, relaxedOptions);
         } catch (retryError) {
-          console.error('Failed to connect even with relaxed TLS settings:', retryError);
+          debug.error('DB', 'Failed to connect even with relaxed TLS settings:', retryError);
         }
       }
     }

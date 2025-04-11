@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "debug": "node scripts/check-debug.js",
+    "dev:debug": "DEBUG=true NODE_ENV=development next dev"
   },
   "dependencies": {
     "@reactflow/background": "^11.3.14",

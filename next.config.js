@@ -13,6 +13,14 @@ const nextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: true
+  },
+  // Enable detailed logging in development mode
+  webpack: (config, { dev, isServer }) => {
+    if (dev || process.env.DEBUG === 'true') {
+      config.devtool = 'source-map';
+      config.optimization.minimize = false;
+    }
+    return config;
   }
 };
 

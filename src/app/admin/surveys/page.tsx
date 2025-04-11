@@ -114,7 +114,7 @@ export default function SurveysPage() {
       }
       
       toast.success('New survey created successfully');
-      openInNewWindow(`/admin/surveys/${data.survey._id}/edit`);
+      openInNewWindow(`/admin/surveys/${data.survey._id}/edit?new=true`);
     } catch (error) {
       console.error('Error creating survey:', error);
       toast.error('Failed to create new survey');

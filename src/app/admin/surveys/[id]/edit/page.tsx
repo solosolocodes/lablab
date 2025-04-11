@@ -61,27 +61,42 @@ export default function SurveyEditorPage() {
         try {
           // Try to fetch existing survey
           console.log('Survey editor: fetching survey data');
-          await fetchSurvey();
+          const surveyFetched = await fetchSurvey();
           
-          // Set immediate fallback timer for 5 seconds
-          fallbackTimer = setTimeout(() => {
-            console.log('Survey editor: checking if fallback needed');
-            // Create empty survey with the ID if not loaded yet
-            if (mounted && isLoading) {
-              console.log('Survey editor: creating fallback survey data');
-              setSurvey({
-                _id: surveyId,
-                title: 'New Survey',
-                description: '',
-                questions: [],
-                status: 'draft',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-              });
-              setIsLoading(false);
-              toast.info('Using default survey template. Changes will be saved.');
+          // Only set fallback timer if survey fetch was unsuccessful
+          // AND this appears to be a new survey (not an existing one)
+          if (!surveyFetched) {
+            console.log('Survey editor: survey fetch unsuccessful, checking if new survey');
+            
+            // Check if this is a new survey by looking at the URL pattern
+            // New surveys typically come from the create flow and might not exist in DB yet
+            const isNewSurvey = window.location.href.includes('?new=true');
+            
+            if (isNewSurvey) {
+              console.log('Survey editor: detected new survey creation flow');
+              // Set immediate fallback timer for new surveys only
+              fallbackTimer = setTimeout(() => {
+                console.log('Survey editor: checking if fallback needed for new survey');
+                // Create empty survey with the ID if not loaded yet
+                if (mounted && isLoading) {
+                  console.log('Survey editor: creating fallback survey data');
+                  setSurvey({
+                    _id: surveyId,
+                    title: 'New Survey',
+                    description: '',
+                    questions: [],
+                    status: 'draft',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                  });
+                  setIsLoading(false);
+                  toast.info('Using default survey template. Changes will be saved.');
+                }
+              }, 5000); // 5 seconds for fallback
+            } else {
+              console.log('Survey editor: not a new survey, no fallback needed');
             }
-          }, 5000); // Reduced from 15s to 5s for faster fallback
+          }
         } catch (error) {
           console.error('Survey editor: error initializing survey:', error);
           if (mounted) {

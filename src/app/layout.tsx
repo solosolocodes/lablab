@@ -3,6 +3,7 @@ import { Inter, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import AuthProvider from '@/components/AuthProvider';
 import { Toaster } from 'react-hot-toast';
+import DebugMonitor from '@/components/DebugMonitor';
 
 const inter = Inter({
   variable: "--font-inter",
@@ -32,6 +33,7 @@ export default function RootLayout({
         <AuthProvider>
           <Toaster position="top-right" />
           {children}
+          <DebugMonitor />
         </AuthProvider>
       </body>
     </html>
