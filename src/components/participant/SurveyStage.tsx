@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParticipant } from '@/contexts/ParticipantContext';
 import { toast } from 'react-hot-toast';
 
@@ -31,6 +31,7 @@ const loadedSurveys = new Map<string, any>();
 let fetchCount = 0;
 
 export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
+  // Track renders for debugging
   const { isStageTransitioning, saveStageResponse, surveyResponses, setSurveyResponses } = useParticipant();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,129 +42,195 @@ export default function SurveyStage({ stage, onNext }: SurveyStageProps) {
   const isMountedRef = useRef(true);
   const hasInitiatedLoadingRef = useRef(false);
   const isFetchingRef = useRef(false);
-  
-  // Use a ref to store the stage ID
+  const renderCountRef = useRef(0);
   const stageIdRef = useRef(stage.id);
   const surveyIdRef = useRef(stage.surveyId);
   
-  // Effect to clean up when component unmounts
-  useEffect(() => {
-    // Set the mounted flag to true (it already is, but this is for clarity)
-    isMountedRef.current = true;
-    console.log('SurveyStage mounted with stage ID:', stage.id, 'survey ID:', stage.surveyId);
-    
-    // Clean up function that runs when component unmounts
-    return () => {
-      isMountedRef.current = false;
-      console.log('SurveyStage unmounted');
-    };
-  }, [stage.id, stage.surveyId]);
+  // Debug render tracking
+  renderCountRef.current++;
+  console.log(`SurveyStage render #${renderCountRef.current} for stage ${stage.id}, surveyId: ${stage.surveyId}`);
   
-  // Fetch survey data if needed
-  useEffect(() => {
-    // Track current survey ID to prevent stale closures
-    const currentSurveyId = stage.surveyId;
-    
-    // Skip if no survey ID or already loaded
-    if (!currentSurveyId || hasInitiatedLoadingRef.current) {
-      console.log(`Survey ${currentSurveyId} - Skip loading:`, {
-        hasSurveyId: !!currentSurveyId,
-        alreadyInitiated: hasInitiatedLoadingRef.current,
-      });
-      return;
+  // Use a stable reference to the fetch function to prevent recreating it on every render
+  const fetchSurveyData = useCallback(async (surveyId: string) => {
+    // Skip if no surveyId provided
+    if (!surveyId) {
+      console.log('No survey ID provided, skipping fetch');
+      return false;
     }
     
     // Check if already in cache
-    if (loadedSurveys.has(currentSurveyId)) {
-      console.log(`Using cached survey data for ${currentSurveyId}`);
-      setSurveyData(loadedSurveys.get(currentSurveyId));
-      return;
+    if (loadedSurveys.has(surveyId)) {
+      console.log(`Using cached survey data for ${surveyId}`);
+      if (isMountedRef.current && surveyId === surveyIdRef.current) {
+        setSurveyData(loadedSurveys.get(surveyId));
+        setIsLoading(false);
+        setError(null);
+      }
+      return true;
     }
     
-    // Mark that we've started loading
-    hasInitiatedLoadingRef.current = true;
+    // Don't fetch if already fetching
+    if (isFetchingRef.current) {
+      console.log(`Already fetching survey ${surveyId}, skipping duplicate call`);
+      return false;
+    }
+    
+    fetchCount++;
+    const currentFetchId = fetchCount;
+    console.log(`Fetching survey ${surveyId} (fetch #${currentFetchId})`);
+    
+    // Mark as fetching
     isFetchingRef.current = true;
     setIsLoading(true);
     
-    // Fetch the survey data
-    const fetchSurvey = async () => {
-      fetchCount++;
-      const currentFetchId = fetchCount;
-      console.log(`Fetching survey ${currentSurveyId} (fetch #${currentFetchId})`);
+    try {
+      // Use AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
       
-      try {
-        // Use AbortController for timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-        
-        const response = await fetch(`/api/admin/surveys/${currentSurveyId}`, {
-          method: 'GET',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          },
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        // Check if component is still mounted and this is still the relevant survey
-        if (!isMountedRef.current || currentSurveyId !== surveyIdRef.current) {
-          console.log('Component unmounted or survey changed during fetch, aborting');
-          return;
-        }
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          if (data.success && data.survey) {
-            console.log(`Successfully loaded survey with ${data.survey.questions?.length || 0} questions`);
-            
-            // Store in cache
-            loadedSurveys.set(currentSurveyId, data.survey);
-            
-            // Update state
-            if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
-              setSurveyData(data.survey);
-              setError(null);
-              initializeAnswers(stage.id, data.survey.questions || []);
-            }
-          } else {
-            console.error('Invalid survey data structure:', data);
-            if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
-              setError('Failed to load survey data');
-            }
-          }
-        } else {
-          console.error(`Failed to load survey: ${response.status}`);
-          if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
-            setError(`Failed to load survey (${response.status})`);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching survey:', err);
-        if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
-          setError(`Error: ${err.message || 'Failed to load survey'}`);
-        }
-      } finally {
-        // Reset loading state
-        if (isMountedRef.current && currentSurveyId === surveyIdRef.current) {
-          setIsLoading(false);
-          isFetchingRef.current = false;
-        }
+      const response = await fetch(`/api/admin/surveys/${surveyId}`, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      // Check if component is still mounted and this is still the relevant survey
+      if (!isMountedRef.current || surveyId !== surveyIdRef.current) {
+        console.log('Component unmounted or survey changed during fetch, aborting');
+        isFetchingRef.current = false;
+        return false;
       }
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.success && data.survey) {
+          console.log(`Successfully loaded survey with ${data.survey.questions?.length || 0} questions`);
+          
+          // Store in cache
+          loadedSurveys.set(surveyId, data.survey);
+          
+          // Update state
+          if (isMountedRef.current && surveyId === surveyIdRef.current) {
+            setSurveyData(data.survey);
+            setError(null);
+            initializeAnswers(stageIdRef.current, data.survey.questions || []);
+          }
+          
+          isFetchingRef.current = false;
+          setIsLoading(false);
+          return true;
+        } else {
+          console.error('Invalid survey data structure:', data);
+          if (isMountedRef.current && surveyId === surveyIdRef.current) {
+            setError('Failed to load survey data');
+            setIsLoading(false);
+          }
+          
+          isFetchingRef.current = false;
+          return false;
+        }
+      } else {
+        console.error(`Failed to load survey: ${response.status}`);
+        if (isMountedRef.current && surveyId === surveyIdRef.current) {
+          setError(`Failed to load survey (${response.status})`);
+          setIsLoading(false);
+        }
+        
+        isFetchingRef.current = false;
+        return false;
+      }
+    } catch (err) {
+      console.error('Error fetching survey:', err);
+      if (isMountedRef.current && surveyId === surveyIdRef.current) {
+        setError(`Error: ${err.message || 'Failed to load survey'}`);
+        setIsLoading(false);
+      }
+      
+      isFetchingRef.current = false;
+      return false;
+    }
+  }, []); // No dependencies to ensure it's stable
+  
+  // Setup survey loading only once when the component mounts
+  useEffect(() => {
+    // Mark as mounted (redundant but clear)
+    isMountedRef.current = true;
+    console.log('Component mounted effect running');
+    
+    // One-time initialization effect
+    const initSurvey = async () => {
+      if (!isMountedRef.current) return;
+      
+      const currentSurveyId = stage.surveyId;
+      stageIdRef.current = stage.id;
+      surveyIdRef.current = currentSurveyId;
+      
+      // Skip if no survey ID
+      if (!currentSurveyId) {
+        console.log('No survey ID provided on initialization, skipping fetch');
+        return;
+      }
+      
+      // Set loading flag - will be reset by fetchSurveyData
+      hasInitiatedLoadingRef.current = true;
+      
+      // This will check cache first, then fetch if needed
+      console.log(`Initial survey load for ${currentSurveyId}`);
+      await fetchSurveyData(currentSurveyId);
     };
     
-    // Start the fetch
-    fetchSurvey();
+    // Start initialization
+    initSurvey();
     
-  }, [stage.surveyId, stage.id]);
+    // Cleanup when component unmounts
+    return () => {
+      console.log('Component unmount cleanup running');
+      isMountedRef.current = false;
+      isFetchingRef.current = false;
+    };
+    
+    // This effect should run exactly once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
-  // Track changes to survey ID
+  // Effect to handle survey ID changes
   useEffect(() => {
-    surveyIdRef.current = stage.surveyId;
-    stageIdRef.current = stage.id;
+    // Skip if component is unmounted
+    if (!isMountedRef.current) return;
+    
+    const prevSurveyId = surveyIdRef.current;
+    const newSurveyId = stage.surveyId;
+    const prevStageId = stageIdRef.current;
+    const newStageId = stage.id;
+    
+    // Log all transitions for debugging
+    console.log(`Survey ID check: ${prevSurveyId} → ${newSurveyId}, Stage ID: ${prevStageId} → ${newStageId}`);
+    
+    // Update refs with new values
+    surveyIdRef.current = newSurveyId;
+    stageIdRef.current = newStageId;
+    
+    // Skip if survey ID didn't change or new survey ID is undefined
+    if (prevSurveyId === newSurveyId || !newSurveyId) {
+      return;
+    }
+    
+    console.log(`Survey ID changed from ${prevSurveyId} to ${newSurveyId}`);
+    
+    // Reset state for new survey
+    setError(null);
+    hasInitiatedLoadingRef.current = true;
+    
+    // This will check cache first, then fetch if needed
+    fetchSurveyData(newSurveyId);
+    
   }, [stage.surveyId, stage.id]);
   
   // Initialize answers for the questions
