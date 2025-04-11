@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { usePreview } from '@/contexts/PreviewContext';
 
-// Create a singleton cache to track which surveys have been successfully loaded
+// Create singleton caches to track which surveys have been loaded and store their data
 // This prevents duplicate fetches across component mounts
 const loadedSurveys = new Set();
+const loadedSurveysData = new Map(); // Maps surveyId to the actual data
 
 // Simple survey component for preview mode
 const SurveyStageComponent = ({ 
@@ -72,9 +73,7 @@ const SurveyStageComponent = ({
     return result;
   }, [surveyData, currentStage]);
   
-  // Current question and navigation state
-  const currentQuestion = questions[currentIndex] || null;
-  const hasMoreQuestions = currentIndex < questions.length - 1;
+  // We no longer need to track current question as we display all questions
   
   // Reset component state when stage changes
   useEffect(() => {
@@ -85,12 +84,17 @@ const SurveyStageComponent = ({
       
       // Reset component state
       retryCountRef.current = 0;
-      setCurrentIndex(0);
       
       console.log(`Stage changed to: ${stageId}`);
       
-      // Clear survey data if switching to a different stage
-      if (stageId && !loadedSurveys.has(stageId)) {
+      // If we have data in the cache for this survey, retrieve it
+      if (stageId && loadedSurveys.has(stageId) && loadedSurveysData.has(stageId)) {
+        console.log(`Loading survey ${stageId} from memory cache`);
+        setSurveyData(loadedSurveysData.get(stageId));
+        setIsLoading(false);
+      } 
+      // Clear survey data if switching to a different stage that's not cached
+      else if (stageId && !loadedSurveys.has(stageId)) {
         setSurveyData(null);
       }
     }
@@ -147,8 +151,11 @@ const SurveyStageComponent = ({
           setError(null);
           setIsLoading(false);
           
-          // Mark as loaded
-          if (stageId) loadedSurveys.add(stageId);
+          // Mark as loaded and store data
+          if (stageId) {
+            loadedSurveys.add(stageId);
+            loadedSurveysData.set(stageId, instructionsSurvey);
+          }
         }
         
         isFetchingRef.current = false;
@@ -205,10 +212,11 @@ const SurveyStageComponent = ({
             setError(null);
             setIsLoading(false);
             
-            // Mark as successfully loaded in the global cache
+            // Store survey data in the global cache by ID
             if (stageId) {
               console.log(`Adding survey ${stageId} to global cache`);
               loadedSurveys.add(stageId);
+              loadedSurveysData.set(stageId, data.survey);
             }
           }
           
@@ -342,7 +350,10 @@ const SurveyStageComponent = ({
     retryCountRef.current = 0;
     
     // Remove from loaded surveys to force a fresh fetch
-    if (stageId) loadedSurveys.delete(stageId);
+    if (stageId) {
+      loadedSurveys.delete(stageId);
+      loadedSurveysData.delete(stageId);
+    }
     
     // Force fetch with cache clearing
     fetchSurveyData(true);
@@ -359,20 +370,8 @@ const SurveyStageComponent = ({
     }
   }, [forceRefreshSignal, handleRefresh]);
   
-  // Navigation functions
-  const handleNext = useCallback(() => {
-    if (hasMoreQuestions) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      nextStageHandler();
-    }
-  }, [hasMoreQuestions, currentIndex, nextStageHandler]);
-  
-  const handlePrev = useCallback(() => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-  }, [currentIndex]);
+  // We no longer need Next/Prev handlers for carousel navigation
+  // since we're showing all questions at once
   
   // Missing stage check
   if (!currentStage) {
@@ -547,114 +546,178 @@ const SurveyStageComponent = ({
     );
   }
   
-  // Main survey rendering - carousel of questions
+  // Main survey rendering - display all questions at once
   return (
     <div style={{ 
       padding: '20px', 
       backgroundColor: 'white',
       border: '1px solid #ccc',
       borderRadius: '4px',
-      maxWidth: '600px',
+      maxWidth: '800px',
       margin: '0 auto'
     }}>
-      <h3 style={{ marginBottom: '20px' }}>
+      <h3 style={{ marginBottom: '20px', color: '#333' }}>
         {surveyData?.title || currentStage.title || "Survey"}
       </h3>
       
-      {currentQuestion && (
-        <div style={{ margin: '20px 0', padding: '10px' }}>
-          <p style={{ fontWeight: 'bold', marginBottom: '15px' }}>
-            {currentQuestion.text}
-          </p>
-          
-          {/* Question UI based on type */}
-          {currentQuestion.type === 'text' && (
-            <input 
-              type="text" 
-              placeholder="Your answer" 
-              style={{ 
-                display: 'block', 
-                width: '100%', 
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                marginTop: '10px' 
-              }}
-            />
-          )}
-          
-          {currentQuestion.type === 'multipleChoice' && (
-            <div style={{ marginTop: '10px' }}>
-              {Array.isArray(currentQuestion.options) && currentQuestion.options.map((option, idx) => (
-                <div key={idx} style={{ margin: '10px 0' }}>
-                  <label style={{ display: 'flex', alignItems: 'center' }}>
-                    <input 
-                      type="radio" 
-                      name="choice" 
-                      style={{ marginRight: '10px' }} 
-                    /> 
-                    <span>{option}</span>
-                  </label>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          {currentQuestion.type === 'checkboxes' && (
-            <div style={{ marginTop: '10px' }}>
-              {Array.isArray(currentQuestion.options) && currentQuestion.options.map((option, idx) => (
-                <div key={idx} style={{ margin: '10px 0' }}>
-                  <label style={{ display: 'flex', alignItems: 'center' }}>
-                    <input 
-                      type="checkbox" 
-                      style={{ marginRight: '10px' }} 
-                    /> 
-                    <span>{option}</span>
-                  </label>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Survey description if available */}
+      {surveyData?.description && (
+        <div style={{ marginBottom: '20px', color: '#666' }}>
+          {surveyData.description}
         </div>
       )}
+
+      {/* Display all questions in one view */}
+      <div style={{ marginBottom: '20px' }}>
+        {questions.length > 0 ? (
+          <div>
+            {questions.map((question, idx) => (
+              <div key={question.id || idx} style={{ 
+                margin: '0 0 25px 0', 
+                padding: '15px', 
+                border: '1px solid #e0e0e0',
+                borderRadius: '8px',
+                backgroundColor: '#f9f9f9' 
+              }}>
+                <p style={{ 
+                  fontWeight: 'bold', 
+                  marginBottom: '15px',
+                  color: '#333',
+                  fontSize: '16px'
+                }}>
+                  {idx + 1}. {question.text}
+                  {question.required && (
+                    <span style={{ color: 'red', marginLeft: '4px' }}>*</span>
+                  )}
+                </p>
+                
+                {/* Question UI based on type */}
+                {question.type === 'text' && (
+                  <input 
+                    type="text" 
+                    placeholder="Your answer" 
+                    style={{ 
+                      display: 'block', 
+                      width: '100%', 
+                      padding: '10px',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                      marginTop: '10px' 
+                    }}
+                    disabled={true} // Disabled for preview
+                  />
+                )}
+                
+                {question.type === 'multipleChoice' && (
+                  <div style={{ marginTop: '10px' }}>
+                    {Array.isArray(question.options) && question.options.map((option, optIdx) => (
+                      <div key={optIdx} style={{ margin: '10px 0' }}>
+                        <label style={{ display: 'flex', alignItems: 'center' }}>
+                          <input 
+                            type="radio" 
+                            name={`question-${idx}`} 
+                            style={{ marginRight: '10px' }} 
+                            disabled={true} // Disabled for preview
+                          /> 
+                          <span>{option}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {question.type === 'checkboxes' && (
+                  <div style={{ marginTop: '10px' }}>
+                    {Array.isArray(question.options) && question.options.map((option, optIdx) => (
+                      <div key={optIdx} style={{ margin: '10px 0' }}>
+                        <label style={{ display: 'flex', alignItems: 'center' }}>
+                          <input 
+                            type="checkbox" 
+                            style={{ marginRight: '10px' }} 
+                            disabled={true} // Disabled for preview
+                          /> 
+                          <span>{option}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {question.type === 'scale' && (
+                  <div style={{ marginTop: '15px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <span>Min: {question.minValue || 1}</span>
+                      <span>Max: {question.maxValue || 10}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      {Array.from({ length: (question.maxValue || 10) - (question.minValue || 1) + 1 }, (_, i) => i + (question.minValue || 1)).map(num => (
+                        <label key={num} style={{ textAlign: 'center' }}>
+                          <input 
+                            type="radio" 
+                            name={`scale-${idx}`}
+                            style={{ display: 'block', margin: '0 auto 5px' }}
+                            disabled={true} // Disabled for preview
+                          />
+                          <span>{num}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {question.type === 'rating' && (
+                  <div style={{ marginTop: '15px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    {Array.from({ length: question.maxRating || 5 }, (_, i) => i + 1).map(star => (
+                      <div key={star} style={{ textAlign: 'center' }}>
+                        <label>
+                          <input 
+                            type="radio" 
+                            name={`rating-${idx}`}
+                            style={{ display: 'block', margin: '0 auto 5px' }}
+                            disabled={true} // Disabled for preview
+                          />
+                          <span style={{ fontSize: '24px', color: '#ffd700' }}>★</span>
+                          <span style={{ display: 'block', fontSize: '12px' }}>{star}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{ textAlign: 'center', color: '#666' }}>
+            No questions found in this survey.
+          </p>
+        )}
+      </div>
       
+      {/* Survey footer with Next button */}
       <div style={{ 
-        marginTop: '30px', 
+        marginTop: '20px', 
         display: 'flex', 
-        justifyContent: 'space-between',
-        alignItems: 'center'
+        justifyContent: 'flex-end',
+        borderTop: '1px solid #eee',
+        paddingTop: '20px'
       }}>
-        <button 
-          onClick={handlePrev} 
-          disabled={currentIndex === 0}
-          style={{ 
-            padding: '8px 16px',
-            backgroundColor: currentIndex === 0 ? '#ccc' : '#f0f0f0',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            cursor: currentIndex === 0 ? 'not-allowed' : 'pointer',
-            opacity: currentIndex === 0 ? 0.5 : 1 
-          }}
-        >
-          Previous
-        </button>
-        
-        <span style={{ fontSize: '14px', color: '#666' }}>
-          Question {currentIndex + 1} of {questions.length}
-        </span>
+        <div style={{ marginRight: 'auto', color: '#666', fontSize: '14px' }}>
+          {questions.length} {questions.length === 1 ? 'question' : 'questions'} total
+        </div>
         
         <button 
-          onClick={handleNext}
+          onClick={nextStageHandler}
           style={{
-            padding: '8px 16px',
+            padding: '10px 20px',
             backgroundColor: '#4285f4',
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            fontSize: '16px'
           }}
         >
-          {hasMoreQuestions ? 'Next' : 'Finish'}
+          Next Stage
         </button>
       </div>
     </div>
