@@ -129,7 +129,7 @@ export default function AdminDashboard() {
                 <Link href="/admin/surveys" className="px-3 py-2 rounded hover:bg-purple-600">Surveys</Link>
                 <Link href="/admin/wallets" className="px-3 py-2 rounded hover:bg-purple-600">Wallets</Link>
                 <Link href="/admin/user-groups" className="px-3 py-2 rounded hover:bg-purple-600">User Groups</Link>
-                <Link href="#" className="px-3 py-2 rounded hover:bg-purple-600">Reporting</Link>
+                <Link href="/reports" className="px-3 py-2 rounded hover:bg-purple-600">Reporting</Link>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -367,7 +367,7 @@ export default function AdminDashboard() {
             </div>
           </Link>
           
-          <Link href="#" className="block">
+          <Link href="/reports" className="block">
             <div className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow">
               <div className="flex items-center">
                 <div className="p-3 rounded-full bg-indigo-100 mr-4">
